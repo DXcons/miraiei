@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ホーム | 未来栄 図面管理システム(モック)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム(モック)</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <h1 class="page-title">何をしますか？</h1>
+  <p class="page-sub">図面の検索、または新しい図面の作成を選択してください。</p>
+
+  <div class="choice-grid">
+    <div class="choice-card" onclick="location.href='search.html'">
+      <div class="choice-icon">🔍</div>
+      <h2>過去の図面をさがす</h2>
+      <p>条件を指定して、これまでに作成した図面を検索します。</p>
+    </div>
+    <div class="choice-card" onclick="location.href='new.html'">
+      <div class="choice-icon">📄</div>
+      <h2>新しい図面をつくる</h2>
+      <p>ゼロから作成するか、過去の図面をコピーして編集します。</p>
+    </div>
+  </div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
+
+<script src="js/common.js"></script>
+<script>
+  requireLogin();
+  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
+</script>
+
+</body>
+</html>

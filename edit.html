@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>図面編集 | 未来栄 図面管理システム(モック)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム(モック)</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ <a href="new.html">新しい図面をつくる</a> ＞ 図面編集</div>
+  <h1 class="page-title" id="editTitle">新規図面の作成</h1>
+  <p class="page-sub">これはモック画面です。実際の作図・編集機能は今後実装予定です。</p>
+
+  <div id="copySourceBanner" class="copy-source-banner" style="display:none;">
+    📋 <span id="copySourceText"></span> をコピーして編集を開始しました。
+  </div>
+
+  <div class="editor-toolbar">
+    <button class="tool-btn">🖊 線を引く</button>
+    <button class="tool-btn">⬜ 図形</button>
+    <button class="tool-btn">🔤 文字入力</button>
+    <button class="tool-btn">📏 寸法線</button>
+    <div class="spacer"></div>
+    <button class="tool-btn" onclick="mockSave()">💾 保存（モック）</button>
+  </div>
+  <div class="editor-canvas">
+    <div class="placeholder-msg">
+      <span class="big">📐</span>
+      図面編集キャンバス（モック表示）<br>
+      実際の作図UIはここに実装されます
+    </div>
+  </div>
+
+  <div class="form-actions" style="margin-top:20px;">
+    <a href="new.html" class="btn btn-ghost">戻る</a>
+    <button class="btn btn-primary" onclick="mockSave()">この図面を保存する</button>
+  </div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
+
+<script src="js/common.js"></script>
+<script>
+  requireLogin();
+  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
+
+  const params = new URLSearchParams(window.location.search);
+  const copyId = params.get("copy");
+  if (copyId) {
+    const src = DRAWINGS.find(d => d.id === copyId);
+    if (src) {
+      document.getElementById("editTitle").textContent = "図面のコピー編集";
+      document.getElementById("copySourceBanner").style.display = "flex";
+      document.getElementById("copySourceText").textContent = `「${src.title}」（${src.id}）`;
+    }
+  }
+
+  function mockSave() {
+    toast("（モック）図面を保存しました。");
+  }
+</script>
+
+</body>
+</html>

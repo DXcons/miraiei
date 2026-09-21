@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>図面詳細 | 未来栄 図面管理システム(モック)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム(モック)</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ <a href="search.html">過去の図面をさがす</a> ＞ 図面詳細</div>
+
+  <div id="detailArea"></div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
+
+<script src="js/common.js"></script>
+<script>
+  requireLogin();
+  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
+
+  const params = new URLSearchParams(window.location.search);
+  const drawingId = params.get("id");
+  const drawing = DRAWINGS.find((d) => d.id === drawingId);
+
+  function render() {
+    const area = document.getElementById("detailArea");
+
+    if (!drawing) {
+      area.innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">🗂️</div>
+          指定された図面が見つかりませんでした。
+          <div class="form-actions" style="justify-content:center; margin-top:16px;">
+            <a href="search.html" class="btn btn-primary">検索画面に戻る</a>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const materials = getRequiredMaterials(drawing);
+
+    area.innerHTML = `
+      <h1 class="page-title">${drawing.title}</h1>
+      <p class="page-sub">図面番号：${drawing.id}　更新日：${drawing.updatedAt}</p>
+
+      <div class="card">
+        <div class="r-meta" style="margin-bottom:18px;">
+          ${badgeHtml(drawing)}
+          <span class="dot">${partsLabelText(drawing)}</span>
+        </div>
+
+        <div class="spec-grid">
+          <div class="spec-item">
+            <div class="spec-label">ロールの寸法</div>
+            <div class="spec-value">Φ${drawing.rollDiameter} × 長さ${drawing.rollLength}mm</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-label">コンベヤの寸法</div>
+            <div class="spec-value">幅${drawing.conveyorWidth} × 長さ${drawing.conveyorLength}mm</div>
+          </div>
+        </div>
+
+        <div class="editor-canvas" style="margin-top:20px;">
+          <div class="placeholder-msg">
+            <span class="big">📐</span>
+            図面プレビュー（モック表示）
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h2 class="section-title">必要な材料</h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>品名</th>
+                <th>材質</th>
+                <th>仕様</th>
+                <th>数量</th>
+                <th>単位</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${materials.map((m) => `
+                <tr>
+                  <td>${m.no}</td>
+                  <td>${m.name}</td>
+                  <td>${m.material}</td>
+                  <td>${m.spec}</td>
+                  <td>${m.qty}</td>
+                  <td>${m.unit}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="form-actions" style="margin-top:20px;">
+        <a href="search.html" class="btn btn-ghost">検索結果に戻る</a>
+        <button class="btn btn-primary" onclick="location.href='edit.html?copy=${encodeURIComponent(drawing.id)}'">この図面をコピーして編集する</button>
+      </div>
+    `;
+  }
+
+  render();
+</script>
+
+</body>
+</html>

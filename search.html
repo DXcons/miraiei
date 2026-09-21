@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>過去の図面をさがす | 未来栄 図面管理システム(モック)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム(モック)</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 過去の図面をさがす</div>
+  <h1 class="page-title">過去の図面をさがす</h1>
+  <p class="page-sub">条件を指定して図面を検索します。条件は複数組み合わせられます。</p>
+
+  <div class="card">
+    <form id="searchForm" onsubmit="return false;">
+
+      <!-- 屋外/室内(排他選択) -->
+      <div class="filter-section">
+        <div class="filter-label">設置場所 <span class="tag tag-single">単一選択</span></div>
+        <div class="chip-group" data-group="location">
+          <label class="chip">
+            <input type="radio" name="location" value="any" checked>
+            <span>指定なし</span>
+          </label>
+          <label class="chip">
+            <input type="radio" name="location" value="outdoor">
+            <span>屋外</span>
+          </label>
+          <label class="chip">
+            <input type="radio" name="location" value="indoor">
+            <span>室内</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 樹脂/金属(複数選択) -->
+      <div class="filter-section">
+        <div class="filter-label">材質 <span class="tag tag-multi">複数選択可</span></div>
+        <div class="chip-group" data-group="material">
+          <label class="chip">
+            <input type="checkbox" name="material" value="resin">
+            <span>樹脂</span>
+          </label>
+          <label class="chip">
+            <input type="checkbox" name="material" value="metal">
+            <span>金属</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 部品名(複数選択) -->
+      <div class="filter-section">
+        <div class="filter-label">部品名 <span class="tag tag-multi">複数選択可</span></div>
+        <div class="chip-group" data-group="parts">
+          <label class="chip">
+            <input type="checkbox" name="parts" value="pulley">
+            <span>プーリー</span>
+          </label>
+          <label class="chip">
+            <input type="checkbox" name="parts" value="roller">
+            <span>ローラー</span>
+          </label>
+          <label class="chip">
+            <input type="checkbox" name="parts" value="belt">
+            <span>ベルト</span>
+          </label>
+          <label class="chip">
+            <input type="checkbox" name="parts" value="alignment">
+            <span>調芯</span>
+          </label>
+          <label class="chip">
+            <input type="checkbox" name="parts" value="other">
+            <span>その他</span>
+          </label>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- ロールの寸法(下限・上限) -->
+      <div class="filter-section">
+        <div class="filter-label">ロールの寸法 <span class="tag tag-single">範囲指定</span></div>
+        <div class="dim-group">
+          <div class="dim-field dim-range">
+            <label>直径</label>
+            <input type="number" id="rollDiameterMin" min="0" placeholder="下限">
+            <span class="range-sep">〜</span>
+            <input type="number" id="rollDiameterMax" min="0" placeholder="上限">
+            <span class="unit">mm</span>
+          </div>
+          <div class="dim-field dim-range">
+            <label>長さ</label>
+            <input type="number" id="rollLengthMin" min="0" placeholder="下限">
+            <span class="range-sep">〜</span>
+            <input type="number" id="rollLengthMax" min="0" placeholder="上限">
+            <span class="unit">mm</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- コンベヤの寸法(下限・上限) -->
+      <div class="filter-section">
+        <div class="filter-label">コンベヤの寸法 <span class="tag tag-single">範囲指定</span></div>
+        <div class="dim-group">
+          <div class="dim-field dim-range">
+            <label>幅</label>
+            <input type="number" id="conveyorWidthMin" min="0" placeholder="下限">
+            <span class="range-sep">〜</span>
+            <input type="number" id="conveyorWidthMax" min="0" placeholder="上限">
+            <span class="unit">mm</span>
+          </div>
+          <div class="dim-field dim-range">
+            <label>長さ</label>
+            <input type="number" id="conveyorLengthMin" min="0" placeholder="下限">
+            <span class="range-sep">〜</span>
+            <input type="number" id="conveyorLengthMax" min="0" placeholder="上限">
+            <span class="unit">mm</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-bar">
+        <div>
+          <span class="count-label">該当する図面の数：</span><span class="count-num" id="hitCount">0</span><span class="count-label">枚</span>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" onclick="resetForm()">条件をクリア</button>
+          <button type="button" class="btn btn-primary" onclick="runSearch()">検索する</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div id="resultArea"></div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
+
+<script src="js/common.js"></script>
+<script>
+  requireLogin();
+  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
+
+  function readFilterState() {
+    const location = document.querySelector('input[name="location"]:checked').value;
+    const materials = Array.from(document.querySelectorAll('input[name="material"]:checked')).map(el => el.value);
+    const parts = Array.from(document.querySelectorAll('input[name="parts"]:checked')).map(el => el.value);
+    return {
+      location,
+      materials,
+      parts,
+      rollDiameterMin: document.getElementById("rollDiameterMin").value,
+      rollDiameterMax: document.getElementById("rollDiameterMax").value,
+      rollLengthMin: document.getElementById("rollLengthMin").value,
+      rollLengthMax: document.getElementById("rollLengthMax").value,
+      conveyorWidthMin: document.getElementById("conveyorWidthMin").value,
+      conveyorWidthMax: document.getElementById("conveyorWidthMax").value,
+      conveyorLengthMin: document.getElementById("conveyorLengthMin").value,
+      conveyorLengthMax: document.getElementById("conveyorLengthMax").value,
+    };
+  }
+
+  function updateHitCount() {
+    const hits = filterDrawings(readFilterState());
+    document.getElementById("hitCount").textContent = hits.length;
+    return hits;
+  }
+
+  function renderResults(hits) {
+    const area = document.getElementById("resultArea");
+    if (hits.length === 0) {
+      area.innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">🗂️</div>
+          該当する図面が見つかりませんでした。条件を変えて再度検索してください。
+        </div>`;
+      return;
+    }
+    area.innerHTML = `
+      <div class="result-list">
+        ${hits.map(d => `
+          <div class="result-item" onclick="location.href='detail.html?id=${encodeURIComponent(d.id)}'">
+            <div class="result-thumb">📐</div>
+            <div class="result-info">
+              <div class="r-title">${d.title}</div>
+              <div class="r-meta">
+                ${badgeHtml(d)}
+                <span class="dot">${partsLabelText(d)}</span>
+                <span class="dot">ロールΦ${d.rollDiameter}×${d.rollLength}mm</span>
+                <span class="dot">コンベヤ幅${d.conveyorWidth}×長さ${d.conveyorLength}mm</span>
+                <span class="dot">更新日：${d.updatedAt}</span>
+              </div>
+            </div>
+            <div class="result-arrow">›</div>
+          </div>
+        `).join("")}
+      </div>`;
+  }
+
+  function runSearch() {
+    const hits = updateHitCount();
+    renderResults(hits);
+  }
+
+  function resetForm() {
+    document.getElementById("searchForm").reset();
+    document.getElementById("resultArea").innerHTML = "";
+    updateHitCount();
+  }
+
+  // 条件変更のたびに件数だけリアルタイム更新
+  document.getElementById("searchForm").addEventListener("input", updateHitCount);
+  document.getElementById("searchForm").addEventListener("change", updateHitCount);
+
+  updateHitCount();
+</script>
+
+</body>
+</html>

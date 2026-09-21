@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ログイン | 未来栄 図面管理システム(モック)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">未</div>
+    <h1>未来栄株式会社</h1>
+    <p class="system-name">図面管理システム(モック)</p>
+
+    <div class="login-error" id="loginError">IDとパスワードを入力してください。</div>
+
+    <form id="loginForm" onsubmit="return handleLogin(event)">
+      <div class="field">
+        <label for="loginId">ユーザーID</label>
+        <input type="text" id="loginId" placeholder="例）y-tanaka" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="loginPass">パスワード</label>
+        <input type="password" id="loginPass" placeholder="パスワードを入力" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">ログイン</button>
+    </form>
+
+    <p class="login-hint">※ これはモック画面です。ID・パスワードは任意の文字列で構いません。</p>
+  </div>
+</div>
+
+<script src="js/common.js"></script>
+<script>
+  function handleLogin(e) {
+    e.preventDefault();
+    const id = document.getElementById("loginId").value.trim();
+    const pass = document.getElementById("loginPass").value.trim();
+    const errorBox = document.getElementById("loginError");
+
+    if (mockLogin(id, pass)) {
+      window.location.href = "home.html";
+    } else {
+      errorBox.style.display = "block";
+    }
+    return false;
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>新しい図面をつくる | 未来栄 図面管理システム(モック)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム(モック)</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 新しい図面をつくる</div>
+  <h1 class="page-title">新しい図面をつくる</h1>
+  <p class="page-sub">作成方法を選択してください。</p>
+
+  <div class="new-choice-wrap">
+    <div class="new-choice-card">
+      <div class="choice-icon">📋</div>
+      <h2>過去の図面をコピーして編集する</h2>
+      <p>既存の図面を検索して選び、それをベースに編集を始めます。</p>
+      <button class="btn btn-primary btn-block" onclick="openCopyModal()">図面を選んでコピー</button>
+    </div>
+    <div class="new-choice-card">
+      <div class="choice-icon">✨</div>
+      <h2>ゼロから作る</h2>
+      <p>まっさらな状態から新しい図面の作成を開始します。</p>
+      <button class="btn btn-secondary btn-block" onclick="location.href='edit.html'">新規作成を開始</button>
+    </div>
+  </div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
+
+<!-- ===== 過去の図面をコピー：選択用モーダル ===== -->
+<div class="modal-overlay" id="copyModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>コピーする図面を選択</h3>
+      <button class="modal-close" onclick="closeCopyModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-filter-row" data-group="m-location">
+        <label class="chip">
+          <input type="radio" name="m-location" value="any" checked>
+          <span>指定なし</span>
+        </label>
+        <label class="chip">
+          <input type="radio" name="m-location" value="outdoor">
+          <span>屋外</span>
+        </label>
+        <label class="chip">
+          <input type="radio" name="m-location" value="indoor">
+          <span>室内</span>
+        </label>
+      </div>
+      <div class="modal-filter-row" data-group="m-material">
+        <label class="chip">
+          <input type="checkbox" name="m-material" value="resin">
+          <span>樹脂</span>
+        </label>
+        <label class="chip">
+          <input type="checkbox" name="m-material" value="metal">
+          <span>金属</span>
+        </label>
+      </div>
+      <div class="modal-filter-row" data-group="m-parts">
+        <label class="chip"><input type="checkbox" name="m-parts" value="pulley"><span>プーリー</span></label>
+        <label class="chip"><input type="checkbox" name="m-parts" value="roller"><span>ローラー</span></label>
+        <label class="chip"><input type="checkbox" name="m-parts" value="belt"><span>ベルト</span></label>
+        <label class="chip"><input type="checkbox" name="m-parts" value="alignment"><span>調芯</span></label>
+        <label class="chip"><input type="checkbox" name="m-parts" value="other"><span>その他</span></label>
+      </div>
+
+      <div id="modalResultArea" class="result-list"></div>
+    </div>
+    <div class="modal-foot">
+      <span id="modalHitCount">12 件表示中</span>
+      <span>図面をクリックするとコピー先の編集画面へ進みます</span>
+    </div>
+  </div>
+</div>
+
+<script src="js/common.js"></script>
+<script>
+  requireLogin();
+  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
+
+  function readModalFilterState() {
+    const location = document.querySelector('input[name="m-location"]:checked').value;
+    const materials = Array.from(document.querySelectorAll('input[name="m-material"]:checked')).map(el => el.value);
+    const parts = Array.from(document.querySelectorAll('input[name="m-parts"]:checked')).map(el => el.value);
+    return { location, materials, parts };
+  }
+
+  function renderModalResults() {
+    const hits = filterDrawings(readModalFilterState());
+    document.getElementById("modalHitCount").textContent = hits.length + " 件表示中";
+    const area = document.getElementById("modalResultArea");
+    if (hits.length === 0) {
+      area.innerHTML = `<div class="empty-state"><div class="empty-icon">🗂️</div>該当する図面がありません。</div>`;
+      return;
+    }
+    area.innerHTML = hits.map(d => `
+      <div class="result-item" onclick="selectDrawingToCopy('${d.id}')">
+        <div class="result-thumb">📐</div>
+        <div class="result-info">
+          <div class="r-title">${d.title}</div>
+          <div class="r-meta">
+            ${badgeHtml(d)}
+            <span class="dot">${partsLabelText(d)}</span>
+            <span class="dot">更新日：${d.updatedAt}</span>
+          </div>
+        </div>
+        <div class="result-arrow">›</div>
+      </div>
+    `).join("");
+  }
+
+  function openCopyModal() {
+    document.getElementById("copyModal").classList.add("open");
+    renderModalResults();
+  }
+
+  function closeCopyModal() {
+    document.getElementById("copyModal").classList.remove("open");
+  }
+
+  function selectDrawingToCopy(id) {
+    window.location.href = "edit.html?copy=" + encodeURIComponent(id);
+  }
+
+  document.querySelectorAll('#copyModal input').forEach(el => {
+    el.addEventListener("change", renderModalResults);
+  });
+
+  // 背景クリックで閉じる
+  document.getElementById("copyModal").addEventListener("click", (e) => {
+    if (e.target.id === "copyModal") closeCopyModal();
+  });
+</script>
+
+</body>
+</html>
