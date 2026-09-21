@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>図面編集 | 未来栄 図面管理システム(モック)</title>
+<title>図面編集 | 未来栄 図面管理システム</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
     <div class="logo-mark">未</div>
     <div>
       未来栄株式会社
-      <small>図面管理システム(モック)</small>
+      <small>図面管理システム</small>
     </div>
   </div>
   <nav>
@@ -27,7 +27,7 @@
 <main class="page">
   <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ <a href="new.html">新しい図面をつくる</a> ＞ 図面編集</div>
   <h1 class="page-title" id="editTitle">新規図面の作成</h1>
-  <p class="page-sub">これはモック画面です。実際の作図・編集機能は今後実装予定です。</p>
+  <p class="page-sub">この画面は開発中のプレースホルダーです。実際の作図・編集機能は今後実装予定です。</p>
 
   <div id="copySourceBanner" class="copy-source-banner" style="display:none;">
     📋 <span id="copySourceText"></span> をコピーして編集を開始しました。
@@ -39,12 +39,12 @@
     <button class="tool-btn">🔤 文字入力</button>
     <button class="tool-btn">📏 寸法線</button>
     <div class="spacer"></div>
-    <button class="tool-btn" onclick="mockSave()">💾 保存（モック）</button>
+    <button class="tool-btn" onclick="mockSave()">💾 保存（準備中）</button>
   </div>
   <div class="editor-canvas">
     <div class="placeholder-msg">
       <span class="big">📐</span>
-      図面編集キャンバス（モック表示）<br>
+      図面編集キャンバス（準備中）<br>
       実際の作図UIはここに実装されます
     </div>
   </div>
@@ -55,7 +55,7 @@
   </div>
 </main>
 
-<footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -80,7 +80,7 @@
   })();
 
   function mockSave() {
-    toast("（モック）図面を保存しました。");
+    toast("（デモ）図面を保存しました。※実際の保存機能は未実装です。");
   }
 </script>
 
