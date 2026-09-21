@@ -154,11 +154,12 @@
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/common.js"></script>
 <script>
-  requireLogin();
-  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
-
   function readFilterState() {
     const location = document.querySelector('input[name="location"]:checked').value;
     const materials = Array.from(document.querySelectorAll('input[name="material"]:checked')).map(el => el.value);
@@ -230,7 +231,11 @@
   document.getElementById("searchForm").addEventListener("input", updateHitCount);
   document.getElementById("searchForm").addEventListener("change", updateHitCount);
 
-  updateHitCount();
+  (async () => {
+    const ok = await initPage({ loadDrawings: true });
+    if (!ok) return;
+    updateHitCount();
+  })();
 </script>
 
 </body>

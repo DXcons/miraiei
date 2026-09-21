@@ -1,26 +1,41 @@
 /* ==========================================================
    未来栄株式会社 図面管理システム(モック) 共通スクリプト
-   ※ すべてダミーデータ・ダミー処理です(バックエンドなし)
+   認証: Firebase Authentication / 図面データ: Firestore(drawingsコレクション)
    ========================================================== */
 
-// ---------- ダミー図面データ ----------
-// location: "outdoor" | "indoor"
-// material: ["resin", "metal"] の部分集合
-// parts: ["pulley","roller","belt","alignment","other"] の部分集合
-const DRAWINGS = [
-  { id: "D-2024-001", title: "屋外用ベルトコンベヤ標準図 A型", location: "outdoor", material: ["metal"], parts: ["pulley", "belt"], rollDiameter: 120, rollLength: 800, conveyorWidth: 650, conveyorLength: 5200, updatedAt: "2024-11-02" },
-  { id: "D-2024-014", title: "室内搬送ローラーコンベヤ 樹脂ローラー仕様", location: "indoor", material: ["resin"], parts: ["roller"], rollDiameter: 60, rollLength: 500, conveyorWidth: 400, conveyorLength: 3000, updatedAt: "2024-12-18" },
-  { id: "D-2025-002", title: "調芯ローラー付きベルトコンベヤ", location: "indoor", material: ["metal", "resin"], parts: ["roller", "belt", "alignment"], rollDiameter: 89, rollLength: 620, conveyorWidth: 500, conveyorLength: 4500, updatedAt: "2025-01-20" },
-  { id: "D-2025-009", title: "屋外重量物用プーリーユニット", location: "outdoor", material: ["metal"], parts: ["pulley"], rollDiameter: 220, rollLength: 950, conveyorWidth: 800, conveyorLength: 8000, updatedAt: "2025-02-14" },
-  { id: "D-2025-015", title: "小型室内搬送機 樹脂部品セット", location: "indoor", material: ["resin"], parts: ["pulley", "roller", "other"], rollDiameter: 45, rollLength: 300, conveyorWidth: 250, conveyorLength: 1800, updatedAt: "2025-03-05" },
-  { id: "D-2025-021", title: "屋外設置型 蛇行防止調芯装置", location: "outdoor", material: ["metal"], parts: ["alignment"], rollDiameter: 100, rollLength: 700, conveyorWidth: 600, conveyorLength: 6000, updatedAt: "2025-04-11" },
-  { id: "D-2025-030", title: "食品搬送用 樹脂ベルトコンベヤ", location: "indoor", material: ["resin"], parts: ["belt"], rollDiameter: 70, rollLength: 450, conveyorWidth: 350, conveyorLength: 2500, updatedAt: "2025-05-22" },
-  { id: "D-2025-037", title: "屋外大型プーリー・ローラー複合ユニット", location: "outdoor", material: ["metal", "resin"], parts: ["pulley", "roller"], rollDiameter: 180, rollLength: 880, conveyorWidth: 700, conveyorLength: 7200, updatedAt: "2025-06-09" },
-  { id: "D-2025-044", title: "室内軽搬送用その他付属部品図", location: "indoor", material: ["resin"], parts: ["other"], rollDiameter: 30, rollLength: 200, conveyorWidth: 200, conveyorLength: 1200, updatedAt: "2025-07-01" },
-  { id: "D-2025-051", title: "屋外用調芯ローラー・ベルト標準セット", location: "outdoor", material: ["metal"], parts: ["roller", "belt", "alignment"], rollDiameter: 110, rollLength: 760, conveyorWidth: 620, conveyorLength: 5600, updatedAt: "2025-08-13" },
-  { id: "D-2025-058", title: "室内クリーンルーム用樹脂コンベヤ一式", location: "indoor", material: ["resin"], parts: ["pulley", "belt"], rollDiameter: 55, rollLength: 400, conveyorWidth: 300, conveyorLength: 2000, updatedAt: "2025-09-02" },
-  { id: "D-2025-063", title: "屋外標準プーリーユニット 金属製", location: "outdoor", material: ["metal"], parts: ["pulley"], rollDiameter: 150, rollLength: 820, conveyorWidth: 650, conveyorLength: 6400, updatedAt: "2025-10-17" },
-];
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ページ内で検索・詳細表示に使う図面データ。fetchDrawings()で読み込む。
+let DRAWINGS = [];
+
+// Firebase Authは初期化直後にログイン状態が確定していないため、
+// 最初のonAuthStateChanged発火を待ってから現在のユーザーを返す。
+let authReadyPromise = null;
+function waitForAuthUser() {
+  if (!authReadyPromise) {
+    authReadyPromise = new Promise((resolve) => {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        unsubscribe();
+        resolve(user);
+      });
+    });
+  }
+  return authReadyPromise;
+}
+
+// Firestoreからdrawingsコレクションを取得し、DRAWINGSに読み込む
+async function fetchDrawings() {
+  try {
+    const snapshot = await db.collection("drawings").orderBy("updatedAt", "desc").get();
+    DRAWINGS = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (err) {
+    console.error("図面データの取得に失敗しました", err);
+    DRAWINGS = [];
+  }
+  return DRAWINGS;
+}
 
 const PART_LABELS = {
   pulley: "プーリー",
@@ -40,30 +55,47 @@ const LOCATION_LABELS = {
   indoor: "室内",
 };
 
-// ---------- ログイン(ダミー認証) ----------
-function mockLogin(id, password) {
-  // モックのため、両方に何か入力されていればログイン成功とする
-  if (id && password) {
-    sessionStorage.setItem("miraiei_user", id);
-    return true;
+// ---------- ログイン(Firebase Authentication) ----------
+async function loginWithPassword(email, password) {
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
   }
-  return false;
 }
 
-function requireLogin() {
-  // モック用の簡易ガード。未ログインならログイン画面に戻す。
-  if (!sessionStorage.getItem("miraiei_user")) {
+// ログイン必須ページの先頭で呼ぶ。未ログインならログイン画面へ飛ばしてfalseを返す。
+async function requireLogin() {
+  const user = await waitForAuthUser();
+  if (!user) {
     window.location.href = "login.html";
+    return false;
   }
+  return true;
 }
 
-function currentUserName() {
-  return sessionStorage.getItem("miraiei_user") || "ゲスト";
+async function currentUserName() {
+  const user = await waitForAuthUser();
+  return user ? user.email : "ゲスト";
 }
 
-function logout() {
-  sessionStorage.removeItem("miraiei_user");
+async function logout() {
+  await auth.signOut();
   window.location.href = "login.html";
+}
+
+// ログイン必須ページの共通初期化。認証チェック＋ユーザー名表示＋(必要なら)図面データ読み込みをまとめて行う。
+async function initPage({ loadDrawings = false } = {}) {
+  const ok = await requireLogin();
+  if (!ok) return false;
+
+  const nameLabel = document.getElementById("userNameLabel");
+  if (nameLabel) nameLabel.textContent = (await currentUserName()) + " さん";
+
+  if (loadDrawings) await fetchDrawings();
+
+  return true;
 }
 
 // ---------- フィルタリング共通ロジック ----------

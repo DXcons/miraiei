@@ -57,21 +57,27 @@
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム(モック画面) — © 2026</footer>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/common.js"></script>
 <script>
-  requireLogin();
-  document.getElementById("userNameLabel").textContent = currentUserName() + " さん";
+  (async () => {
+    const ok = await initPage({ loadDrawings: true });
+    if (!ok) return;
 
-  const params = new URLSearchParams(window.location.search);
-  const copyId = params.get("copy");
-  if (copyId) {
-    const src = DRAWINGS.find(d => d.id === copyId);
-    if (src) {
-      document.getElementById("editTitle").textContent = "図面のコピー編集";
-      document.getElementById("copySourceBanner").style.display = "flex";
-      document.getElementById("copySourceText").textContent = `「${src.title}」（${src.id}）`;
+    const params = new URLSearchParams(window.location.search);
+    const copyId = params.get("copy");
+    if (copyId) {
+      const src = DRAWINGS.find(d => d.id === copyId);
+      if (src) {
+        document.getElementById("editTitle").textContent = "図面のコピー編集";
+        document.getElementById("copySourceBanner").style.display = "flex";
+        document.getElementById("copySourceText").textContent = `「${src.title}」（${src.id}）`;
+      }
     }
-  }
+  })();
 
   function mockSave() {
     toast("（モック）図面を保存しました。");

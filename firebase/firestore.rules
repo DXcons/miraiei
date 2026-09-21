@@ -1,0 +1,13 @@
+// Firebaseコンソール > Firestore Database > ルール タブに貼り付けて「公開」してください。
+//
+// drawingsコレクションは「ログイン済みユーザーのみ閲覧可・書き込み不可」。
+// 図面データの投入(初回のみ)は seed.html を使い、投入後にこの状態へ戻してください。
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /drawings/{drawingId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

@@ -18,8 +18,8 @@
 
     <form id="loginForm" onsubmit="return handleLogin(event)">
       <div class="field">
-        <label for="loginId">ユーザーID</label>
-        <input type="text" id="loginId" placeholder="例）y-tanaka" autocomplete="username">
+        <label for="loginId">メールアドレス</label>
+        <input type="email" id="loginId" placeholder="例）y-tanaka@miraiei.co.jp" autocomplete="username">
       </div>
       <div class="field">
         <label for="loginPass">パスワード</label>
@@ -28,21 +28,27 @@
       <button type="submit" class="btn btn-primary btn-block">ログイン</button>
     </form>
 
-    <p class="login-hint">※ これはモック画面です。ID・パスワードは任意の文字列で構いません。</p>
+    <p class="login-hint">※ アカウントは管理者が発行します。お持ちでない場合は管理者にお問い合わせください。</p>
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/common.js"></script>
 <script>
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    const id = document.getElementById("loginId").value.trim();
+    const email = document.getElementById("loginId").value.trim();
     const pass = document.getElementById("loginPass").value.trim();
     const errorBox = document.getElementById("loginError");
 
-    if (mockLogin(id, pass)) {
+    const { ok } = await loginWithPassword(email, pass);
+    if (ok) {
       window.location.href = "home.html";
     } else {
+      errorBox.textContent = "メールアドレスまたはパスワードが正しくありません。";
       errorBox.style.display = "block";
     }
     return false;
