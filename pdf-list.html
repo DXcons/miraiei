@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>保存した図面をさがす | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 保存した図面をさがす</div>
+  <h1 class="page-title">保存した図面をさがす</h1>
+  <p class="page-sub">客先・品名・図面作成日で絞り込みます。一覧をクリックするとPDFが開きます。</p>
+
+  <div class="card">
+    <div class="form-grid form-grid-3">
+      <div class="field">
+        <label for="filterCustomer">客先</label>
+        <select id="filterCustomer"><option value="">すべて</option></select>
+      </div>
+      <div class="field">
+        <label for="filterProduct">品名（部分一致）</label>
+        <input type="text" id="filterProduct" placeholder="品名の一部を入力">
+      </div>
+      <div class="field">
+        <label>図面作成日</label>
+        <div class="date-selects">
+          <select id="filterYear"><option value="">すべて</option></select><span class="date-unit">年</span>
+          <select id="filterMonth"><option value="">すべて</option></select><span class="date-unit">月</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-bar" style="margin-bottom:0;">
+      <div>
+        <span class="count-label">該当する図面の数：</span><span class="count-num" id="hitCount">0</span><span class="count-label">件</span>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="resetBtn">条件をクリア</button>
+        <button type="button" class="btn btn-secondary" id="reloadBtn">再読み込み</button>
+        <button type="button" class="btn btn-primary" onclick="location.href='pdf-new.html'">図面を保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="resultArea"></div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<!-- ===== PDF表示モーダル ===== -->
+<div class="modal-overlay" id="viewerModal">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-head">
+      <h3 id="viewerTitle">図面</h3>
+      <button class="modal-close" onclick="closeViewer()">&times;</button>
+    </div>
+    <div class="modal-body modal-body-flush">
+      <div id="viewerMeta" class="viewer-meta"></div>
+      <div id="viewerFrameArea" class="viewer-frame-area">
+        <div class="empty-state">読み込み中…</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost btn-danger" id="deleteBtn">この図面を削除する</button>
+      <span>
+        <a id="openTabLink" class="btn btn-secondary" target="_blank" rel="noopener">別タブで開く</a>
+        <a id="downloadLink" class="btn btn-primary" download>ダウンロード</a>
+      </span>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/pdf-store.js"></script>
+<script>
+  let PDF_DRAWINGS = [];
+  let currentViewerId = null;
+  let currentObjectUrl = null;
+
+  /* ---------- 絞り込み ---------- */
+
+  function readFilters() {
+    return {
+      customer: document.getElementById("filterCustomer").value,
+      product: document.getElementById("filterProduct").value.trim(),
+      year: document.getElementById("filterYear").value,
+      month: document.getElementById("filterMonth").value,
+    };
+  }
+
+  function applyFilters() {
+    const f = readFilters();
+    return PDF_DRAWINGS.filter((d) => {
+      if (f.customer && d.customer !== f.customer) return false;
+      if (f.product && !String(d.productName || "").toLowerCase().includes(f.product.toLowerCase())) return false;
+      if (f.year && String(d.drawingYear) !== f.year) return false;
+      if (f.month && String(d.drawingMonth) !== f.month) return false;
+      return true;
+    });
+  }
+
+  function rebuildFilterOptions() {
+    const customerSel = document.getElementById("filterCustomer");
+    const yearSel = document.getElementById("filterYear");
+    const monthSel = document.getElementById("filterMonth");
+    const keep = { customer: customerSel.value, year: yearSel.value, month: monthSel.value };
+
+    const customers = Array.from(new Set(PDF_DRAWINGS.map((d) => d.customer).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "ja"));
+    const years = Array.from(new Set(PDF_DRAWINGS.map((d) => d.drawingYear).filter(Boolean)))
+      .sort((a, b) => b - a);
+
+    customerSel.innerHTML =
+      `<option value="">すべて</option>` +
+      customers.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    yearSel.innerHTML =
+      `<option value="">すべて</option>` + years.map((y) => `<option value="${y}">${y}</option>`).join("");
+    monthSel.innerHTML =
+      `<option value="">すべて</option>` +
+      Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+
+    customerSel.value = keep.customer;
+    yearSel.value = keep.year;
+    monthSel.value = keep.month;
+  }
+
+  /* ---------- 一覧表示 ---------- */
+
+  function render() {
+    const hits = applyFilters();
+    document.getElementById("hitCount").textContent = hits.length;
+
+    const area = document.getElementById("resultArea");
+    if (PDF_DRAWINGS.length === 0) {
+      area.innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">🗂️</div>
+          保存された図面はまだありません。
+          <div style="margin-top:14px;"><a href="pdf-new.html" class="text-link">図面を保存する ›</a></div>
+        </div>`;
+      return;
+    }
+    if (hits.length === 0) {
+      area.innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">🔍</div>
+          該当する図面が見つかりませんでした。条件を変えてください。
+        </div>`;
+      return;
+    }
+
+    area.innerHTML = `
+      <div class="result-list">
+        ${hits.map((d) => `
+          <div class="result-item" data-open="${escapeHtml(d.id)}">
+            <div class="result-thumb">📄</div>
+            <div class="result-info">
+              <div class="r-title">${escapeHtml(d.productName)}</div>
+              <div class="r-meta">
+                <span class="badge badge-customer">${escapeHtml(d.customer)}</span>
+                <span class="dot">図面作成日：${formatDrawingDate(d.drawingDate)}</span>
+                <span class="dot">${escapeHtml(d.fileName)}</span>
+                <span class="dot">${formatFileSize(d.fileSize)}</span>
+              </div>
+            </div>
+            <div class="result-arrow">›</div>
+          </div>
+        `).join("")}
+      </div>`;
+
+    area.querySelectorAll("[data-open]").forEach((el) => {
+      el.addEventListener("click", () => openViewer(el.dataset.open));
+    });
+  }
+
+  /* ---------- PDF表示モーダル ---------- */
+
+  async function openViewer(id) {
+    const meta = PDF_DRAWINGS.find((d) => d.id === id);
+    if (!meta) return;
+
+    currentViewerId = id;
+    document.getElementById("viewerTitle").textContent = meta.productName;
+    document.getElementById("viewerMeta").innerHTML = `
+      <span class="badge badge-customer">${escapeHtml(meta.customer)}</span>
+      <span>図面作成日：${formatDrawingDate(meta.drawingDate)}</span>
+      <span>${escapeHtml(meta.fileName)}（${formatFileSize(meta.fileSize)}）</span>
+      <span>登録：${escapeHtml(meta.createdAtText || "-")}</span>`;
+    document.getElementById("viewerFrameArea").innerHTML = `<div class="empty-state">PDFを読み込んでいます…</div>`;
+    // 前に開いた図面のリンクが残らないよう、読み込み前に空にする
+    document.getElementById("downloadLink").removeAttribute("href");
+    document.getElementById("openTabLink").removeAttribute("href");
+    document.getElementById("viewerModal").classList.add("open");
+
+    releaseObjectUrl();
+    try {
+      const blob = await loadPdfBlob(id, meta.mimeType);
+      // このモーダルを開いている間だけ有効なURLを作る(閉じるときに破棄する)
+      currentObjectUrl = URL.createObjectURL(blob);
+      if (currentViewerId !== id) return; // 読み込み中に別の図面へ切り替わった
+      document.getElementById("viewerFrameArea").innerHTML =
+        `<iframe src="${currentObjectUrl}" title="${escapeHtml(meta.productName)}"></iframe>`;
+      document.getElementById("downloadLink").href = currentObjectUrl;
+      document.getElementById("downloadLink").setAttribute("download", meta.fileName);
+      document.getElementById("openTabLink").href = currentObjectUrl;
+    } catch (err) {
+      console.error("PDFの読み込みに失敗しました", err);
+      document.getElementById("viewerFrameArea").innerHTML =
+        `<div class="empty-state">PDFを読み込めませんでした。<br>${escapeHtml(err.message || err)}</div>`;
+    }
+  }
+
+  function releaseObjectUrl() {
+    if (currentObjectUrl) {
+      URL.revokeObjectURL(currentObjectUrl);
+      currentObjectUrl = null;
+    }
+  }
+
+  function closeViewer() {
+    document.getElementById("viewerModal").classList.remove("open");
+    document.getElementById("viewerFrameArea").innerHTML = "";
+    currentViewerId = null;
+    releaseObjectUrl();
+  }
+
+  async function deleteCurrent() {
+    if (!currentViewerId) return;
+    const meta = PDF_DRAWINGS.find((d) => d.id === currentViewerId);
+    if (!meta) return;
+    if (!confirm(`「${meta.productName}」を削除します。元に戻せません。よろしいですか？`)) return;
+
+    const btn = document.getElementById("deleteBtn");
+    btn.disabled = true;
+    btn.textContent = "削除中…";
+    try {
+      await deletePdfDrawing(currentViewerId);
+      closeViewer();
+      await reload();
+      toast("図面を削除しました");
+    } catch (err) {
+      console.error("削除に失敗しました", err);
+      toast("削除に失敗しました：" + (err.message || err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "この図面を削除する";
+    }
+  }
+
+  /* ---------- 読み込み ---------- */
+
+  async function reload() {
+    try {
+      PDF_DRAWINGS = await fetchPdfDrawings();
+    } catch (err) {
+      PDF_DRAWINGS = [];
+      document.getElementById("resultArea").innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">⚠️</div>
+          保存済み図面を読み込めませんでした。<br>
+          Firestoreのセキュリティルールに <code>pdfDrawings</code> の設定が入っているか確認してください。
+        </div>`;
+      document.getElementById("hitCount").textContent = "0";
+      return;
+    }
+    rebuildFilterOptions();
+    render();
+  }
+
+  /* ---------- イベント登録 ---------- */
+
+  ["filterCustomer", "filterProduct", "filterYear", "filterMonth"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", render);
+    document.getElementById(id).addEventListener("change", render);
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    document.getElementById("filterCustomer").value = "";
+    document.getElementById("filterProduct").value = "";
+    document.getElementById("filterYear").value = "";
+    document.getElementById("filterMonth").value = "";
+    render();
+  });
+
+  document.getElementById("reloadBtn").addEventListener("click", reload);
+  document.getElementById("deleteBtn").addEventListener("click", deleteCurrent);
+
+  document.getElementById("viewerModal").addEventListener("click", (ev) => {
+    if (ev.target.id === "viewerModal") closeViewer();
+  });
+
+  (async () => {
+    const ok = await initPage();
+    if (!ok) return;
+    await reload();
+  })();
+</script>
+
+</body>
+</html>

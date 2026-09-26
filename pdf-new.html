@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>図面を保存する | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 図面を保存する</div>
+  <h1 class="page-title">図面を保存する</h1>
+  <p class="page-sub">PDFの図面ファイルを、客先・図面作成日・品名とあわせて登録します。</p>
+
+  <!-- ===== 1. 客先と図面作成日 ===== -->
+  <div class="card">
+    <h2 class="section-title">① 客先と図面作成日</h2>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="customerSelect">客先 <span class="req">必須</span></label>
+        <select id="customerSelect">
+          <option value="">— 一覧から選択 —</option>
+        </select>
+        <input type="text" id="customerManual" class="manual-input" placeholder="客先名を入力してください" autocomplete="off">
+        <p class="field-note" id="customerNote">客先一覧を読み込んでいます…</p>
+      </div>
+
+      <div class="field">
+        <label>図面作成日 <span class="req">必須</span></label>
+        <div class="date-selects">
+          <select id="dateYear"></select><span class="date-unit">年</span>
+          <select id="dateMonth"></select><span class="date-unit">月</span>
+          <select id="dateDay"></select><span class="date-unit">日</span>
+        </div>
+        <p class="field-note">年は西暦です。</p>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="csv-row">
+      <div>
+        <div class="csv-row-title">客先一覧を差し替える</div>
+        <div class="csv-row-sub">
+          客先名の列をもつCSVファイルを選ぶと、上の選択欄がその内容に入れ替わります
+          （Excelで保存したCSVもそのまま読み込めます）。
+        </div>
+      </div>
+      <div class="csv-row-actions">
+        <label class="btn btn-secondary">
+          CSVを読み込む
+          <input type="file" id="customerCsvInput" accept=".csv,text/csv" hidden>
+        </label>
+        <button type="button" class="btn btn-ghost" id="customerResetBtn">元に戻す</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 2. PDFファイル ===== -->
+  <div class="card" style="margin-top:20px;">
+    <h2 class="section-title">② PDFファイルと品名</h2>
+
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">📄</div>
+      <div class="dropzone-main">ここにPDFをドラッグ＆ドロップ</div>
+      <div class="dropzone-sub">または</div>
+      <label class="btn btn-secondary">
+        ファイルを選ぶ
+        <input type="file" id="pdfInput" accept="application/pdf,.pdf" multiple hidden>
+      </label>
+      <div class="dropzone-note">複数選択できます。1ファイル20MBまで。</div>
+    </div>
+    <p class="field-note" style="margin-top:10px;">
+      品名は自由に入力できます。入力欄をクリックすると、過去の図面でよく使われている品名が候補として表示されます
+      （候補は <a href="data/products.csv" class="text-link" target="_blank">data/products.csv</a> で管理しています）。
+    </p>
+
+    <div id="fileListArea"></div>
+    <datalist id="productNameList"></datalist>
+  </div>
+
+  <div class="result-bar" style="margin-top:20px;">
+    <div id="saveStatus" class="save-status">PDFファイルを選んでください。</div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost" id="clearBtn">選択をクリア</button>
+      <button type="button" class="btn btn-primary" id="saveBtn" disabled>この内容で保存する</button>
+    </div>
+  </div>
+
+  <p class="page-sub" style="text-align:right;margin:0;">
+    <a href="pdf-list.html" class="text-link">保存済みの図面を見る ›</a>
+  </p>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/pdf-store.js"></script>
+<script>
+  // 選択中のファイル。{ file, productName, status } の配列。
+  let entries = [];
+  let saving = false;
+
+  const MANUAL_VALUE = "__manual__";
+
+  /* ---------- 客先 ---------- */
+
+  function renderCustomerOptions(list, source) {
+    const select = document.getElementById("customerSelect");
+    const note = document.getElementById("customerNote");
+
+    select.innerHTML =
+      `<option value="">— 一覧から選択 —</option>` +
+      list.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("") +
+      `<option value="${MANUAL_VALUE}">＋ 一覧にない客先を直接入力する</option>`;
+
+    if (source === "none") {
+      note.textContent =
+        "客先一覧を読み込めませんでした。下の「CSVを読み込む」で客先一覧CSVを選ぶか、「＋ 一覧にない客先を直接入力する」を使ってください。";
+    } else if (source === "uploaded") {
+      note.textContent = `読み込んだCSVの客先一覧を表示しています（${list.length}件）。`;
+    } else {
+      note.textContent = `data/customers.csv の客先一覧を表示しています（${list.length}件）。`;
+    }
+    syncManualInput();
+  }
+
+  // 「直接入力する」を選んだときだけ自由記入欄を出す
+  function syncManualInput() {
+    const select = document.getElementById("customerSelect");
+    const manual = document.getElementById("customerManual");
+    const isManual = select.value === MANUAL_VALUE;
+    manual.style.display = isManual ? "block" : "none";
+    if (isManual) manual.focus();
+    updateSaveButton();
+  }
+
+  function readCustomer() {
+    const select = document.getElementById("customerSelect");
+    if (select.value === MANUAL_VALUE) {
+      return document.getElementById("customerManual").value.trim();
+    }
+    return select.value;
+  }
+
+  /* ---------- 図面作成日 ---------- */
+
+  function buildDateSelects() {
+    const today = new Date();
+    const yearSel = document.getElementById("dateYear");
+    const monthSel = document.getElementById("dateMonth");
+
+    const options = [];
+    for (let y = today.getFullYear() + 1; y >= 1980; y--) {
+      options.push(`<option value="${y}">${y}</option>`);
+    }
+    yearSel.innerHTML = options.join("");
+    yearSel.value = String(today.getFullYear());
+
+    monthSel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+    monthSel.value = String(today.getMonth() + 1);
+
+    rebuildDayOptions(today.getDate());
+
+    yearSel.addEventListener("change", () => rebuildDayOptions());
+    monthSel.addEventListener("change", () => rebuildDayOptions());
+  }
+
+  // 年月に合わせて「日」の選択肢を作り直す(2月30日などを選べないようにする)
+  function rebuildDayOptions(preferredDay) {
+    const daySel = document.getElementById("dateDay");
+    const year = Number(document.getElementById("dateYear").value);
+    const month = Number(document.getElementById("dateMonth").value);
+    const last = daysInMonth(year, month);
+    const keep = preferredDay || Number(daySel.value) || 1;
+
+    daySel.innerHTML = Array.from({ length: last }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+    daySel.value = String(Math.min(keep, last));
+  }
+
+  function readDrawingDate() {
+    const y = document.getElementById("dateYear").value;
+    const m = document.getElementById("dateMonth").value;
+    const d = document.getElementById("dateDay").value;
+    return `${y}-${pad2(m)}-${pad2(d)}`;
+  }
+
+  /* ---------- ファイル一覧 ---------- */
+
+  function addFiles(fileList) {
+    const rejected = [];
+    Array.from(fileList).forEach((file) => {
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      if (!isPdf) {
+        rejected.push(`${file.name}（PDFではありません）`);
+        return;
+      }
+      if (file.size > PDF_MAX_FILE_SIZE) {
+        rejected.push(`${file.name}（${formatFileSize(file.size)}：上限${formatFileSize(PDF_MAX_FILE_SIZE)}を超えています）`);
+        return;
+      }
+      if (entries.some((e) => e.file.name === file.name && e.file.size === file.size)) return;
+      entries.push({
+        file,
+        // 品名の初期値はファイル名(拡張子なし)。あとから直せる。
+        productName: file.name.replace(/\.pdf$/i, ""),
+        status: "waiting",
+        message: "",
+      });
+    });
+
+    if (rejected.length > 0) {
+      toast("保存できないファイルがありました：" + rejected.join(" / "));
+    }
+    renderFileList();
+  }
+
+  function removeEntry(index) {
+    if (saving) return;
+    entries.splice(index, 1);
+    renderFileList();
+  }
+
+  function statusCellHtml(entry) {
+    if (entry.status === "waiting") return `<span class="status-pill">待機中</span>`;
+    if (entry.status === "saving") return `<span class="status-pill status-saving">保存中 ${entry.message}</span>`;
+    if (entry.status === "done") return `<span class="status-pill status-done">保存しました</span>`;
+    return `<span class="status-pill status-error" title="${escapeHtml(entry.message)}">失敗</span>`;
+  }
+
+  function renderFileList() {
+    const area = document.getElementById("fileListArea");
+    if (entries.length === 0) {
+      area.innerHTML = "";
+      updateSaveButton();
+      return;
+    }
+
+    area.innerHTML = `
+      <div class="table-wrap" style="margin-top:18px;">
+        <table class="data-table file-table">
+          <thead>
+            <tr>
+              <th style="width:40px;">No</th>
+              <th>ファイル名</th>
+              <th style="width:280px;">品名 <span class="req">必須</span></th>
+              <th style="width:90px;">サイズ</th>
+              <th style="width:130px;">状態</th>
+              <th style="width:50px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map((e, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td class="file-name-cell" title="${escapeHtml(e.file.name)}">${escapeHtml(e.file.name)}</td>
+                <td><input type="text" class="product-input" data-index="${i}" value="${escapeHtml(e.productName)}" placeholder="品名を入力" list="productNameList" autocomplete="off"></td>
+                <td>${formatFileSize(e.file.size)}</td>
+                <td data-status="${i}">${statusCellHtml(e)}</td>
+                <td><button type="button" class="row-remove" data-remove="${i}" title="一覧から外す">×</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>`;
+
+    area.querySelectorAll(".product-input").forEach((input) => {
+      input.addEventListener("input", (ev) => {
+        entries[Number(ev.target.dataset.index)].productName = ev.target.value;
+        updateSaveButton();
+      });
+    });
+    area.querySelectorAll("[data-remove]").forEach((btn) => {
+      btn.addEventListener("click", (ev) => removeEntry(Number(ev.currentTarget.dataset.remove)));
+    });
+
+    updateSaveButton();
+  }
+
+  // 保存中は行ごと作り直さず、状態セルだけ書き換える(入力中の品名が消えないように)
+  function refreshStatusCell(index) {
+    const cell = document.querySelector(`[data-status="${index}"]`);
+    if (cell) cell.innerHTML = statusCellHtml(entries[index]);
+  }
+
+  /* ---------- 保存 ---------- */
+
+  function pendingEntries() {
+    return entries.filter((e) => e.status !== "done");
+  }
+
+  function validate() {
+    if (entries.length === 0) return "PDFファイルを選んでください。";
+    if (pendingEntries().length === 0) return "選択中のPDFはすべて保存済みです。";
+    if (!readCustomer()) return "客先を選択、または入力してください。";
+    const blank = entries.findIndex((e) => e.status !== "done" && !e.productName.trim());
+    if (blank >= 0) return `${blank + 1}行目の品名が未入力です。`;
+    return null;
+  }
+
+  function updateSaveButton() {
+    if (saving) return;
+    const error = validate();
+    document.getElementById("saveBtn").disabled = !!error;
+    document.getElementById("saveStatus").textContent = error || `${pendingEntries().length}件のPDFを保存します。`;
+  }
+
+  function setSavingUi(on) {
+    saving = on;
+    document.getElementById("saveBtn").disabled = on;
+    document.getElementById("clearBtn").disabled = on;
+    document.getElementById("pdfInput").disabled = on;
+    document.querySelectorAll(".product-input, .row-remove").forEach((el) => (el.disabled = on));
+  }
+
+  async function saveAll() {
+    const error = validate();
+    if (error) {
+      toast(error);
+      return;
+    }
+
+    const customer = readCustomer();
+    const drawingDate = readDrawingDate();
+    const status = document.getElementById("saveStatus");
+
+    setSavingUi(true);
+    let succeeded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (entry.status === "done") continue;
+
+      entry.status = "saving";
+      entry.message = "0%";
+      refreshStatusCell(i);
+      status.textContent = `${i + 1} / ${entries.length} 件目を保存中…`;
+
+      try {
+        await savePdfDrawing(
+          entry.file,
+          { customer, drawingDate, productName: entry.productName.trim() },
+          (done, total) => {
+            entry.message = Math.round((done / total) * 100) + "%";
+            refreshStatusCell(i);
+          }
+        );
+        entry.status = "done";
+        succeeded++;
+      } catch (err) {
+        console.error("保存に失敗しました", err);
+        entry.status = "error";
+        entry.message = err && err.message ? err.message : "不明なエラー";
+        failed++;
+      }
+      refreshStatusCell(i);
+    }
+
+    setSavingUi(false);
+
+    if (failed === 0) {
+      status.innerHTML = `${succeeded}件を保存しました。<a href="pdf-list.html" class="text-link">保存済みの図面を見る ›</a>`;
+      toast(`${succeeded}件の図面を保存しました`);
+    } else {
+      status.textContent = `${succeeded}件を保存しました。${failed}件は失敗しました（「失敗」にマウスを乗せると理由が出ます）。`;
+      toast(`${failed}件の保存に失敗しました`);
+    }
+    // 保存済みの行は「選択をクリア」ボタンで消す
+    document.getElementById("clearBtn").disabled = false;
+  }
+
+  /* ---------- イベント登録 ---------- */
+
+  document.getElementById("customerSelect").addEventListener("change", syncManualInput);
+  document.getElementById("customerManual").addEventListener("input", updateSaveButton);
+
+  document.getElementById("pdfInput").addEventListener("change", (ev) => {
+    addFiles(ev.target.files);
+    ev.target.value = "";
+  });
+
+  const dropzone = document.getElementById("dropzone");
+  ["dragenter", "dragover"].forEach((type) =>
+    dropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      dropzone.classList.add("dragging");
+    })
+  );
+  ["dragleave", "drop"].forEach((type) =>
+    dropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      dropzone.classList.remove("dragging");
+    })
+  );
+  dropzone.addEventListener("drop", (ev) => {
+    if (saving) return;
+    addFiles(ev.dataTransfer.files);
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    if (saving) return;
+    entries = [];
+    renderFileList();
+    document.getElementById("saveStatus").textContent = "PDFファイルを選んでください。";
+  });
+
+  document.getElementById("saveBtn").addEventListener("click", saveAll);
+
+  document.getElementById("customerCsvInput").addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    try {
+      const list = parseCustomerCsvBuffer(await file.arrayBuffer());
+      if (list.length === 0) {
+        toast("CSVから客先名を読み取れませんでした。1列目に客先名が並ぶCSVをご用意ください。");
+        return;
+      }
+      storeCustomerList(list);
+      renderCustomerOptions(list, "uploaded");
+      toast(`客先一覧を読み込みました（${list.length}件）`);
+    } catch (err) {
+      console.error("CSVの読み込みに失敗しました", err);
+      toast("CSVの読み込みに失敗しました。");
+    }
+  });
+
+  document.getElementById("customerResetBtn").addEventListener("click", async () => {
+    clearStoredCustomerList();
+    const { list, source } = await loadCustomerList();
+    renderCustomerOptions(list, source);
+    toast("客先一覧を元に戻しました");
+  });
+
+  /* ---------- 初期化 ---------- */
+
+  async function loadProductSuggestions() {
+    const names = await loadProductNameList();
+    document.getElementById("productNameList").innerHTML = names
+      .map((name) => `<option value="${escapeHtml(name)}">`)
+      .join("");
+  }
+
+  (async () => {
+    buildDateSelects();
+    const ok = await initPage();
+    if (!ok) return;
+    const { list, source } = await loadCustomerList();
+    renderCustomerOptions(list, source);
+    loadProductSuggestions();
+    updateSaveButton();
+  })();
+</script>
+
+</body>
+</html>

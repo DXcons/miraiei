@@ -1,13 +1,24 @@
 // Firebaseコンソール > Firestore Database > ルール タブに貼り付けて「公開」してください。
 //
-// drawingsコレクションは「ログイン済みユーザーのみ閲覧可・書き込み不可」。
-// 図面データの投入(初回のみ)は seed.html を使い、投入後にこの状態へ戻してください。
+// drawings    : 検索用の図面データ。「ログイン済みユーザーのみ閲覧可・書き込み不可」。
+//               投入(初回のみ)は seed.html を使い、投入後にこの状態へ戻してください。
+// pdfDrawings : 「図面を保存する」で登録したPDF図面。ログイン済みユーザーが
+//               登録・閲覧・削除できます。chunksサブコレクションにPDF本体が
+//               分割して入っています。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /drawings/{drawingId} {
       allow read: if request.auth != null;
       allow write: if false;
+    }
+
+    match /pdfDrawings/{pdfId} {
+      allow read, write: if request.auth != null;
+
+      match /chunks/{chunkId} {
+        allow read, write: if request.auth != null;
+      }
     }
   }
 }

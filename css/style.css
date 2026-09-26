@@ -925,3 +925,356 @@ footer.mock-footer {
 .data-table td:nth-child(5) {
   color: var(--text-light);
 }
+
+/* ==========================================================
+   PDF図面の保存・一覧(pdf-new.html / pdf-list.html)
+   ========================================================== */
+
+/* ---------- ホームのカード3枚並び ---------- */
+.choice-grid.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 900px) {
+  .choice-grid.cols-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .choice-grid.cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home-sub-link {
+  text-align: center;
+  margin: 22px 0 0;
+  font-size: 13px;
+}
+
+.text-link {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- 入力フォーム ---------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.form-grid.form-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 760px) {
+  .form-grid,
+  .form-grid.form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-grid .field {
+  margin-bottom: 0;
+}
+
+.field select,
+.field input[type="text"] {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fbfcfd;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232, 103, 44, 0.15);
+  background: #fff;
+}
+
+.field .manual-input {
+  display: none;
+  margin-top: 8px;
+}
+
+.field-note {
+  font-size: 11.5px;
+  color: var(--text-light);
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+
+.req {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+
+/* ---------- 年月日の選択 ---------- */
+.date-selects {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-selects select {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fbfcfd;
+}
+
+.date-selects select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232, 103, 44, 0.15);
+  background: #fff;
+}
+
+.date-unit {
+  font-size: 12.5px;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+/* ---------- 客先CSVの読み込み行 ---------- */
+.csv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.csv-row-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 4px;
+}
+
+.csv-row-sub {
+  font-size: 11.5px;
+  color: var(--text-light);
+  line-height: 1.6;
+  max-width: 560px;
+}
+
+.csv-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* file inputを隠してlabelをボタンに見せているため */
+.csv-row-actions label.btn,
+.dropzone label.btn {
+  cursor: pointer;
+}
+
+/* ---------- ドラッグ＆ドロップ ---------- */
+.dropzone {
+  border: 2px dashed #c9d2e0;
+  border-radius: 12px;
+  background: #fafbfd;
+  padding: 30px 20px;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: #fef5f0;
+}
+
+.dropzone-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.dropzone-main {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+
+.dropzone-sub {
+  font-size: 11.5px;
+  color: var(--text-light);
+  margin-bottom: 10px;
+}
+
+.dropzone-note {
+  font-size: 11.5px;
+  color: var(--text-light);
+  margin-top: 10px;
+}
+
+/* ---------- 保存ファイル一覧 ---------- */
+.file-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.file-table .file-name-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-table .product-input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fbfcfd;
+}
+
+.file-table .product-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232, 103, 44, 0.15);
+  background: #fff;
+}
+
+.file-table .row-remove {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-light);
+  cursor: pointer;
+}
+
+.file-table .row-remove:hover:not(:disabled) {
+  background: #fdecea;
+  border-color: #f0bcb6;
+  color: #b3261e;
+}
+
+.file-table .row-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: var(--text-light);
+}
+
+.status-saving {
+  background: #fdf1e4;
+  color: #c07a1f;
+}
+
+.status-done {
+  background: #e6f4ea;
+  color: var(--success);
+}
+
+.status-error {
+  background: #fdecea;
+  color: #b3261e;
+  cursor: help;
+}
+
+.save-status {
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+/* ---------- 一覧・ビューア ---------- */
+.badge-customer {
+  background: var(--navy);
+  color: #fff;
+}
+
+.modal-box-wide {
+  max-width: 1000px;
+  height: 90vh;
+  max-height: 90vh;
+}
+
+.modal-body-flush {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.viewer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+.viewer-frame-area {
+  flex: 1;
+  min-height: 0;
+  background: #525659;
+}
+
+.viewer-frame-area iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.viewer-frame-area .empty-state {
+  color: #cfd5dd;
+}
+
+.modal-foot .btn {
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.btn-danger {
+  color: #b3261e;
+  border-color: #f0bcb6;
+}
+
+.btn-danger:hover {
+  background: #fdecea;
+}

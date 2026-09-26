@@ -26,9 +26,9 @@
 
 <main class="page">
   <h1 class="page-title">何をしますか？</h1>
-  <p class="page-sub">図面の検索、または新しい図面の作成を選択してください。</p>
+  <p class="page-sub">図面の検索、新しい図面の作成、PDF図面の保存から選択してください。</p>
 
-  <div class="choice-grid">
+  <div class="choice-grid cols-3">
     <div class="choice-card" onclick="location.href='search.html'">
       <div class="choice-icon">🔍</div>
       <h2>過去の図面をさがす</h2>
@@ -39,7 +39,16 @@
       <h2>新しい図面をつくる</h2>
       <p>ゼロから作成するか、過去の図面をコピーして編集します。</p>
     </div>
+    <div class="choice-card" onclick="location.href='pdf-new.html'">
+      <div class="choice-icon">🗄️</div>
+      <h2>図面を保存する</h2>
+      <p>PDFの図面を、客先・図面作成日・品名とあわせて登録します。</p>
+    </div>
   </div>
+
+  <p class="home-sub-link">
+    <a href="pdf-list.html" class="text-link">保存済みのPDF図面を一覧で見る ›</a>
+  </p>
 </main>
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
