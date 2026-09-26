@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>保存した図面をさがす | 未来栄 図面管理システム</title>
+<title>過去の図面をさがす | 未来栄 図面管理システム</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -25,8 +25,8 @@
 </header>
 
 <main class="page">
-  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 保存した図面をさがす</div>
-  <h1 class="page-title">保存した図面をさがす</h1>
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 過去の図面をさがす</div>
+  <h1 class="page-title">過去の図面をさがす</h1>
   <p class="page-sub">客先・品名・図面作成日で絞り込みます。一覧をクリックするとPDFが開きます。</p>
 
   <div class="card">
@@ -47,6 +47,11 @@
         </div>
       </div>
     </div>
+
+    <hr class="divider">
+
+    <!-- 保存画面の「任意で入力する項目」と同じ定義(PDF_OPTION_FIELDS)から生成 -->
+    <div class="form-grid form-grid-4" id="optionFilterArea"></div>
 
     <div class="result-bar" style="margin-bottom:0;">
       <div>
@@ -101,12 +106,32 @@
 
   /* ---------- 絞り込み ---------- */
 
+  // 保存画面と同じ項目定義(PDF_OPTION_FIELDS)から絞り込み用のプルダウンを作る
+  function buildOptionFilters() {
+    document.getElementById("optionFilterArea").innerHTML = PDF_OPTION_FIELDS.map(
+      (field) => `
+        <div class="field">
+          <label for="filterOpt-${field.key}">${escapeHtml(field.label)}</label>
+          <select id="filterOpt-${field.key}" data-optkey="${field.key}">
+            <option value="">すべて</option>
+            ${field.options.map((o) => `<option value="${o.value}">${escapeHtml(o.label)}</option>`).join("")}
+          </select>
+        </div>`
+    ).join("");
+  }
+
   function readFilters() {
+    const options = {};
+    PDF_OPTION_FIELDS.forEach((field) => {
+      const el = document.getElementById(`filterOpt-${field.key}`);
+      options[field.key] = el ? el.value : "";
+    });
     return {
       customer: document.getElementById("filterCustomer").value,
       product: document.getElementById("filterProduct").value.trim(),
       year: document.getElementById("filterYear").value,
       month: document.getElementById("filterMonth").value,
+      options,
     };
   }
 
@@ -117,6 +142,17 @@
       if (f.product && !String(d.productName || "").toLowerCase().includes(f.product.toLowerCase())) return false;
       if (f.year && String(d.drawingYear) !== f.year) return false;
       if (f.month && String(d.drawingMonth) !== f.month) return false;
+
+      // 任意項目の絞り込み(複数選択の項目は、選んだ値を含んでいれば一致とみなす)
+      for (const field of PDF_OPTION_FIELDS) {
+        const wanted = f.options[field.key];
+        if (!wanted) continue;
+        if (field.multiple) {
+          if (!Array.isArray(d[field.key]) || !d[field.key].includes(wanted)) return false;
+        } else if (d[field.key] !== wanted) {
+          return false;
+        }
+      }
       return true;
     });
   }
@@ -147,6 +183,20 @@
   }
 
   /* ---------- 一覧表示 ---------- */
+
+  // 任意項目のうち入力済みのものをバッジのHTMLにする
+  function optionBadgesHtml(d) {
+    const badges = [];
+    PDF_OPTION_FIELDS.forEach((field) => {
+      const value = d[field.key];
+      if (field.multiple) {
+        (value || []).forEach((v) => badges.push(pdfOptionLabel(field.key, v)));
+      } else if (value) {
+        badges.push(pdfOptionLabel(field.key, value));
+      }
+    });
+    return badges.map((label) => `<span class="badge">${escapeHtml(label)}</span>`).join("");
+  }
 
   function render() {
     const hits = applyFilters();
@@ -180,6 +230,7 @@
               <div class="r-title">${escapeHtml(d.productName)}</div>
               <div class="r-meta">
                 <span class="badge badge-customer">${escapeHtml(d.customer)}</span>
+                ${optionBadgesHtml(d)}
                 <span class="dot">図面作成日：${formatDrawingDate(d.drawingDate)}</span>
                 <span class="dot">${escapeHtml(d.fileName)}</span>
                 <span class="dot">${formatFileSize(d.fileSize)}</span>
@@ -205,6 +256,7 @@
     document.getElementById("viewerTitle").textContent = meta.productName;
     document.getElementById("viewerMeta").innerHTML = `
       <span class="badge badge-customer">${escapeHtml(meta.customer)}</span>
+      ${optionBadgesHtml(meta)}
       <span>図面作成日：${formatDrawingDate(meta.drawingDate)}</span>
       <span>${escapeHtml(meta.fileName)}（${formatFileSize(meta.fileSize)}）</span>
       <span>登録：${escapeHtml(meta.createdAtText || "-")}</span>`;
@@ -291,16 +343,19 @@
 
   /* ---------- イベント登録 ---------- */
 
-  ["filterCustomer", "filterProduct", "filterYear", "filterMonth"].forEach((id) => {
-    document.getElementById(id).addEventListener("input", render);
-    document.getElementById(id).addEventListener("change", render);
-  });
+  // 絞り込み欄はあとから組み立てるものもあるので、カード全体で受け取る
+  document.querySelector(".card").addEventListener("input", render);
+  document.querySelector(".card").addEventListener("change", render);
 
   document.getElementById("resetBtn").addEventListener("click", () => {
     document.getElementById("filterCustomer").value = "";
     document.getElementById("filterProduct").value = "";
     document.getElementById("filterYear").value = "";
     document.getElementById("filterMonth").value = "";
+    PDF_OPTION_FIELDS.forEach((field) => {
+      const el = document.getElementById(`filterOpt-${field.key}`);
+      if (el) el.value = "";
+    });
     render();
   });
 
@@ -312,6 +367,7 @@
   });
 
   (async () => {
+    buildOptionFilters();
     const ok = await initPage();
     if (!ok) return;
     await reload();

@@ -973,11 +973,38 @@ footer.mock-footer {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.form-grid.form-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 960px) {
+  .form-grid.form-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 760px) {
   .form-grid,
-  .form-grid.form-grid-3 {
+  .form-grid.form-grid-3,
+  .form-grid.form-grid-4 {
     grid-template-columns: 1fr;
   }
+}
+
+/* 使用頻度の低い操作を置く、画面上部の小さなボタン列 */
+.page-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .form-grid .field {
@@ -1059,37 +1086,8 @@ footer.mock-footer {
   flex-shrink: 0;
 }
 
-/* ---------- 客先CSVの読み込み行 ---------- */
-.csv-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.csv-row-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--navy);
-  margin-bottom: 4px;
-}
-
-.csv-row-sub {
-  font-size: 11.5px;
-  color: var(--text-light);
-  line-height: 1.6;
-  max-width: 560px;
-}
-
-.csv-row-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 /* file inputを隠してlabelをボタンに見せているため */
-.csv-row-actions label.btn,
+.page-toolbar label.btn,
 .dropzone label.btn {
   cursor: pointer;
 }

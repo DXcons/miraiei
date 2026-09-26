@@ -29,9 +29,39 @@
   <h1 class="page-title">図面を保存する</h1>
   <p class="page-sub">PDFの図面ファイルを、客先・図面作成日・品名とあわせて登録します。</p>
 
-  <!-- ===== 1. 客先と図面作成日 ===== -->
+  <!-- 使用頻度の低い操作は上部に小さくまとめる -->
+  <div class="page-toolbar">
+    <label class="btn btn-ghost btn-sm" title="客先の選択肢をCSVファイルから読み込みます（Excelで保存したCSVも可）">
+      客先一覧を差し替える
+      <input type="file" id="customerCsvInput" accept=".csv,text/csv" hidden>
+    </label>
+    <button type="button" class="btn btn-ghost btn-sm" id="customerResetBtn">元に戻す</button>
+  </div>
+
+  <!-- ===== 入力必須 ===== -->
   <div class="card">
-    <h2 class="section-title">① 客先と図面作成日</h2>
+    <h2 class="section-title">入力が必要な項目</h2>
+
+    <div class="filter-label" style="margin-bottom:12px;">PDFファイルと品名 <span class="req">必須</span></div>
+
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">📄</div>
+      <div class="dropzone-main">ここにPDFをドラッグ＆ドロップ</div>
+      <div class="dropzone-sub">または</div>
+      <label class="btn btn-secondary">
+        ファイルを選ぶ
+        <input type="file" id="pdfInput" accept="application/pdf,.pdf" multiple hidden>
+      </label>
+      <div class="dropzone-note">複数選択できます。1ファイル20MBまで。</div>
+    </div>
+    <p class="field-note" style="margin-top:10px;">
+      品名は自由に入力できます。入力欄をクリックすると、「複数部品の図面」や50音の行から品名の候補を選べます
+      （候補は <a href="data/products.csv" class="text-link" target="_blank">data/products.csv</a> で管理しています）。
+    </p>
+
+    <div id="fileListArea"></div>
+
+    <hr class="divider">
 
     <div class="form-grid">
       <div class="field">
@@ -52,47 +82,18 @@
         <p class="field-note">年は西暦です。</p>
       </div>
     </div>
-
-    <hr class="divider">
-
-    <div class="csv-row">
-      <div>
-        <div class="csv-row-title">客先一覧を差し替える</div>
-        <div class="csv-row-sub">
-          客先名の列をもつCSVファイルを選ぶと、上の選択欄がその内容に入れ替わります
-          （Excelで保存したCSVもそのまま読み込めます）。
-        </div>
-      </div>
-      <div class="csv-row-actions">
-        <label class="btn btn-secondary">
-          CSVを読み込む
-          <input type="file" id="customerCsvInput" accept=".csv,text/csv" hidden>
-        </label>
-        <button type="button" class="btn btn-ghost" id="customerResetBtn">元に戻す</button>
-      </div>
-    </div>
   </div>
 
-  <!-- ===== 2. PDFファイル ===== -->
+  <!-- ===== 任意入力（分類） ===== -->
   <div class="card" style="margin-top:20px;">
-    <h2 class="section-title">② PDFファイルと品名</h2>
-
-    <div class="dropzone" id="dropzone">
-      <div class="dropzone-icon">📄</div>
-      <div class="dropzone-main">ここにPDFをドラッグ＆ドロップ</div>
-      <div class="dropzone-sub">または</div>
-      <label class="btn btn-secondary">
-        ファイルを選ぶ
-        <input type="file" id="pdfInput" accept="application/pdf,.pdf" multiple hidden>
-      </label>
-      <div class="dropzone-note">複数選択できます。1ファイル20MBまで。</div>
-    </div>
-    <p class="field-note" style="margin-top:10px;">
-      品名は自由に入力できます。入力欄をクリックすると、「複数部品の図面」や50音の行から品名の候補を選べます
-      （候補は <a href="data/products.csv" class="text-link" target="_blank">data/products.csv</a> で管理しています）。
+    <h2 class="section-title">任意で入力する項目</h2>
+    <p class="page-sub" style="margin-bottom:20px;">
+      あとで図面を探しやすくするための分類です。未入力のままでも保存できます。
+      ここで選んだ内容は、上で選択したPDF全部に共通で付きます。
     </p>
 
-    <div id="fileListArea"></div>
+    <!-- 中身は js/pdf-store.js の PDF_OPTION_FIELDS から生成（検索画面と共通） -->
+    <div id="optionFieldsArea"></div>
   </div>
 
   <div class="result-bar" style="margin-top:20px;">
@@ -104,7 +105,7 @@
   </div>
 
   <p class="page-sub" style="text-align:right;margin:0;">
-    <a href="pdf-list.html" class="text-link">保存済みの図面を見る ›</a>
+    <a href="pdf-list.html" class="text-link">過去の図面をさがす ›</a>
   </p>
 </main>
 
@@ -139,6 +140,8 @@
     if (source === "none") {
       note.textContent =
         "客先一覧を読み込めませんでした。下の「CSVを読み込む」で客先一覧CSVを選ぶか、「＋ 一覧にない客先を直接入力する」を使ってください。";
+    } else if (source === "default") {
+      note.textContent = `内蔵の初期一覧を表示しています（${list.length}件）。CSVから読み込むには下の「CSVを読み込む」を使ってください。`;
     } else if (source === "uploaded") {
       note.textContent = `読み込んだCSVの客先一覧を表示しています（${list.length}件）。`;
     } else {
@@ -187,6 +190,54 @@
     const y = document.getElementById("dateYear").value;
     const m = document.getElementById("dateMonth").value;
     return `${y}-${pad2(m)}`;
+  }
+
+  /* ---------- 任意で入力する分類項目 ---------- */
+
+  // PDF_OPTION_FIELDS(pdf-store.js)からチップ選択のUIを組み立てる。
+  // 検索画面と同じ定義を使うので、項目を増やすときはpdf-store.js側だけ直せばよい。
+  function buildOptionFields() {
+    document.getElementById("optionFieldsArea").innerHTML = PDF_OPTION_FIELDS.map((field) => {
+      const chips = field.multiple
+        ? field.options
+            .map(
+              (o) =>
+                `<label class="chip"><input type="checkbox" name="opt-${field.key}" value="${o.value}"><span>${escapeHtml(o.label)}</span></label>`
+            )
+            .join("")
+        : `<label class="chip"><input type="radio" name="opt-${field.key}" value="" checked><span>未設定</span></label>` +
+          field.options
+            .map(
+              (o) =>
+                `<label class="chip"><input type="radio" name="opt-${field.key}" value="${o.value}"><span>${escapeHtml(o.label)}</span></label>`
+            )
+            .join("");
+
+      const tag = field.multiple
+        ? `<span class="tag tag-multi">複数選択可</span>`
+        : `<span class="tag tag-single">単一選択</span>`;
+
+      return `
+        <div class="filter-section">
+          <div class="filter-label">${escapeHtml(field.label)} ${tag}</div>
+          <div class="chip-group">${chips}</div>
+        </div>`;
+    }).join("");
+  }
+
+  function readOptionFields() {
+    const values = {};
+    PDF_OPTION_FIELDS.forEach((field) => {
+      if (field.multiple) {
+        values[field.key] = Array.from(
+          document.querySelectorAll(`input[name="opt-${field.key}"]:checked`)
+        ).map((el) => el.value);
+      } else {
+        const checked = document.querySelector(`input[name="opt-${field.key}"]:checked`);
+        values[field.key] = checked ? checked.value : "";
+      }
+    });
+    return values;
   }
 
   /* ---------- ファイル一覧 ---------- */
@@ -327,6 +378,7 @@
 
     const customer = readCustomer();
     const drawingDate = readDrawingDate();
+    const options = readOptionFields();
     const status = document.getElementById("saveStatus");
 
     setSavingUi(true);
@@ -345,7 +397,7 @@
       try {
         await savePdfDrawing(
           entry.file,
-          { customer, drawingDate, productName: entry.productName.trim() },
+          Object.assign({ customer, drawingDate, productName: entry.productName.trim() }, options),
           (done, total) => {
             entry.message = Math.round((done / total) * 100) + "%";
             refreshStatusCell(i);
@@ -365,7 +417,7 @@
     setSavingUi(false);
 
     if (failed === 0) {
-      status.innerHTML = `${succeeded}件を保存しました。<a href="pdf-list.html" class="text-link">保存済みの図面を見る ›</a>`;
+      status.innerHTML = `${succeeded}件を保存しました。<a href="pdf-list.html" class="text-link">過去の図面をさがす ›</a>`;
       toast(`${succeeded}件の図面を保存しました`);
     } else {
       status.textContent = `${succeeded}件を保存しました。${failed}件は失敗しました（「失敗」にマウスを乗せると理由が出ます）。`;
@@ -545,6 +597,7 @@
 
   (async () => {
     buildDateSelects();
+    buildOptionFields();
     const ok = await initPage();
     if (!ok) return;
     const { list, source } = await loadCustomerList();
