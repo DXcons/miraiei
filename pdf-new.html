@@ -48,7 +48,6 @@
         <div class="date-selects">
           <select id="dateYear"></select><span class="date-unit">年</span>
           <select id="dateMonth"></select><span class="date-unit">月</span>
-          <select id="dateDay"></select><span class="date-unit">日</span>
         </div>
         <p class="field-note">年は西暦です。</p>
       </div>
@@ -89,12 +88,11 @@
       <div class="dropzone-note">複数選択できます。1ファイル20MBまで。</div>
     </div>
     <p class="field-note" style="margin-top:10px;">
-      品名は自由に入力できます。入力欄をクリックすると、過去の図面でよく使われている品名が候補として表示されます
+      品名は自由に入力できます。入力欄をクリックすると、「複数部品の図面」や50音の行から品名の候補を選べます
       （候補は <a href="data/products.csv" class="text-link" target="_blank">data/products.csv</a> で管理しています）。
     </p>
 
     <div id="fileListArea"></div>
-    <datalist id="productNameList"></datalist>
   </div>
 
   <div class="result-bar" style="margin-top:20px;">
@@ -109,6 +107,8 @@
     <a href="pdf-list.html" class="text-link">保存済みの図面を見る ›</a>
   </p>
 </main>
+
+<div class="product-picker" id="productPicker" hidden></div>
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
 
@@ -181,30 +181,12 @@
 
     monthSel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
     monthSel.value = String(today.getMonth() + 1);
-
-    rebuildDayOptions(today.getDate());
-
-    yearSel.addEventListener("change", () => rebuildDayOptions());
-    monthSel.addEventListener("change", () => rebuildDayOptions());
-  }
-
-  // 年月に合わせて「日」の選択肢を作り直す(2月30日などを選べないようにする)
-  function rebuildDayOptions(preferredDay) {
-    const daySel = document.getElementById("dateDay");
-    const year = Number(document.getElementById("dateYear").value);
-    const month = Number(document.getElementById("dateMonth").value);
-    const last = daysInMonth(year, month);
-    const keep = preferredDay || Number(daySel.value) || 1;
-
-    daySel.innerHTML = Array.from({ length: last }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
-    daySel.value = String(Math.min(keep, last));
   }
 
   function readDrawingDate() {
     const y = document.getElementById("dateYear").value;
     const m = document.getElementById("dateMonth").value;
-    const d = document.getElementById("dateDay").value;
-    return `${y}-${pad2(m)}-${pad2(d)}`;
+    return `${y}-${pad2(m)}`;
   }
 
   /* ---------- ファイル一覧 ---------- */
@@ -251,6 +233,7 @@
   }
 
   function renderFileList() {
+    closeProductPicker(); // 行を作り直すと参照中の入力欄が消えるため、開いていれば閉じる
     const area = document.getElementById("fileListArea");
     if (entries.length === 0) {
       area.innerHTML = "";
@@ -276,7 +259,7 @@
               <tr>
                 <td>${i + 1}</td>
                 <td class="file-name-cell" title="${escapeHtml(e.file.name)}">${escapeHtml(e.file.name)}</td>
-                <td><input type="text" class="product-input" data-index="${i}" value="${escapeHtml(e.productName)}" placeholder="品名を入力" list="productNameList" autocomplete="off"></td>
+                <td><input type="text" class="product-input" data-index="${i}" value="${escapeHtml(e.productName)}" placeholder="品名を入力" autocomplete="off"></td>
                 <td>${formatFileSize(e.file.size)}</td>
                 <td data-status="${i}">${statusCellHtml(e)}</td>
                 <td><button type="button" class="row-remove" data-remove="${i}" title="一覧から外す">×</button></td>
@@ -455,14 +438,110 @@
     toast("客先一覧を元に戻しました");
   });
 
-  /* ---------- 初期化 ---------- */
+  /* ---------- 品名ピッカー(「複数部品の図面」＋50音の行から選ぶ) ---------- */
 
-  async function loadProductSuggestions() {
-    const names = await loadProductNameList();
-    document.getElementById("productNameList").innerHTML = names
-      .map((name) => `<option value="${escapeHtml(name)}">`)
-      .join("");
+  let productBuckets = { pinned: [], groups: {} };
+  let activeProductInput = null;
+  let pickerView = { mode: "index" }; // { mode: "index" } または { mode: "group", row: "さ" }
+
+  function closeProductPicker() {
+    const picker = document.getElementById("productPicker");
+    picker.hidden = true;
+    activeProductInput = null;
   }
+
+  function positionPicker(input) {
+    const picker = document.getElementById("productPicker");
+    const rect = input.getBoundingClientRect();
+    const width = Math.max(rect.width, 240);
+    const maxLeft = window.innerWidth - width - 12;
+    const left = Math.max(12, Math.min(rect.left, maxLeft));
+    picker.style.width = width + "px";
+    picker.style.left = left + "px";
+    picker.style.top = (rect.bottom + 4) + "px";
+  }
+
+  function openProductPicker(input) {
+    activeProductInput = input;
+    pickerView = { mode: "index" };
+    renderProductPicker();
+    positionPicker(input);
+    document.getElementById("productPicker").hidden = false;
+  }
+
+  function selectProductName(name) {
+    if (!activeProductInput) return;
+    activeProductInput.value = name;
+    activeProductInput.dispatchEvent(new Event("input", { bubbles: true }));
+    closeProductPicker();
+  }
+
+  function renderProductPicker() {
+    const picker = document.getElementById("productPicker");
+
+    if (pickerView.mode === "group") {
+      const items = productBuckets.groups[pickerView.row] || [];
+      picker.innerHTML = `
+        <div class="picker-back" data-back>‹ 戻る</div>
+        <div class="picker-item-list">
+          ${items.length > 0
+            ? items.map((name) => `<div class="picker-item" data-name="${escapeHtml(name)}">${escapeHtml(name)}</div>`).join("")
+            : `<div class="picker-empty">この行に登録されている品名はまだありません。</div>`}
+        </div>`;
+      picker.querySelector("[data-back]").addEventListener("click", () => {
+        pickerView = { mode: "index" };
+        renderProductPicker();
+      });
+      picker.querySelectorAll("[data-name]").forEach((el) => {
+        el.addEventListener("click", () => selectProductName(el.dataset.name));
+      });
+      return;
+    }
+
+    const pinnedHtml = productBuckets.pinned
+      .map((name) => `<div class="picker-chip pinned" data-name="${escapeHtml(name)}">${escapeHtml(name)}</div>`)
+      .join("");
+    const rowHtml = KANA_ROW_ORDER
+      .map((row) => `<div class="picker-chip" data-row="${row}">${row}行</div>`)
+      .join("");
+
+    picker.innerHTML = `<div class="picker-chip-group">${pinnedHtml}${rowHtml}</div>`;
+
+    picker.querySelectorAll("[data-name]").forEach((el) => {
+      el.addEventListener("click", () => selectProductName(el.dataset.name));
+    });
+    picker.querySelectorAll("[data-row]").forEach((el) => {
+      el.addEventListener("click", () => {
+        pickerView = { mode: "group", row: el.dataset.row };
+        renderProductPicker();
+      });
+    });
+  }
+
+  // 品名欄をクリック(フォーカス)したらピッカーを開く
+  document.addEventListener("focusin", (ev) => {
+    if (ev.target.classList && ev.target.classList.contains("product-input")) {
+      openProductPicker(ev.target);
+    }
+  });
+
+  // ピッカーの外をクリックしたら閉じる
+  document.addEventListener("mousedown", (ev) => {
+    const picker = document.getElementById("productPicker");
+    if (picker.hidden) return;
+    if (picker.contains(ev.target)) return;
+    if (ev.target.classList && ev.target.classList.contains("product-input")) return;
+    closeProductPicker();
+  });
+
+  window.addEventListener("scroll", () => {
+    if (activeProductInput) positionPicker(activeProductInput);
+  }, true);
+  window.addEventListener("resize", () => {
+    if (activeProductInput) positionPicker(activeProductInput);
+  });
+
+  /* ---------- 初期化 ---------- */
 
   (async () => {
     buildDateSelects();
@@ -470,7 +549,7 @@
     if (!ok) return;
     const { list, source } = await loadCustomerList();
     renderCustomerOptions(list, source);
-    loadProductSuggestions();
+    productBuckets = await loadProductBuckets();
     updateSaveButton();
   })();
 </script>
