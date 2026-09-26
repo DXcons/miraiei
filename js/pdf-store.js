@@ -47,21 +47,16 @@ function formatFileSize(bytes) {
   return (bytes / 1024 / 1024).toFixed(1) + " MB";
 }
 
-// 「2026-09-24」→「2026年9月24日」
-function formatDrawingDate(isoDate) {
-  if (!isoDate) return "-";
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
-  if (!m) return isoDate;
-  return `${Number(m[1])}年${Number(m[2])}月${Number(m[3])}日`;
+// 「2026-09」→「2026年9月」
+function formatDrawingDate(isoMonth) {
+  if (!isoMonth) return "-";
+  const m = /^(\d{4})-(\d{2})$/.exec(isoMonth);
+  if (!m) return isoMonth;
+  return `${Number(m[1])}年${Number(m[2])}月`;
 }
 
 function pad2(n) {
   return String(n).padStart(2, "0");
-}
-
-// 指定した年月の日数(うるう年対応)
-function daysInMonth(year, month) {
-  return new Date(Number(year), Number(month), 0).getDate();
 }
 
 /* ---------- Base64変換 ---------- */
@@ -100,7 +95,7 @@ function readFileAsArrayBuffer(file) {
 
 /**
  * PDFを1件保存する。
- * meta: { customer, drawingDate:"YYYY-MM-DD", productName }
+ * meta: { customer, drawingDate:"YYYY-MM", productName }
  * onProgress(done, total) … チャンクの書き込み進捗(0〜total)
  *
  * 本体チャンクを先に書き、最後に検索用ドキュメントを書く。
@@ -129,7 +124,7 @@ async function savePdfDrawing(file, meta, onProgress) {
   }
 
   const now = new Date();
-  const [year, month, day] = meta.drawingDate.split("-");
+  const [year, month] = meta.drawingDate.split("-");
 
   await docRef.set({
     customer: meta.customer,
@@ -138,7 +133,6 @@ async function savePdfDrawing(file, meta, onProgress) {
     // 年・月での絞り込みを軽くするために分解した値も持たせておく
     drawingYear: Number(year),
     drawingMonth: Number(month),
-    drawingDay: Number(day),
     fileName: file.name,
     fileSize: file.size,
     mimeType: file.type || "application/pdf",
@@ -285,14 +279,94 @@ function extractNamesFromCsvRows(rows, headerPattern) {
 }
 
 const CUSTOMER_HEADER_PATTERN = /客先|取引先|得意先|顧客|会社名|会社|customer|company|name/i;
-const PRODUCT_HEADER_PATTERN = /品名|部品名|製品名|product|name/i;
 
 function parseCustomerCsvBuffer(buffer) {
   return extractNamesFromCsvRows(parseCsv(decodeCsvBuffer(buffer)), CUSTOMER_HEADER_PATTERN);
 }
 
-function parseProductCsvBuffer(buffer) {
-  return extractNamesFromCsvRows(parseCsv(decodeCsvBuffer(buffer)), PRODUCT_HEADER_PATTERN);
+/* ==========================================================
+   品名一覧CSVの読み込み(50音の行で絞り込むためのグループ分け)
+   ========================================================== */
+
+// data/products.csv は「品名,よみ」の2列。
+// よみが空欄の行は「複数部品の図面」のように50音では分類しない
+// 特別項目として扱い、候補パネルの先頭に常に表示する。
+const PRODUCT_NAME_HEADER_PATTERN = /品名|部品名|製品名|product/i;
+const PRODUCT_YOMI_HEADER_PATTERN = /よみ|読み|ふりがな|yomi|reading/i;
+
+// 50音の行の並び順(候補パネルに表示する順番)
+const KANA_ROW_ORDER = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ"];
+
+// ひらがな1文字 → その行(濁音・半濁音・拗音・小書き文字は元になる行にまとめる)
+const KANA_TO_ROW = {
+  あ: "あ", い: "あ", う: "あ", え: "あ", お: "あ", ぁ: "あ", ぃ: "あ", ぅ: "あ", ぇ: "あ", ぉ: "あ",
+  か: "か", き: "か", く: "か", け: "か", こ: "か", が: "か", ぎ: "か", ぐ: "か", げ: "か", ご: "か",
+  さ: "さ", し: "さ", す: "さ", せ: "さ", そ: "さ", ざ: "さ", じ: "さ", ず: "さ", ぜ: "さ", ぞ: "さ",
+  た: "た", ち: "た", つ: "た", て: "た", と: "た", だ: "た", ぢ: "た", づ: "た", で: "た", ど: "た", っ: "た",
+  な: "な", に: "な", ぬ: "な", ね: "な", の: "な",
+  は: "は", ひ: "は", ふ: "は", へ: "は", ほ: "は", ば: "は", び: "は", ぶ: "は", べ: "は", ぼ: "は",
+  ぱ: "は", ぴ: "は", ぷ: "は", ぺ: "は", ぽ: "は",
+  ま: "ま", み: "ま", む: "ま", め: "ま", も: "ま",
+  や: "や", ゆ: "や", よ: "や", ゃ: "や", ゅ: "や", ょ: "や",
+  ら: "ら", り: "ら", る: "ら", れ: "ら", ろ: "ら",
+  わ: "わ", を: "わ", ん: "わ",
+};
+
+function kanaRowOf(char) {
+  return KANA_TO_ROW[char] || null;
+}
+
+// CSVの「品名,よみ」を { name, yomi } の配列に変換する
+function parseProductCsvRows(buffer) {
+  const rows = parseCsv(decodeCsvBuffer(buffer));
+  if (rows.length === 0) return [];
+
+  const header = rows[0].map((c) => c.trim());
+  const nameHit = header.findIndex((c) => PRODUCT_NAME_HEADER_PATTERN.test(c));
+  const yomiHit = header.findIndex((c) => PRODUCT_YOMI_HEADER_PATTERN.test(c));
+  const hasHeader = nameHit >= 0 || yomiHit >= 0;
+  const nameCol = nameHit >= 0 ? nameHit : 0;
+  const yomiCol = yomiHit >= 0 ? yomiHit : 1;
+  const startRow = hasHeader ? 1 : 0;
+
+  const items = [];
+  const seen = new Set();
+  for (let r = startRow; r < rows.length; r++) {
+    const name = (rows[r][nameCol] || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    items.push({ name, yomi: (rows[r][yomiCol] || "").trim() });
+  }
+  return items;
+}
+
+/**
+ * 品名の候補一覧を取得し、「よみ」をもとに50音の行へ仕分けする。
+ * よみが空欄の項目(「複数部品の図面」など)はpinnedへ、
+ * それ以外はよみの1文字目でgroups["あ"]〜groups["わ"]へ分類する。
+ * 戻り値: { pinned: string[], groups: { あ: string[], か: string[], ... } }
+ */
+async function loadProductBuckets() {
+  const buckets = { pinned: [], groups: {} };
+  KANA_ROW_ORDER.forEach((row) => (buckets.groups[row] = []));
+
+  try {
+    const res = await fetch(PRODUCT_CSV_PATH, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const items = parseProductCsvRows(await res.arrayBuffer());
+    items.forEach(({ name, yomi }) => {
+      if (!yomi) {
+        buckets.pinned.push(name);
+        return;
+      }
+      const row = kanaRowOf(yomi[0]) || "わ"; // 想定外の読み(記号など)はわ行にまとめる
+      buckets.groups[row].push(name);
+    });
+  } catch (err) {
+    // ローカルファイル(file://)で開いた場合はfetchがブロックされるためここに来る
+    console.warn("品名一覧CSVを読み込めませんでした", err);
+  }
+  return buckets;
 }
 
 /* ---------- 客先一覧の取得と保存 ---------- */
@@ -346,18 +420,3 @@ async function loadCustomerList() {
   }
 }
 
-/**
- * 品名の入力補完に使う候補一覧を取得する(data/products.csvを読む)。
- * 客先と違い「一覧にない品名の自由入力」が前提のため、見つからなければ
- * 空配列を返すだけでよい(入力欄はそのまま自由記入として機能する)。
- */
-async function loadProductNameList() {
-  try {
-    const res = await fetch(PRODUCT_CSV_PATH, { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return parseProductCsvBuffer(await res.arrayBuffer());
-  } catch (err) {
-    console.warn("品名一覧CSVを読み込めませんでした", err);
-    return [];
-  }
-}
