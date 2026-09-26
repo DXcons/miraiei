@@ -98,12 +98,18 @@ function formatFileSize(bytes) {
   return (bytes / 1024 / 1024).toFixed(1) + " MB";
 }
 
-// 「2026-09」→「2026年9月」
-function formatDrawingDate(isoMonth) {
-  if (!isoMonth) return "-";
-  const m = /^(\d{4})-(\d{2})$/.exec(isoMonth);
-  if (!m) return isoMonth;
-  return `${Number(m[1])}年${Number(m[2])}月`;
+// 図面作成日の表示。年月が不明な場合もあるので複数の形式を受け付ける。
+//   "2026-09" → 「2026年9月」 / "2026" → 「2026年（月不明）」 / "" → 「不明」
+//   "2026-09-24" は日まで入れていた頃に保存したデータ用
+function formatDrawingDate(value) {
+  if (!value) return "不明";
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (ymd) return `${Number(ymd[1])}年${Number(ymd[2])}月${Number(ymd[3])}日`;
+  const ym = /^(\d{4})-(\d{2})$/.exec(value);
+  if (ym) return `${Number(ym[1])}年${Number(ym[2])}月`;
+  const y = /^(\d{4})$/.exec(value);
+  if (y) return `${Number(y[1])}年（月不明）`;
+  return value;
 }
 
 function pad2(n) {
@@ -175,15 +181,16 @@ async function savePdfDrawing(file, meta, onProgress) {
   }
 
   const now = new Date();
-  const [year, month] = meta.drawingDate.split("-");
+  // drawingDateは "2026-09"(年月) / "2026"(年のみ) / ""(不明) のいずれか
+  const [year, month] = (meta.drawingDate || "").split("-");
 
   await docRef.set({
     customer: meta.customer,
     productName: meta.productName,
-    drawingDate: meta.drawingDate,
-    // 年・月での絞り込みを軽くするために分解した値も持たせておく
-    drawingYear: Number(year),
-    drawingMonth: Number(month),
+    drawingDate: meta.drawingDate || "",
+    // 年・月での絞り込みを軽くするために分解した値も持たせておく(不明ならnull)
+    drawingYear: year ? Number(year) : null,
+    drawingMonth: month ? Number(month) : null,
     // 任意で入力する分類項目(未選択なら空)
     location: meta.location || "",
     materials: meta.materials || [],
@@ -372,6 +379,56 @@ function kanaRowOf(char) {
   return KANA_TO_ROW[char] || null;
 }
 
+// 50音の行に振り分けられない品名(漢字・英字で始まるものなど)を入れるグループ
+const PDF_OTHER_ROW_KEY = "他";
+
+function katakanaToHiragana(text) {
+  return String(text || "").replace(/[ァ-ヶ]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60)
+  );
+}
+
+// 品名そのものから50音の行を推測する(カナで始まる場合のみ判定できる)。
+// よみを持たない、保存済み図面から拾ってきた品名の振り分けに使う。
+function guessKanaRow(name) {
+  const first = katakanaToHiragana(String(name || "").trim())[0];
+  return first ? kanaRowOf(first) : null;
+}
+
+/**
+ * 保存済み図面の品名を候補に加える。
+ * これにより、一度「直接入力」で保存した品名は次回から候補に出るようになる。
+ * カナで始まる品名はその行へ、判定できないもの(漢字始まりなど)は「その他」へ入れる。
+ */
+function mergeSavedProductNames(buckets, names) {
+  const known = new Set(buckets.pinned);
+  Object.keys(buckets.groups).forEach((row) => {
+    buckets.groups[row].forEach((name) => known.add(name));
+  });
+
+  names.forEach((rawName) => {
+    const name = String(rawName || "").trim();
+    if (!name || known.has(name)) return;
+    known.add(name);
+    const row = guessKanaRow(name) || PDF_OTHER_ROW_KEY;
+    if (!buckets.groups[row]) buckets.groups[row] = [];
+    buckets.groups[row].push(name);
+  });
+  return buckets;
+}
+
+// 保存済み図面から品名だけを重複なく取り出す
+async function fetchSavedProductNames() {
+  try {
+    const snapshot = await db.collection(PDF_COLLECTION).get();
+    const names = snapshot.docs.map((doc) => doc.data().productName).filter(Boolean);
+    return Array.from(new Set(names));
+  } catch (err) {
+    console.warn("保存済み図面の品名を取得できませんでした", err);
+    return [];
+  }
+}
+
 // data/products.csv が読み込めない環境(ローカルファイルとして開いた場合など)でも
 // 候補が出るように、CSVと同じ初期内容をここにも持たせておく。
 // 通常はCSV側が優先され、CSVを更新すればそちらが反映される。
@@ -447,6 +504,7 @@ function parseProductCsvRows(buffer) {
 async function loadProductBuckets() {
   const buckets = { pinned: [], groups: {} };
   KANA_ROW_ORDER.forEach((row) => (buckets.groups[row] = []));
+  buckets.groups[PDF_OTHER_ROW_KEY] = [];
 
   let items = [];
   try {

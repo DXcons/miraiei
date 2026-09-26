@@ -79,21 +79,28 @@
           <select id="dateYear"></select><span class="date-unit">年</span>
           <select id="dateMonth"></select><span class="date-unit">月</span>
         </div>
-        <p class="field-note">年は西暦です。</p>
+        <p class="field-note">年は西暦です。わからない場合は「不明」を選んでください。</p>
       </div>
     </div>
   </div>
 
-  <!-- ===== 任意入力（分類） ===== -->
-  <div class="card" style="margin-top:20px;">
-    <h2 class="section-title">任意で入力する項目</h2>
-    <p class="page-sub" style="margin-bottom:20px;">
-      あとで図面を探しやすくするための分類です。未入力のままでも保存できます。
-      ここで選んだ内容は、上で選択したPDF全部に共通で付きます。
-    </p>
+  <!-- ===== 任意入力（分類）：普段は折りたたんでおく ===== -->
+  <div class="card collapsible" id="optionCard" style="margin-top:20px;">
+    <button type="button" class="collapsible-head" id="optionToggle" aria-expanded="false" aria-controls="optionBody">
+      <span class="collapsible-icon">＋</span>
+      <span class="section-title" style="margin:0;">任意で入力する項目</span>
+      <span class="collapsible-hint" id="optionSummary">未設定</span>
+    </button>
 
-    <!-- 中身は js/pdf-store.js の PDF_OPTION_FIELDS から生成（検索画面と共通） -->
-    <div id="optionFieldsArea"></div>
+    <div class="collapsible-body" id="optionBody" hidden>
+      <p class="page-sub" style="margin:16px 0 20px;">
+        あとで図面を探しやすくするための分類です。未入力のままでも保存できます。
+        ここで選んだ内容は、上で選択したPDF全部に共通で付きます。
+      </p>
+
+      <!-- 中身は js/pdf-store.js の PDF_OPTION_FIELDS から生成（検索画面と共通） -->
+      <div id="optionFieldsArea"></div>
+    </div>
   </div>
 
   <div class="result-bar" style="margin-top:20px;">
@@ -175,20 +182,37 @@
     const yearSel = document.getElementById("dateYear");
     const monthSel = document.getElementById("dateMonth");
 
-    const options = [];
+    const years = [`<option value="">不明</option>`];
     for (let y = today.getFullYear() + 1; y >= 1980; y--) {
-      options.push(`<option value="${y}">${y}</option>`);
+      years.push(`<option value="${y}">${y}</option>`);
     }
-    yearSel.innerHTML = options.join("");
+    yearSel.innerHTML = years.join("");
     yearSel.value = String(today.getFullYear());
 
-    monthSel.innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+    monthSel.innerHTML =
+      `<option value="">不明</option>` +
+      Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
     monthSel.value = String(today.getMonth() + 1);
+
+    yearSel.addEventListener("change", syncDateSelects);
+    syncDateSelects();
   }
 
+  // 年が「不明」なら月だけ選べても意味がないので、月も不明に固定する
+  function syncDateSelects() {
+    const yearSel = document.getElementById("dateYear");
+    const monthSel = document.getElementById("dateMonth");
+    const unknownYear = yearSel.value === "";
+    if (unknownYear) monthSel.value = "";
+    monthSel.disabled = unknownYear;
+  }
+
+  // 戻り値は "2026-09"(年月) / "2026"(年のみ) / ""(不明)
   function readDrawingDate() {
     const y = document.getElementById("dateYear").value;
     const m = document.getElementById("dateMonth").value;
+    if (!y) return "";
+    if (!m) return y;
     return `${y}-${pad2(m)}`;
   }
 
@@ -238,6 +262,31 @@
       }
     });
     return values;
+  }
+
+  // 折りたたんだ状態でも何を選んだか分かるよう、見出しの右に要約を出す
+  function updateOptionSummary() {
+    const values = readOptionFields();
+    const labels = [];
+    PDF_OPTION_FIELDS.forEach((field) => {
+      const value = values[field.key];
+      if (field.multiple) {
+        (value || []).forEach((v) => labels.push(pdfOptionLabel(field.key, v)));
+      } else if (value) {
+        labels.push(pdfOptionLabel(field.key, value));
+      }
+    });
+    document.getElementById("optionSummary").textContent =
+      labels.length > 0 ? labels.join("・") : "未設定";
+  }
+
+  function toggleOptionCard() {
+    const body = document.getElementById("optionBody");
+    const toggle = document.getElementById("optionToggle");
+    const open = body.hidden;
+    body.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    document.querySelector("#optionToggle .collapsible-icon").textContent = open ? "−" : "＋";
   }
 
   /* ---------- ファイル一覧 ---------- */
@@ -416,6 +465,9 @@
 
     setSavingUi(false);
 
+    // 今回保存した品名をすぐ候補に反映する(同じ画面で続けて登録する場合のため)
+    if (succeeded > 0) refreshProductBuckets();
+
     if (failed === 0) {
       status.innerHTML = `${succeeded}件を保存しました。<a href="pdf-list.html" class="text-link">過去の図面をさがす ›</a>`;
       toast(`${succeeded}件の図面を保存しました`);
@@ -463,6 +515,9 @@
   });
 
   document.getElementById("saveBtn").addEventListener("click", saveAll);
+
+  document.getElementById("optionToggle").addEventListener("click", toggleOptionCard);
+  document.getElementById("optionFieldsArea").addEventListener("change", updateOptionSummary);
 
   document.getElementById("customerCsvInput").addEventListener("change", async (ev) => {
     const file = ev.target.files[0];
@@ -553,9 +608,13 @@
     const pinnedHtml = productBuckets.pinned
       .map((name) => `<div class="picker-chip pinned" data-name="${escapeHtml(name)}">${escapeHtml(name)}</div>`)
       .join("");
-    const rowHtml = KANA_ROW_ORDER
+    let rowHtml = KANA_ROW_ORDER
       .map((row) => `<div class="picker-chip" data-row="${row}">${row}行</div>`)
       .join("");
+    // 漢字始まりなど50音の行に振り分けられない品名がある場合だけ「その他」を出す
+    if ((productBuckets.groups[PDF_OTHER_ROW_KEY] || []).length > 0) {
+      rowHtml += `<div class="picker-chip" data-row="${PDF_OTHER_ROW_KEY}">その他</div>`;
+    }
 
     picker.innerHTML = `<div class="picker-chip-group">${pinnedHtml}${rowHtml}</div>`;
 
@@ -595,14 +654,22 @@
 
   /* ---------- 初期化 ---------- */
 
+  // CSVの候補に加えて、保存済み図面で実際に使われている品名も候補に入れる。
+  // これにより「直接入力」した品名が、保存後は候補から選べるようになる。
+  async function refreshProductBuckets() {
+    const buckets = await loadProductBuckets();
+    productBuckets = mergeSavedProductNames(buckets, await fetchSavedProductNames());
+  }
+
   (async () => {
     buildDateSelects();
     buildOptionFields();
+    updateOptionSummary();
     const ok = await initPage();
     if (!ok) return;
     const { list, source } = await loadCustomerList();
     renderCustomerOptions(list, source);
-    productBuckets = await loadProductBuckets();
+    await refreshProductBuckets();
     updateSaveButton();
   })();
 </script>

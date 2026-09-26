@@ -140,7 +140,11 @@
     return PDF_DRAWINGS.filter((d) => {
       if (f.customer && d.customer !== f.customer) return false;
       if (f.product && !String(d.productName || "").toLowerCase().includes(f.product.toLowerCase())) return false;
-      if (f.year && String(d.drawingYear) !== f.year) return false;
+      if (f.year === "unknown") {
+        if (d.drawingYear) return false; // 作成年が不明のものだけ
+      } else if (f.year && String(d.drawingYear) !== f.year) {
+        return false;
+      }
       if (f.month && String(d.drawingMonth) !== f.month) return false;
 
       // 任意項目の絞り込み(複数選択の項目は、選んだ値を含んでいれば一致とみなす)
@@ -171,8 +175,11 @@
     customerSel.innerHTML =
       `<option value="">すべて</option>` +
       customers.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+    const hasUnknownYear = PDF_DRAWINGS.some((d) => !d.drawingYear);
     yearSel.innerHTML =
-      `<option value="">すべて</option>` + years.map((y) => `<option value="${y}">${y}</option>`).join("");
+      `<option value="">すべて</option>` +
+      years.map((y) => `<option value="${y}">${y}</option>`).join("") +
+      (hasUnknownYear ? `<option value="unknown">不明</option>` : "");
     monthSel.innerHTML =
       `<option value="">すべて</option>` +
       Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
