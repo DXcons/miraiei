@@ -57,7 +57,7 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -70,14 +70,14 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   color: #fff;
 }
 
 .app-header .brand small {
   display: block;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
   color: #b9c3d6;
   letter-spacing: 0.05em;
@@ -87,7 +87,7 @@ a {
   display: flex;
   align-items: center;
   gap: 18px;
-  font-size: 13px;
+  font-size: 15px;
   color: #cfd8e8;
 }
 
@@ -107,7 +107,7 @@ a {
   gap: 8px;
   padding-left: 12px;
   border-left: 1px solid rgba(255, 255, 255, 0.2);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 /* ---------- 共通レイアウト ---------- */
@@ -118,20 +118,20 @@ a {
 }
 
 .page-title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   margin: 0 0 4px;
   color: var(--navy);
 }
 
 .page-sub {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-light);
   margin: 0 0 24px;
 }
 
 .breadcrumb {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
   margin-bottom: 14px;
 }
@@ -187,18 +187,18 @@ a {
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 22px;
+  font-size: 24px;
   margin: 0 auto 16px;
 }
 
 .login-card h1 {
-  font-size: 18px;
+  font-size: 20px;
   margin: 0 0 4px;
   color: var(--navy);
 }
 
 .login-card p.system-name {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
   margin: 0 0 28px;
   letter-spacing: 0.04em;
@@ -211,7 +211,7 @@ a {
 
 .field label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-light);
   margin-bottom: 6px;
@@ -224,7 +224,7 @@ a {
   padding: 11px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   background: #fbfcfd;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -240,7 +240,7 @@ a {
   display: none;
   background: #fdecea;
   color: #b3261e;
-  font-size: 12px;
+  font-size: 14px;
   padding: 8px 10px;
   border-radius: 6px;
   margin-bottom: 14px;
@@ -249,7 +249,7 @@ a {
 
 .login-hint {
   margin-top: 20px;
-  font-size: 11px;
+  font-size: 13px;
   color: #a7b0bd;
   line-height: 1.6;
 }
@@ -263,7 +263,7 @@ a {
   padding: 12px 20px;
   border-radius: 8px;
   border: none;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   transition: transform 0.06s ease, box-shadow 0.15s, background 0.15s;
@@ -310,7 +310,7 @@ a {
 
 .btn-lg {
   padding: 20px 24px;
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .btn:disabled {
@@ -361,17 +361,17 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 30px;
 }
 
 .choice-card h2 {
-  font-size: 16px;
+  font-size: 18px;
   margin: 0;
   color: var(--navy);
 }
 
 .choice-card p {
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--text-light);
   margin: 0;
   line-height: 1.6;
@@ -387,7 +387,7 @@ a {
 }
 
 .filter-label {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--navy);
   margin-bottom: 10px;
@@ -397,7 +397,7 @@ a {
 }
 
 .filter-label .tag {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 999px;
@@ -438,7 +438,7 @@ a {
   padding: 9px 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text);
   background: #fbfcfd;
   transition: all 0.12s;
@@ -472,7 +472,7 @@ a {
 }
 
 .dim-field label {
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--text-light);
   white-space: nowrap;
 }
@@ -482,7 +482,7 @@ a {
   border: none;
   background: transparent;
   padding: 6px 4px;
-  font-size: 14px;
+  font-size: 16px;
   text-align: right;
 }
 
@@ -491,7 +491,7 @@ a {
 }
 
 .dim-field .unit {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
 }
 
@@ -501,7 +501,7 @@ a {
 
 .dim-field.dim-range .range-sep {
   color: var(--text-light);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 hr.divider {
@@ -522,12 +522,12 @@ hr.divider {
 }
 
 .result-bar .count-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-light);
 }
 
 .result-bar .count-num {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   color: var(--accent);
   margin: 0 4px;
@@ -571,7 +571,7 @@ hr.divider {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 24px;
   flex-shrink: 0;
   color: #8b95a5;
 }
@@ -582,14 +582,14 @@ hr.divider {
 }
 
 .result-info .r-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 4px;
 }
 
 .result-info .r-meta {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
   display: flex;
   flex-wrap: wrap;
@@ -602,7 +602,7 @@ hr.divider {
 }
 
 .badge {
-  font-size: 11px;
+  font-size: 13px;
   padding: 2px 8px;
   border-radius: 999px;
   background: #eef1f6;
@@ -617,7 +617,7 @@ hr.divider {
 
 .result-arrow {
   color: #c3cad4;
-  font-size: 18px;
+  font-size: 20px;
   flex-shrink: 0;
 }
 
@@ -625,11 +625,11 @@ hr.divider {
   text-align: center;
   padding: 40px 20px;
   color: var(--text-light);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .empty-state .empty-icon {
-  font-size: 32px;
+  font-size: 34px;
   margin-bottom: 10px;
 }
 
@@ -660,13 +660,13 @@ hr.divider {
 }
 
 .new-choice-card h2 {
-  font-size: 15px;
+  font-size: 17px;
   color: var(--navy);
   margin: 0 0 8px;
 }
 
 .new-choice-card p {
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--text-light);
   margin: 0 0 20px;
   line-height: 1.7;
@@ -712,14 +712,14 @@ hr.divider {
 
 .modal-head h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--navy);
 }
 
 .modal-head .modal-close {
   border: none;
   background: transparent;
-  font-size: 20px;
+  font-size: 22px;
   cursor: pointer;
   color: var(--text-light);
   line-height: 1;
@@ -738,7 +738,7 @@ hr.divider {
   justify-content: space-between;
   align-items: center;
   background: #fafbfc;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
 }
 
@@ -751,7 +751,7 @@ hr.divider {
 
 .modal-filter-row .chip span {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 /* ---------- 図面編集(プレースホルダー) ---------- */
@@ -771,7 +771,7 @@ hr.divider {
   background: #fbfcfd;
   border-radius: 6px;
   padding: 7px 12px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text);
   cursor: pointer;
 }
@@ -803,11 +803,11 @@ hr.divider {
 .editor-canvas .placeholder-msg {
   text-align: center;
   color: #98a2b3;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .editor-canvas .placeholder-msg .big {
-  font-size: 40px;
+  font-size: 42px;
   margin-bottom: 10px;
   display: block;
 }
@@ -821,7 +821,7 @@ hr.divider {
   color: #2c5aa0;
   border-radius: 8px;
   padding: 10px 14px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   margin-bottom: 18px;
 }
 
@@ -834,7 +834,7 @@ hr.divider {
   color: #fff;
   padding: 12px 22px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 15px;
   box-shadow: var(--shadow-lg);
   opacity: 0;
   pointer-events: none;
@@ -849,14 +849,14 @@ hr.divider {
 
 footer.mock-footer {
   text-align: center;
-  font-size: 11px;
+  font-size: 13px;
   color: #b3bac5;
   padding: 24px 0 10px;
 }
 
 /* ---------- 図面詳細画面 ---------- */
 .section-title {
-  font-size: 15px;
+  font-size: 17px;
   color: var(--navy);
   margin: 0 0 16px;
 }
@@ -881,13 +881,13 @@ footer.mock-footer {
 }
 
 .spec-label {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--text-light);
   margin-bottom: 4px;
 }
 
 .spec-value {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text);
 }
@@ -899,7 +899,7 @@ footer.mock-footer {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .data-table th,
@@ -914,7 +914,7 @@ footer.mock-footer {
   background: #f7f9fb;
   color: var(--text-light);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .data-table tbody tr:hover {
@@ -950,7 +950,7 @@ footer.mock-footer {
 .home-sub-link {
   text-align: center;
   margin: 22px 0 0;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .text-link {
@@ -1002,7 +1002,7 @@ footer.mock-footer {
 
 .btn-sm {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1040,14 +1040,14 @@ footer.mock-footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
 }
 
 .collapsible-hint {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
   text-align: right;
 }
@@ -1070,7 +1070,7 @@ footer.mock-footer {
   padding: 11px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   color: var(--text);
   background: #fbfcfd;
@@ -1090,14 +1090,14 @@ footer.mock-footer {
 }
 
 .field-note {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--text-light);
   line-height: 1.6;
   margin: 6px 0 0;
 }
 
 .req {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 999px;
@@ -1120,7 +1120,7 @@ footer.mock-footer {
   padding: 11px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   color: var(--text);
   background: #fbfcfd;
@@ -1134,7 +1134,7 @@ footer.mock-footer {
 }
 
 .date-unit {
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--text-light);
   flex-shrink: 0;
 }
@@ -1161,25 +1161,25 @@ footer.mock-footer {
 }
 
 .dropzone-icon {
-  font-size: 32px;
+  font-size: 34px;
   margin-bottom: 8px;
 }
 
 .dropzone-main {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--navy);
   margin-bottom: 6px;
 }
 
 .dropzone-sub {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--text-light);
   margin-bottom: 10px;
 }
 
 .dropzone-note {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--text-light);
   margin-top: 10px;
 }
@@ -1201,7 +1201,7 @@ footer.mock-footer {
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 15px;
   font-family: inherit;
   background: #fbfcfd;
 }
@@ -1219,7 +1219,7 @@ footer.mock-footer {
   border-radius: 6px;
   width: 26px;
   height: 26px;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
   color: var(--text-light);
   cursor: pointer;
@@ -1238,7 +1238,7 @@ footer.mock-footer {
 
 .status-pill {
   display: inline-block;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   padding: 3px 10px;
   border-radius: 999px;
@@ -1263,7 +1263,7 @@ footer.mock-footer {
 }
 
 .save-status {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-light);
 }
 
@@ -1295,7 +1295,7 @@ footer.mock-footer {
   gap: 8px 14px;
   padding: 12px 22px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-light);
 }
 
@@ -1318,7 +1318,7 @@ footer.mock-footer {
 
 .modal-foot .btn {
   padding: 9px 16px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .btn-danger {
@@ -1358,7 +1358,7 @@ footer.mock-footer {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: #fbfcfd;
-  font-size: 12.5px;
+  font-size: 14.5px;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
@@ -1380,7 +1380,7 @@ footer.mock-footer {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--navy);
   cursor: pointer;
   margin-bottom: 8px;
@@ -1401,7 +1401,7 @@ footer.mock-footer {
 .picker-item {
   padding: 8px 10px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 15px;
   cursor: pointer;
 }
 
@@ -1410,7 +1410,40 @@ footer.mock-footer {
 }
 
 .picker-empty {
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--text-light);
   padding: 8px 4px;
+}
+
+/* ---------- 客先一覧の編集 ---------- */
+.customer-add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.customer-add-row input,
+.customer-table .customer-name-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fbfcfd;
+}
+
+.customer-add-row input:focus,
+.customer-table .customer-name-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232, 103, 44, 0.15);
+  background: #fff;
+}
+
+.customer-table td {
+  vertical-align: middle;
 }
