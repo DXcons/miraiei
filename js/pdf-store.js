@@ -71,8 +71,14 @@ function pdfOptionLabel(fieldKey, value) {
   return option ? option.label : value;
 }
 
-// 客先一覧CSVの既定の置き場所と、画面から読み込んだ一覧の保存先
+// 客先一覧の保存先。画面の「客先一覧の編集」で保存した一覧はFirestoreの
+// settings/customers に入り、全員・全PCで共有される。
+// まだ一度も編集していない間は data/customers.csv を初期値として使う。
 const CUSTOMER_CSV_PATH = "data/customers.csv";
+const SETTINGS_COLLECTION = "settings";
+const CUSTOMER_DOC_ID = "customers";
+// 以前の「客先一覧を差し替える」(CSV読み込み)でブラウザに保存していた一覧。
+// Firestoreにまだ一覧が無いときだけ初期値として引き継ぐ。
 const CUSTOMER_STORAGE_KEY = "miraiei_customer_list";
 
 // 品名一覧CSV(入力補完の候補)の既定の置き場所。
@@ -542,29 +548,48 @@ function getStoredCustomerList() {
   }
 }
 
-function storeCustomerList(list) {
-  try {
-    localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(list));
-  } catch (err) {
-    console.warn("客先一覧をブラウザに保存できませんでした", err);
-  }
+// 前後の空白を取り、空欄と重複を除いた一覧にする
+function normalizeCustomerList(list) {
+  const names = [];
+  const seen = new Set();
+  (list || []).forEach((raw) => {
+    const name = String(raw == null ? "" : raw).trim();
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  });
+  return names;
 }
 
-function clearStoredCustomerList() {
-  try {
-    localStorage.removeItem(CUSTOMER_STORAGE_KEY);
-  } catch (err) {
-    /* 何もしない */
-  }
+// 画面で編集した客先一覧をFirestoreに保存する(全員で共有)
+async function saveCustomerList(list) {
+  const names = normalizeCustomerList(list);
+  await db.collection(SETTINGS_COLLECTION).doc(CUSTOMER_DOC_ID).set({
+    names,
+    updatedBy: auth.currentUser ? auth.currentUser.email : "",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  return names;
 }
 
 /**
  * 客先一覧を取得する。
- * 1. 画面からCSVを読み込み済みなら、それ(ブラウザに保存されている)を使う
- * 2. 無ければリポジトリ内の data/customers.csv を読む
- * 戻り値: { list, source: "uploaded"|"file"|"none" }
+ * 1. 「客先一覧の編集」で保存した一覧(Firestore)があればそれを使う
+ * 2. 無ければ、以前CSVから読み込んでブラウザに保存していた一覧を使う
+ * 3. 無ければリポジトリ内の data/customers.csv を読む
+ * 戻り値: { list, source: "saved"|"uploaded"|"file"|"default" }
  */
 async function loadCustomerList() {
+  try {
+    const doc = await db.collection(SETTINGS_COLLECTION).doc(CUSTOMER_DOC_ID).get();
+    if (doc.exists && Array.isArray(doc.data().names)) {
+      return { list: doc.data().names, source: "saved" };
+    }
+  } catch (err) {
+    // セキュリティルール未更新(permission-denied)などの場合はCSVで代用する
+    console.warn("保存済みの客先一覧を取得できませんでした", err);
+  }
+
   const stored = getStoredCustomerList();
   if (stored) return { list: stored, source: "uploaded" };
 
