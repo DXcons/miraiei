@@ -5,6 +5,8 @@
 // pdfDrawings : 「図面を保存する」で登録したPDF図面。ログイン済みユーザーが
 //               登録・閲覧・削除できます。chunksサブコレクションにPDF本体が
 //               分割して入っています。
+// settings    : 「客先一覧の編集」で保存した客先一覧(settings/customers)など。
+//               ログイン済みユーザーが閲覧・編集できます。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -19,6 +21,10 @@ service cloud.firestore {
       match /chunks/{chunkId} {
         allow read, write: if request.auth != null;
       }
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if request.auth != null;
     }
   }
 }
