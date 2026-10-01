@@ -31,11 +31,9 @@
 
   <!-- 使用頻度の低い操作は上部に小さくまとめる -->
   <div class="page-toolbar">
-    <label class="btn btn-ghost btn-sm" title="客先の選択肢をCSVファイルから読み込みます（Excelで保存したCSVも可）">
-      客先一覧を差し替える
-      <input type="file" id="customerCsvInput" accept=".csv,text/csv" hidden>
-    </label>
-    <button type="button" class="btn btn-ghost btn-sm" id="customerResetBtn">元に戻す</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="customerEditBtn" title="客先の選択肢を追加・削除します">
+      客先一覧の編集
+    </button>
   </div>
 
   <!-- ===== 入力必須 ===== -->
@@ -118,6 +116,45 @@
 
 <div class="product-picker" id="productPicker" hidden></div>
 
+<!-- 客先一覧の編集 -->
+<div class="modal-overlay" id="customerModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>客先一覧の編集</h3>
+      <button type="button" class="modal-close" id="customerModalClose" title="閉じる">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="field-note" style="margin:0 0 14px;">
+        客先名はその場で書き換えられます。「保存する」を押すまで変更は反映されません。
+        保存した一覧は、この画面を使う全員で共有されます。
+      </p>
+      <div class="customer-add-row">
+        <input type="text" id="customerAddInput" placeholder="追加する客先名を入力" autocomplete="off">
+        <button type="button" class="btn btn-secondary" id="customerAddBtn">＋ 追加</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table customer-table">
+          <thead>
+            <tr>
+              <th style="width:56px;">No</th>
+              <th>客先名</th>
+              <th style="width:90px;"></th>
+            </tr>
+          </thead>
+          <tbody id="customerEditRows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span id="customerEditCount"></span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="customerCancelBtn">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="customerSaveBtn">保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -135,25 +172,24 @@
 
   /* ---------- 客先 ---------- */
 
-  function renderCustomerOptions(list, source) {
+  // 現在の客先一覧(編集画面の初期値に使う)
+  let customerList = [];
+
+  function renderCustomerOptions(list) {
     const select = document.getElementById("customerSelect");
     const note = document.getElementById("customerNote");
+    const previous = select.value;
+    customerList = list.slice();
 
     select.innerHTML =
       `<option value="">— 一覧から選択 —</option>` +
       list.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("") +
       `<option value="${MANUAL_VALUE}">＋ 一覧にない客先を直接入力する</option>`;
 
-    if (source === "none") {
-      note.textContent =
-        "客先一覧を読み込めませんでした。下の「CSVを読み込む」で客先一覧CSVを選ぶか、「＋ 一覧にない客先を直接入力する」を使ってください。";
-    } else if (source === "default") {
-      note.textContent = `内蔵の初期一覧を表示しています（${list.length}件）。CSVから読み込むには下の「CSVを読み込む」を使ってください。`;
-    } else if (source === "uploaded") {
-      note.textContent = `読み込んだCSVの客先一覧を表示しています（${list.length}件）。`;
-    } else {
-      note.textContent = `data/customers.csv の客先一覧を表示しています（${list.length}件）。`;
-    }
+    // 一覧を保存し直しても、選んでいた客先が残っていれば選択を保つ
+    if (previous === MANUAL_VALUE || list.includes(previous)) select.value = previous;
+
+    note.textContent = `客先は${list.length}件登録されています。増やす・消すときは右上の「客先一覧の編集」を使ってください。`;
     syncManualInput();
   }
 
@@ -519,30 +555,100 @@
   document.getElementById("optionToggle").addEventListener("click", toggleOptionCard);
   document.getElementById("optionFieldsArea").addEventListener("change", updateOptionSummary);
 
-  document.getElementById("customerCsvInput").addEventListener("change", async (ev) => {
-    const file = ev.target.files[0];
-    ev.target.value = "";
-    if (!file) return;
+  /* ---------- 客先一覧の編集 ---------- */
+
+  // 編集中の一覧。「保存する」を押すまで画面の選択肢には反映しない。
+  let editingCustomers = [];
+
+  function openCustomerEditor() {
+    editingCustomers = customerList.slice();
+    document.getElementById("customerAddInput").value = "";
+    renderCustomerEditor();
+    document.getElementById("customerModal").classList.add("open");
+    document.getElementById("customerAddInput").focus();
+  }
+
+  function closeCustomerEditor() {
+    document.getElementById("customerModal").classList.remove("open");
+  }
+
+  function renderCustomerEditor() {
+    const body = document.getElementById("customerEditRows");
+    body.innerHTML = editingCustomers.length > 0
+      ? editingCustomers.map((name, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td><input type="text" class="customer-name-input" data-index="${i}" value="${escapeHtml(name)}" autocomplete="off"></td>
+            <td><button type="button" class="btn btn-ghost btn-sm btn-danger" data-delete="${i}">削除</button></td>
+          </tr>`).join("")
+      : `<tr><td colspan="3" class="empty-state">客先が登録されていません。上の欄から追加してください。</td></tr>`;
+    document.getElementById("customerEditCount").textContent = `${editingCustomers.length}件`;
+  }
+
+  function addCustomer() {
+    const input = document.getElementById("customerAddInput");
+    const name = input.value.trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    if (editingCustomers.some((c) => c.trim() === name)) {
+      toast(`「${name}」はすでに一覧にあります`);
+      return;
+    }
+    editingCustomers.push(name);
+    input.value = "";
+    renderCustomerEditor();
+    input.focus();
+  }
+
+  async function saveCustomerEditor() {
+    const names = normalizeCustomerList(editingCustomers);
+    const btn = document.getElementById("customerSaveBtn");
+    btn.disabled = true;
     try {
-      const list = parseCustomerCsvBuffer(await file.arrayBuffer());
-      if (list.length === 0) {
-        toast("CSVから客先名を読み取れませんでした。1列目に客先名が並ぶCSVをご用意ください。");
-        return;
-      }
-      storeCustomerList(list);
-      renderCustomerOptions(list, "uploaded");
-      toast(`客先一覧を読み込みました（${list.length}件）`);
+      const saved = await saveCustomerList(names);
+      renderCustomerOptions(saved);
+      closeCustomerEditor();
+      toast(`客先一覧を保存しました（${saved.length}件）`);
     } catch (err) {
-      console.error("CSVの読み込みに失敗しました", err);
-      toast("CSVの読み込みに失敗しました。");
+      console.error("客先一覧の保存に失敗しました", err);
+      toast(
+        err && err.code === "permission-denied"
+          ? "保存する権限がありません。管理者にFirestoreのルール更新を依頼してください。"
+          : "客先一覧の保存に失敗しました。"
+      );
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("customerEditBtn").addEventListener("click", openCustomerEditor);
+  document.getElementById("customerModalClose").addEventListener("click", closeCustomerEditor);
+  document.getElementById("customerCancelBtn").addEventListener("click", closeCustomerEditor);
+  document.getElementById("customerSaveBtn").addEventListener("click", saveCustomerEditor);
+  document.getElementById("customerAddBtn").addEventListener("click", addCustomer);
+  document.getElementById("customerAddInput").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.isComposing) {
+      ev.preventDefault();
+      addCustomer();
     }
   });
 
-  document.getElementById("customerResetBtn").addEventListener("click", async () => {
-    clearStoredCustomerList();
-    const { list, source } = await loadCustomerList();
-    renderCustomerOptions(list, source);
-    toast("客先一覧を元に戻しました");
+  const customerRows = document.getElementById("customerEditRows");
+  customerRows.addEventListener("input", (ev) => {
+    if (ev.target.dataset.index != null) {
+      editingCustomers[Number(ev.target.dataset.index)] = ev.target.value;
+    }
+  });
+  customerRows.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-delete]");
+    if (!btn) return;
+    const index = Number(btn.dataset.delete);
+    const name = editingCustomers[index].trim() || "（空欄）";
+    if (!confirm(`「${name}」を一覧から削除しますか？\n（保存済みの図面の客先名は変わりません）`)) return;
+    editingCustomers.splice(index, 1);
+    renderCustomerEditor();
   });
 
   /* ---------- 品名ピッカー(「複数部品の図面」＋50音の行から選ぶ) ---------- */
@@ -667,8 +773,8 @@
     updateOptionSummary();
     const ok = await initPage();
     if (!ok) return;
-    const { list, source } = await loadCustomerList();
-    renderCustomerOptions(list, source);
+    const { list } = await loadCustomerList();
+    renderCustomerOptions(list);
     await refreshProductBuckets();
     updateSaveButton();
   })();

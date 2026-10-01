@@ -20,8 +20,65 @@ const PDF_CHUNK_SIZE = 500000;
 // Firestore無料枠(合計1GB)を踏まえた実用上の上限。
 const PDF_MAX_FILE_SIZE = 20 * 1024 * 1024;
 
-// 客先一覧CSVの既定の置き場所と、画面から読み込んだ一覧の保存先
+/* ---------- 任意で入力する分類項目 ----------
+   「図面を保存する」画面の選択肢と「過去の図面をさがす」画面の絞り込みは
+   この定義を共有する。項目を増やすときはここを直せば両画面に反映される。
+   (common.jsの旧モック用ラベルと名前が衝突しないようPDF_接頭辞を付けている) */
+const PDF_OPTION_FIELDS = [
+  {
+    key: "location",
+    label: "設置場所",
+    multiple: false,
+    options: [
+      { value: "outdoor", label: "屋外" },
+      { value: "indoor", label: "屋内" },
+    ],
+  },
+  {
+    key: "materials",
+    label: "材質",
+    multiple: true,
+    options: [
+      { value: "resin", label: "樹脂" },
+      { value: "metal", label: "金属" },
+    ],
+  },
+  {
+    key: "size",
+    label: "大きさ",
+    multiple: false,
+    options: [
+      { value: "large", label: "大物" },
+      { value: "small", label: "小物" },
+    ],
+  },
+  {
+    key: "category",
+    label: "種別",
+    multiple: false,
+    options: [
+      { value: "belt", label: "ベルトコンベヤ" },
+      { value: "other", label: "それ以外" },
+    ],
+  },
+];
+
+// 値(outdoorなど)から表示用ラベル(屋外)を引く
+function pdfOptionLabel(fieldKey, value) {
+  const field = PDF_OPTION_FIELDS.find((f) => f.key === fieldKey);
+  if (!field) return value;
+  const option = field.options.find((o) => o.value === value);
+  return option ? option.label : value;
+}
+
+// 客先一覧の保存先。画面の「客先一覧の編集」で保存した一覧はFirestoreの
+// settings/customers に入り、全員・全PCで共有される。
+// まだ一度も編集していない間は data/customers.csv を初期値として使う。
 const CUSTOMER_CSV_PATH = "data/customers.csv";
+const SETTINGS_COLLECTION = "settings";
+const CUSTOMER_DOC_ID = "customers";
+// 以前の「客先一覧を差し替える」(CSV読み込み)でブラウザに保存していた一覧。
+// Firestoreにまだ一覧が無いときだけ初期値として引き継ぐ。
 const CUSTOMER_STORAGE_KEY = "miraiei_customer_list";
 
 // 品名一覧CSV(入力補完の候補)の既定の置き場所。
@@ -47,12 +104,18 @@ function formatFileSize(bytes) {
   return (bytes / 1024 / 1024).toFixed(1) + " MB";
 }
 
-// 「2026-09」→「2026年9月」
-function formatDrawingDate(isoMonth) {
-  if (!isoMonth) return "-";
-  const m = /^(\d{4})-(\d{2})$/.exec(isoMonth);
-  if (!m) return isoMonth;
-  return `${Number(m[1])}年${Number(m[2])}月`;
+// 図面作成日の表示。年月が不明な場合もあるので複数の形式を受け付ける。
+//   "2026-09" → 「2026年9月」 / "2026" → 「2026年（月不明）」 / "" → 「不明」
+//   "2026-09-24" は日まで入れていた頃に保存したデータ用
+function formatDrawingDate(value) {
+  if (!value) return "不明";
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (ymd) return `${Number(ymd[1])}年${Number(ymd[2])}月${Number(ymd[3])}日`;
+  const ym = /^(\d{4})-(\d{2})$/.exec(value);
+  if (ym) return `${Number(ym[1])}年${Number(ym[2])}月`;
+  const y = /^(\d{4})$/.exec(value);
+  if (y) return `${Number(y[1])}年（月不明）`;
+  return value;
 }
 
 function pad2(n) {
@@ -124,15 +187,21 @@ async function savePdfDrawing(file, meta, onProgress) {
   }
 
   const now = new Date();
-  const [year, month] = meta.drawingDate.split("-");
+  // drawingDateは "2026-09"(年月) / "2026"(年のみ) / ""(不明) のいずれか
+  const [year, month] = (meta.drawingDate || "").split("-");
 
   await docRef.set({
     customer: meta.customer,
     productName: meta.productName,
-    drawingDate: meta.drawingDate,
-    // 年・月での絞り込みを軽くするために分解した値も持たせておく
-    drawingYear: Number(year),
-    drawingMonth: Number(month),
+    drawingDate: meta.drawingDate || "",
+    // 年・月での絞り込みを軽くするために分解した値も持たせておく(不明ならnull)
+    drawingYear: year ? Number(year) : null,
+    drawingMonth: month ? Number(month) : null,
+    // 任意で入力する分類項目(未選択なら空)
+    location: meta.location || "",
+    materials: meta.materials || [],
+    size: meta.size || "",
+    category: meta.category || "",
     fileName: file.name,
     fileSize: file.size,
     mimeType: file.type || "application/pdf",
@@ -316,6 +385,98 @@ function kanaRowOf(char) {
   return KANA_TO_ROW[char] || null;
 }
 
+// 50音の行に振り分けられない品名(漢字・英字で始まるものなど)を入れるグループ
+const PDF_OTHER_ROW_KEY = "他";
+
+function katakanaToHiragana(text) {
+  return String(text || "").replace(/[ァ-ヶ]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0x60)
+  );
+}
+
+// 品名そのものから50音の行を推測する(カナで始まる場合のみ判定できる)。
+// よみを持たない、保存済み図面から拾ってきた品名の振り分けに使う。
+function guessKanaRow(name) {
+  const first = katakanaToHiragana(String(name || "").trim())[0];
+  return first ? kanaRowOf(first) : null;
+}
+
+/**
+ * 保存済み図面の品名を候補に加える。
+ * これにより、一度「直接入力」で保存した品名は次回から候補に出るようになる。
+ * カナで始まる品名はその行へ、判定できないもの(漢字始まりなど)は「その他」へ入れる。
+ */
+function mergeSavedProductNames(buckets, names) {
+  const known = new Set(buckets.pinned);
+  Object.keys(buckets.groups).forEach((row) => {
+    buckets.groups[row].forEach((name) => known.add(name));
+  });
+
+  names.forEach((rawName) => {
+    const name = String(rawName || "").trim();
+    if (!name || known.has(name)) return;
+    known.add(name);
+    const row = guessKanaRow(name) || PDF_OTHER_ROW_KEY;
+    if (!buckets.groups[row]) buckets.groups[row] = [];
+    buckets.groups[row].push(name);
+  });
+  return buckets;
+}
+
+// 保存済み図面から品名だけを重複なく取り出す
+async function fetchSavedProductNames() {
+  try {
+    const snapshot = await db.collection(PDF_COLLECTION).get();
+    const names = snapshot.docs.map((doc) => doc.data().productName).filter(Boolean);
+    return Array.from(new Set(names));
+  } catch (err) {
+    console.warn("保存済み図面の品名を取得できませんでした", err);
+    return [];
+  }
+}
+
+// data/products.csv が読み込めない環境(ローカルファイルとして開いた場合など)でも
+// 候補が出るように、CSVと同じ初期内容をここにも持たせておく。
+// 通常はCSV側が優先され、CSVを更新すればそちらが反映される。
+const DEFAULT_PRODUCT_ITEMS = [
+  { name: "複数部品の図面", yomi: "" },
+  { name: "スタンド", yomi: "すたんど" },
+  { name: "コモンプレート", yomi: "こもんぷれーと" },
+  { name: "シリンダベース", yomi: "しりんだべーす" },
+  { name: "シリンダブラケット", yomi: "しりんだぶらけっと" },
+  { name: "ステー", yomi: "すてー" },
+  { name: "スライダー", yomi: "すらいだー" },
+  { name: "レール", yomi: "れーる" },
+  { name: "受台スライダ", yomi: "うけだいすらいだ" },
+  { name: "ハウジング", yomi: "はうじんぐ" },
+  { name: "ガイド板", yomi: "がいどばん" },
+  { name: "カットホルダ", yomi: "かっとほるだ" },
+  { name: "切刃ホルダ", yomi: "せっぱほるだ" },
+  { name: "刃ホルダ", yomi: "はほるだ" },
+  { name: "軸受", yomi: "じくうけ" },
+  { name: "軸受(上)", yomi: "じくうけうえ" },
+  { name: "軸受(下)", yomi: "じくうけした" },
+  { name: "ジョイント", yomi: "じょいんと" },
+  { name: "反転アームステー", yomi: "はんてんあーむすてー" },
+  { name: "反転ステー", yomi: "はんてんすてー" },
+  { name: "テープ受皿", yomi: "てーぷうけざら" },
+  { name: "テープ案内ガイド", yomi: "てーぷあんないがいど" },
+  { name: "テープ受バー", yomi: "てーぷうけばー" },
+  { name: "ガイドバー", yomi: "がいどばー" },
+  { name: "クランプベース", yomi: "くらんぷべーす" },
+  { name: "リール切出しスライダ", yomi: "りーるきりだしすらいだ" },
+  { name: "ナット用ブラケット", yomi: "なっとようぶらけっと" },
+  { name: "リールチャック昇降ベース", yomi: "りーるちゃっくしょうこうべーす" },
+  { name: "切出しブラケット", yomi: "きりだしぶらけっと" },
+  { name: "ストッパーブラケット", yomi: "すとっぱーぶらけっと" },
+  { name: "ストッパーバー", yomi: "すとっぱーばー" },
+  { name: "レバー", yomi: "ればー" },
+  { name: "成形クランプバー", yomi: "せいけいくらんぷばー" },
+];
+
+// 客先一覧CSVが読み込めない場合の予備。data/customers.csv と同じ初期内容。
+const DEFAULT_CUSTOMERS = ["TANIDA", "CAM'S", "茅原"];
+
 // CSVの「品名,よみ」を { name, yomi } の配列に変換する
 function parseProductCsvRows(buffer) {
   const rows = parseCsv(decodeCsvBuffer(buffer));
@@ -349,23 +510,28 @@ function parseProductCsvRows(buffer) {
 async function loadProductBuckets() {
   const buckets = { pinned: [], groups: {} };
   KANA_ROW_ORDER.forEach((row) => (buckets.groups[row] = []));
+  buckets.groups[PDF_OTHER_ROW_KEY] = [];
 
+  let items = [];
   try {
     const res = await fetch(PRODUCT_CSV_PATH, { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    const items = parseProductCsvRows(await res.arrayBuffer());
-    items.forEach(({ name, yomi }) => {
-      if (!yomi) {
-        buckets.pinned.push(name);
-        return;
-      }
-      const row = kanaRowOf(yomi[0]) || "わ"; // 想定外の読み(記号など)はわ行にまとめる
-      buckets.groups[row].push(name);
-    });
+    items = parseProductCsvRows(await res.arrayBuffer());
   } catch (err) {
     // ローカルファイル(file://)で開いた場合はfetchがブロックされるためここに来る
-    console.warn("品名一覧CSVを読み込めませんでした", err);
+    console.warn("品名一覧CSVを読み込めませんでした。内蔵の初期リストを使います。", err);
   }
+  // CSVが読めない・中身が空のときは内蔵の初期リストで代用する
+  if (items.length === 0) items = DEFAULT_PRODUCT_ITEMS;
+
+  items.forEach(({ name, yomi }) => {
+    if (!yomi) {
+      buckets.pinned.push(name);
+      return;
+    }
+    const row = kanaRowOf(yomi[0]) || "わ"; // 想定外の読み(記号など)はわ行にまとめる
+    buckets.groups[row].push(name);
+  });
   return buckets;
 }
 
@@ -382,29 +548,48 @@ function getStoredCustomerList() {
   }
 }
 
-function storeCustomerList(list) {
-  try {
-    localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(list));
-  } catch (err) {
-    console.warn("客先一覧をブラウザに保存できませんでした", err);
-  }
+// 前後の空白を取り、空欄と重複を除いた一覧にする
+function normalizeCustomerList(list) {
+  const names = [];
+  const seen = new Set();
+  (list || []).forEach((raw) => {
+    const name = String(raw == null ? "" : raw).trim();
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  });
+  return names;
 }
 
-function clearStoredCustomerList() {
-  try {
-    localStorage.removeItem(CUSTOMER_STORAGE_KEY);
-  } catch (err) {
-    /* 何もしない */
-  }
+// 画面で編集した客先一覧をFirestoreに保存する(全員で共有)
+async function saveCustomerList(list) {
+  const names = normalizeCustomerList(list);
+  await db.collection(SETTINGS_COLLECTION).doc(CUSTOMER_DOC_ID).set({
+    names,
+    updatedBy: auth.currentUser ? auth.currentUser.email : "",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  return names;
 }
 
 /**
  * 客先一覧を取得する。
- * 1. 画面からCSVを読み込み済みなら、それ(ブラウザに保存されている)を使う
- * 2. 無ければリポジトリ内の data/customers.csv を読む
- * 戻り値: { list, source: "uploaded"|"file"|"none" }
+ * 1. 「客先一覧の編集」で保存した一覧(Firestore)があればそれを使う
+ * 2. 無ければ、以前CSVから読み込んでブラウザに保存していた一覧を使う
+ * 3. 無ければリポジトリ内の data/customers.csv を読む
+ * 戻り値: { list, source: "saved"|"uploaded"|"file"|"default" }
  */
 async function loadCustomerList() {
+  try {
+    const doc = await db.collection(SETTINGS_COLLECTION).doc(CUSTOMER_DOC_ID).get();
+    if (doc.exists && Array.isArray(doc.data().names)) {
+      return { list: doc.data().names, source: "saved" };
+    }
+  } catch (err) {
+    // セキュリティルール未更新(permission-denied)などの場合はCSVで代用する
+    console.warn("保存済みの客先一覧を取得できませんでした", err);
+  }
+
   const stored = getStoredCustomerList();
   if (stored) return { list: stored, source: "uploaded" };
 
@@ -412,11 +597,12 @@ async function loadCustomerList() {
     const res = await fetch(CUSTOMER_CSV_PATH, { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const list = parseCustomerCsvBuffer(await res.arrayBuffer());
-    return { list, source: list.length > 0 ? "file" : "none" };
+    if (list.length > 0) return { list, source: "file" };
   } catch (err) {
     // ローカルファイル(file://)で開いた場合はfetchがブロックされるためここに来る
-    console.warn("客先一覧CSVを読み込めませんでした", err);
-    return { list: [], source: "none" };
+    console.warn("客先一覧CSVを読み込めませんでした。内蔵の初期リストを使います。", err);
   }
+  // CSVが読めない・中身が空のときは内蔵の初期リストで代用する
+  return { list: DEFAULT_CUSTOMERS, source: "default" };
 }
 
