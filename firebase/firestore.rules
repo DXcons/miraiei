@@ -7,6 +7,8 @@
 //               分割して入っています。
 // settings    : 「客先一覧の編集」で保存した客先一覧(settings/customers)など。
 //               ログイン済みユーザーが閲覧・編集できます。
+// orders      : 「受発注・請求書の管理」の取引一覧。ログイン済みユーザーが
+//               登録・閲覧・編集・削除できます。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -24,6 +26,10 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /orders/{orderId} {
       allow read, write: if request.auth != null;
     }
   }
