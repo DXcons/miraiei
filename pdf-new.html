@@ -36,6 +36,9 @@
     </button>
   </div>
 
+  <!-- 保存容量(無料枠)の使用状況。js/pdf-store.js の renderStorageMeter で描く -->
+  <div id="storageMeter" style="margin-bottom:16px;"></div>
+
   <!-- ===== 入力必須 ===== -->
   <div class="card">
     <h2 class="section-title">入力が必要な項目</h2>
@@ -502,7 +505,10 @@
     setSavingUi(false);
 
     // 今回保存した品名をすぐ候補に反映する(同じ画面で続けて登録する場合のため)
-    if (succeeded > 0) refreshProductBuckets();
+    if (succeeded > 0) {
+      refreshProductBuckets();
+      renderStorageMeter("storageMeter");
+    }
 
     if (failed === 0) {
       status.innerHTML = `${succeeded}件を保存しました。<a href="pdf-list.html" class="text-link">過去の図面をさがす ›</a>`;
@@ -777,6 +783,7 @@
     renderCustomerOptions(list);
     await refreshProductBuckets();
     updateSaveButton();
+    renderStorageMeter("storageMeter");
   })();
 </script>
 

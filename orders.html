@@ -140,6 +140,89 @@
   </div>
 </div>
 
+<!-- ===== 取引の書類 ===== -->
+<div class="modal-overlay" id="docsModal">
+  <div class="modal-box modal-box-docs">
+    <div class="modal-head">
+      <h3 id="docsTitle">書類</h3>
+      <button type="button" class="modal-close" id="docsClose" title="閉じる">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="docs-upload">
+        <div class="filter-label">書類を追加する</div>
+        <div class="chip-group" id="docTypeGroup"></div>
+        <div class="dropzone docs-dropzone" id="docsDropzone">
+          <div class="dropzone-main">ここにファイルをドラッグ＆ドロップ</div>
+          <div class="dropzone-sub">または</div>
+          <label class="btn btn-secondary">
+            ファイルを選ぶ
+            <input type="file" id="docsFileInput" multiple hidden>
+          </label>
+          <div class="dropzone-note">PDF・Excel・写真など。1ファイル20MBまで（写真は自動で縮小して保存します）。</div>
+        </div>
+        <div id="docsUploadStatus" class="save-status"></div>
+        <div id="docsStorageMeter"></div>
+      </div>
+
+      <div class="docs-drawing-bar">
+        <span>図面は「図面を保存する」で保存したものを紐づけます。</span>
+        <button type="button" class="btn btn-secondary btn-sm" id="linkDrawingBtn">＋ 保存済みの図面から紐づける</button>
+      </div>
+
+      <div id="docsList"></div>
+    </div>
+    <div class="modal-foot">
+      <span id="docsCount"></span>
+      <button type="button" class="btn btn-ghost" id="docsCloseBtn">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 保存済み図面の選択 ===== -->
+<div class="modal-overlay" id="pickerModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>紐づける図面を選ぶ</h3>
+      <button type="button" class="modal-close" id="pickerClose" title="閉じる">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="picker-filter">
+        <input type="text" id="pickerSearch" placeholder="品名・ファイル名の一部で絞り込み" autocomplete="off">
+        <label class="check-label"><input type="checkbox" id="pickerSameCustomer" checked> <span id="pickerSameCustomerLabel">この客先の図面だけ</span></label>
+      </div>
+      <div id="pickerList"></div>
+    </div>
+    <div class="modal-foot">
+      <span id="pickerCount"></span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="pickerCancel">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="pickerOk" disabled>紐づける</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 書類・図面の表示 ===== -->
+<div class="modal-overlay" id="viewerModal">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-head">
+      <h3 id="viewerTitle">書類</h3>
+      <button type="button" class="modal-close" id="viewerClose" title="閉じる">&times;</button>
+    </div>
+    <div class="modal-body modal-body-flush">
+      <div id="viewerMeta" class="viewer-meta"></div>
+      <div id="viewerFrameArea" class="viewer-frame-area"></div>
+    </div>
+    <div class="modal-foot">
+      <span></span>
+      <span>
+        <a id="openTabLink" class="btn btn-secondary" target="_blank" rel="noopener">別タブで開く</a>
+        <a id="downloadLink" class="btn btn-primary" download>ダウンロード</a>
+      </span>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -149,6 +232,8 @@
 <script src="js/order-store.js"></script>
 <script>
   let orders = [];
+  let orderFiles = []; // 全取引の書類(一覧用データのみ)
+  let drawings = null; // 保存済み図面の一覧(最初に必要になったときに読む)
   let customerList = [];
   let editingId = null; // nullなら新規追加
   let busy = false;
@@ -295,6 +380,7 @@
                       ${next
                         ? `<button type="button" class="btn btn-secondary btn-sm" data-next="${o.id}">次へ：${escapeHtml(next)} ▶</button>`
                         : ""}
+                      <button type="button" class="btn btn-ghost btn-sm" data-docs="${o.id}">📎 書類（${docCount(o)}）</button>
                       <button type="button" class="btn btn-ghost btn-sm" data-edit="${o.id}">編集</button>
                     </td>
                   </tr>`;
@@ -317,8 +403,20 @@
         </div>`;
       return;
     }
+    try {
+      orderFiles = await fetchOrderFiles();
+    } catch (err) {
+      // 書類の許可(orderFiles)がまだルールに無くても、取引一覧は表示する
+      console.warn("書類の一覧を取得できませんでした", err);
+      orderFiles = [];
+    }
     refreshCustomerFilter();
     renderOrders();
+  }
+
+  // 一覧の「📎 書類（n）」に出す件数 = 保存した書類 + 紐づけた図面
+  function docCount(order) {
+    return orderFiles.filter((f) => f.orderId === order.id).length + (order.drawingIds || []).length;
   }
 
   /* ---------- ステータスの切り替え ---------- */
@@ -382,6 +480,11 @@
       const order = orders.find((o) => o.id === nextBtn.dataset.next);
       const next = order && nextOrderStatus(order.status);
       if (next) changeStatus(order.id, next);
+      return;
+    }
+    const docsBtn = ev.target.closest("[data-docs]");
+    if (docsBtn) {
+      openDocsModal(docsBtn.dataset.docs);
       return;
     }
     const editBtn = ev.target.closest("[data-edit]");
@@ -540,7 +643,7 @@
   async function removeOrder() {
     if (busy || !editingId) return;
     const order = orders.find((o) => o.id === editingId);
-    if (!confirm(`「${order.customer}」（納期 ${formatDueDate(order.dueDate)}）の取引を削除しますか？\nこの操作は元に戻せません。`)) return;
+    if (!confirm(`「${order.customer}」（納期 ${formatDueDate(order.dueDate)}）の取引を削除しますか？\nこの取引に保存した書類も一緒に削除されます（紐づけた図面は残ります）。\nこの操作は元に戻せません。`)) return;
     busy = true;
     try {
       await deleteOrder(editingId);
@@ -555,7 +658,353 @@
     }
   }
 
+  /* ---------- 取引の書類 ---------- */
+
+  let docsOrderId = null;
+  let uploading = false;
+
+  function currentDocsOrder() {
+    return orders.find((o) => o.id === docsOrderId);
+  }
+
+  async function ensureDrawings(force) {
+    if (drawings && !force) return drawings;
+    try {
+      drawings = await fetchPdfDrawings();
+    } catch (err) {
+      console.warn("保存済み図面を取得できませんでした", err);
+      drawings = drawings || [];
+    }
+    return drawings;
+  }
+
+  function buildDocTypeChoices() {
+    document.getElementById("docTypeGroup").innerHTML = ORDER_UPLOAD_TYPES.map(
+      (t, i) => `<label class="chip"><input type="radio" name="docType" value="${t}" ${i === 0 ? "checked" : ""}><span>${t}</span></label>`
+    ).join("");
+  }
+
+  async function openDocsModal(orderId) {
+    docsOrderId = orderId;
+    const order = currentDocsOrder();
+    document.getElementById("docsTitle").textContent =
+      `書類 — ${order.customer}${order.productName ? "／" + order.productName : ""}`;
+    document.getElementById("docsUploadStatus").textContent = "";
+    document.getElementById("docsList").innerHTML = `<div class="empty-state">読み込んでいます…</div>`;
+    document.getElementById("docsModal").classList.add("open");
+    renderStorageMeter("docsStorageMeter");
+    if ((order.drawingIds || []).length > 0) await ensureDrawings();
+    renderDocsList();
+  }
+
+  function closeDocsModal() {
+    if (uploading) {
+      toast("保存中です。終わるまでお待ちください。");
+      return;
+    }
+    document.getElementById("docsModal").classList.remove("open");
+    docsOrderId = null;
+    renderOrders(); // 書類の件数を一覧に反映する
+  }
+
+  function docItemHtml(item) {
+    return `
+      <div class="doc-item">
+        <div class="doc-icon">${item.icon}</div>
+        <div class="doc-info">
+          <button type="button" class="doc-name" ${item.missing ? "disabled" : `data-view="${item.key}"`}>${escapeHtml(item.name)}</button>
+          <div class="doc-meta">${item.meta}</div>
+        </div>
+        <div class="doc-actions">
+          ${item.missing ? "" : `<button type="button" class="btn btn-secondary btn-sm" data-view="${item.key}">表示</button>`}
+          <button type="button" class="btn btn-ghost btn-sm btn-danger" data-remove="${item.key}">${item.removeLabel}</button>
+        </div>
+      </div>`;
+  }
+
+  // 書類を種類ごとにまとめた表示用データを作る。keyは「file:ID」か「drawing:ID」。
+  function docsGroups() {
+    const order = currentDocsOrder();
+    const groups = {};
+    ORDER_DOC_TYPES.forEach((t) => (groups[t] = []));
+
+    (order.drawingIds || []).forEach((id) => {
+      const d = (drawings || []).find((x) => x.id === id);
+      groups["図面"].push(d
+        ? {
+            key: "drawing:" + id,
+            icon: "📐",
+            name: d.productName || d.fileName,
+            meta: `${escapeHtml(d.fileName)}・${formatFileSize(d.fileSize)}・図面作成日 ${formatDrawingDate(d.drawingDate)}`,
+            removeLabel: "紐づけを外す",
+          }
+        : { key: "drawing:" + id, icon: "⚠️", name: "（削除された図面）", meta: "元の図面が削除されています", removeLabel: "紐づけを外す", missing: true });
+    });
+
+    orderFiles
+      .filter((f) => f.orderId === order.id)
+      .sort((a, b) => (a.createdAtText || "").localeCompare(b.createdAtText || ""))
+      .forEach((f) => {
+        (groups[f.docType] || groups["その他"]).push({
+          key: "file:" + f.id,
+          icon: fileIcon(f.mimeType, f.fileName),
+          name: f.fileName,
+          meta: `${formatFileSize(f.fileSize)}・${escapeHtml(f.createdAtText || "")} 登録`,
+          removeLabel: "削除",
+        });
+      });
+    return groups;
+  }
+
+  function renderDocsList() {
+    const groups = docsGroups();
+    const total = Object.values(groups).reduce((n, list) => n + list.length, 0);
+    document.getElementById("docsCount").textContent = `${total}件`;
+    document.getElementById("docsList").innerHTML = ORDER_DOC_TYPES.map((t) => `
+      <div class="doc-group">
+        <div class="doc-group-title">${t} <span>${groups[t].length}</span></div>
+        ${groups[t].length > 0
+          ? groups[t].map(docItemHtml).join("")
+          : `<div class="doc-empty">まだありません</div>`}
+      </div>`).join("");
+  }
+
+  async function uploadDocs(fileList) {
+    if (uploading || !docsOrderId) return;
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    const docType = document.querySelector('input[name="docType"]:checked').value;
+    const status = document.getElementById("docsUploadStatus");
+    const orderId = docsOrderId;
+    uploading = true;
+    let ok = 0;
+    const failed = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const saved = await saveOrderFile(orderId, docType, file, (done, total) => {
+          status.textContent = `${i + 1} / ${files.length} 件目「${file.name}」を保存中… ${Math.round((done / total) * 100)}%`;
+        });
+        orderFiles.push(saved);
+        ok++;
+        renderDocsList();
+      } catch (err) {
+        console.error("書類の保存に失敗しました", err);
+        failed.push(`${file.name}（${err && err.code === "permission-denied" ? "保存する権限がありません" : (err.message || "不明なエラー")}）`);
+      }
+    }
+    uploading = false;
+    if (ok > 0) renderStorageMeter("docsStorageMeter");
+    status.textContent = failed.length === 0
+      ? `${ok}件を「${docType}」として保存しました。`
+      : `${ok}件を保存しました。保存できなかったファイル：${failed.join(" / ")}`;
+  }
+
+  async function removeDoc(key) {
+    const [kind, id] = key.split(":");
+    const order = currentDocsOrder();
+    try {
+      if (kind === "drawing") {
+        if (!confirm("この図面の紐づけを外しますか？\n（図面そのものは「過去の図面をさがす」に残ります）")) return;
+        await unlinkOrderDrawing(order.id, id);
+        order.drawingIds = (order.drawingIds || []).filter((x) => x !== id);
+      } else {
+        const f = orderFiles.find((x) => x.id === id);
+        if (!confirm(`「${f.fileName}」を削除しますか？\nこの操作は元に戻せません。`)) return;
+        await deleteOrderFile(id);
+        orderFiles = orderFiles.filter((x) => x.id !== id);
+        renderStorageMeter("docsStorageMeter");
+      }
+      renderDocsList();
+    } catch (err) {
+      console.error("削除に失敗しました", err);
+      toast("削除に失敗しました。");
+    }
+  }
+
+  /* ---------- 保存済み図面の紐づけ ---------- */
+
+  let pickerSelected = new Set();
+
+  async function openPicker() {
+    pickerSelected = new Set();
+    const order = currentDocsOrder();
+    document.getElementById("pickerSearch").value = "";
+    document.getElementById("pickerSameCustomer").checked = true;
+    document.getElementById("pickerSameCustomerLabel").textContent = `「${order.customer}」の図面だけ`;
+    document.getElementById("pickerList").innerHTML = `<div class="empty-state">図面を読み込んでいます…</div>`;
+    document.getElementById("pickerModal").classList.add("open");
+    await ensureDrawings(true); // 別の画面で図面が追加されているかもしれないので読み直す
+    renderPicker();
+  }
+
+  function closePicker() {
+    document.getElementById("pickerModal").classList.remove("open");
+  }
+
+  function renderPicker() {
+    const order = currentDocsOrder();
+    const linked = new Set(order.drawingIds || []);
+    const keyword = document.getElementById("pickerSearch").value.trim().toLowerCase();
+    const sameCustomer = document.getElementById("pickerSameCustomer").checked;
+    const list = (drawings || []).filter((d) => {
+      if (sameCustomer && d.customer !== order.customer) return false;
+      if (keyword && !`${d.productName || ""} ${d.fileName || ""}`.toLowerCase().includes(keyword)) return false;
+      return true;
+    });
+
+    document.getElementById("pickerList").innerHTML = list.length > 0
+      ? list.map((d) => `
+          <label class="picker-row ${linked.has(d.id) ? "is-linked" : ""}">
+            <input type="checkbox" data-pick-drawing="${d.id}" ${linked.has(d.id) ? "checked disabled" : pickerSelected.has(d.id) ? "checked" : ""}>
+            <span class="picker-row-main">
+              <b>${escapeHtml(d.productName || d.fileName)}</b>
+              <small>${escapeHtml(d.customer)}・図面作成日 ${formatDrawingDate(d.drawingDate)}・${escapeHtml(d.fileName)}${linked.has(d.id) ? "・紐づけ済み" : ""}</small>
+            </span>
+          </label>`).join("")
+      : `<div class="empty-state">${sameCustomer
+          ? "この客先の図面が見つかりません。チェックを外すと全部の客先の図面から選べます。"
+          : "条件に合う図面が見つかりません。"}</div>`;
+    document.getElementById("pickerCount").textContent = `${pickerSelected.size}件選択中`;
+    document.getElementById("pickerOk").disabled = pickerSelected.size === 0;
+  }
+
+  async function confirmPicker() {
+    const order = currentDocsOrder();
+    const ids = Array.from(pickerSelected);
+    if (ids.length === 0) return;
+    try {
+      await linkOrderDrawings(order.id, ids);
+      order.drawingIds = Array.from(new Set([...(order.drawingIds || []), ...ids]));
+      closePicker();
+      renderDocsList();
+      toast(`図面を${ids.length}件紐づけました`);
+    } catch (err) {
+      console.error("図面の紐づけに失敗しました", err);
+      toast("図面の紐づけに失敗しました。");
+    }
+  }
+
+  /* ---------- 書類・図面の表示 ---------- */
+
+  let viewerUrl = null;
+  let viewerKey = null;
+
+  function releaseViewerUrl() {
+    if (viewerUrl) {
+      URL.revokeObjectURL(viewerUrl);
+      viewerUrl = null;
+    }
+  }
+
+  async function openViewer(key) {
+    const [kind, id] = key.split(":");
+    let meta;
+    if (kind === "drawing") {
+      const d = (drawings || []).find((x) => x.id === id);
+      if (!d) return;
+      meta = { title: d.productName || d.fileName, fileName: d.fileName, fileSize: d.fileSize, mimeType: d.mimeType || "application/pdf",
+               label: `図面・${d.customer}・図面作成日 ${formatDrawingDate(d.drawingDate)}`, load: () => loadPdfBlob(id, d.mimeType) };
+    } else {
+      const f = orderFiles.find((x) => x.id === id);
+      if (!f) return;
+      meta = { title: f.fileName, fileName: f.fileName, fileSize: f.fileSize, mimeType: f.mimeType,
+               label: `${f.docType}・${f.createdAtText || ""} 登録`, load: () => loadOrderFileBlob(id, f.mimeType) };
+    }
+
+    viewerKey = key;
+    releaseViewerUrl();
+    const area = document.getElementById("viewerFrameArea");
+    document.getElementById("viewerTitle").textContent = meta.title;
+    document.getElementById("viewerMeta").innerHTML =
+      `<span>${escapeHtml(meta.label)}</span><span>${escapeHtml(meta.fileName)}（${formatFileSize(meta.fileSize)}）</span>`;
+    area.innerHTML = `<div class="empty-state">読み込んでいます…</div>`;
+    document.getElementById("downloadLink").removeAttribute("href");
+    document.getElementById("openTabLink").removeAttribute("href");
+    document.getElementById("viewerModal").classList.add("open");
+
+    try {
+      const blob = await meta.load();
+      if (viewerKey !== key) return; // 読み込み中に別の書類へ切り替わった
+      viewerUrl = URL.createObjectURL(blob);
+      const kindOfView = fileViewKind(meta.mimeType, meta.fileName);
+      if (kindOfView === "pdf") {
+        area.innerHTML = `<iframe src="${viewerUrl}" title="${escapeHtml(meta.title)}"></iframe>`;
+      } else if (kindOfView === "image") {
+        area.innerHTML = `<div class="viewer-image"><img src="${viewerUrl}" alt="${escapeHtml(meta.title)}"></div>`;
+      } else {
+        area.innerHTML = `
+          <div class="empty-state viewer-download">
+            <div class="empty-icon">${fileIcon(meta.mimeType, meta.fileName)}</div>
+            この形式（Excelなど）は画面の中では表示できません。<br>
+            右下の「ダウンロード」を押して、パソコンのアプリで開いてください。
+          </div>`;
+      }
+      document.getElementById("downloadLink").href = viewerUrl;
+      document.getElementById("downloadLink").setAttribute("download", meta.fileName);
+      document.getElementById("openTabLink").href = viewerUrl;
+      document.getElementById("openTabLink").style.display = kindOfView === "download" ? "none" : "";
+    } catch (err) {
+      console.error("書類の読み込みに失敗しました", err);
+      area.innerHTML = `<div class="empty-state">読み込めませんでした。<br>${escapeHtml(err.message || err)}</div>`;
+    }
+  }
+
+  function closeViewer() {
+    document.getElementById("viewerModal").classList.remove("open");
+    document.getElementById("viewerFrameArea").innerHTML = "";
+    viewerKey = null;
+    releaseViewerUrl();
+  }
+
   /* ---------- イベント登録 ---------- */
+
+  document.getElementById("docsClose").addEventListener("click", closeDocsModal);
+  document.getElementById("docsCloseBtn").addEventListener("click", closeDocsModal);
+  document.getElementById("docsFileInput").addEventListener("change", (ev) => {
+    uploadDocs(ev.target.files);
+    ev.target.value = "";
+  });
+  const docsDropzone = document.getElementById("docsDropzone");
+  ["dragenter", "dragover"].forEach((type) =>
+    docsDropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      docsDropzone.classList.add("dragging");
+    })
+  );
+  ["dragleave", "drop"].forEach((type) =>
+    docsDropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      docsDropzone.classList.remove("dragging");
+    })
+  );
+  docsDropzone.addEventListener("drop", (ev) => uploadDocs(ev.dataTransfer.files));
+  document.getElementById("docsList").addEventListener("click", (ev) => {
+    const view = ev.target.closest("[data-view]");
+    if (view) {
+      openViewer(view.dataset.view);
+      return;
+    }
+    const remove = ev.target.closest("[data-remove]");
+    if (remove) removeDoc(remove.dataset.remove);
+  });
+
+  document.getElementById("linkDrawingBtn").addEventListener("click", openPicker);
+  document.getElementById("pickerClose").addEventListener("click", closePicker);
+  document.getElementById("pickerCancel").addEventListener("click", closePicker);
+  document.getElementById("pickerOk").addEventListener("click", confirmPicker);
+  document.getElementById("pickerSearch").addEventListener("input", renderPicker);
+  document.getElementById("pickerSameCustomer").addEventListener("change", renderPicker);
+  document.getElementById("pickerList").addEventListener("change", (ev) => {
+    const id = ev.target.dataset.pickDrawing;
+    if (!id) return;
+    if (ev.target.checked) pickerSelected.add(id);
+    else pickerSelected.delete(id);
+    document.getElementById("pickerCount").textContent = `${pickerSelected.size}件選択中`;
+    document.getElementById("pickerOk").disabled = pickerSelected.size === 0;
+  });
+
+  document.getElementById("viewerClose").addEventListener("click", closeViewer);
 
   document.getElementById("filterBranch").addEventListener("change", renderOrders);
   document.getElementById("filterStatus").addEventListener("change", renderOrders);
@@ -593,6 +1042,7 @@
   (async () => {
     buildFilters();
     buildModalChoices();
+    buildDocTypeChoices();
     const ok = await initPage();
     if (!ok) return;
     customerList = (await loadCustomerList()).list;
