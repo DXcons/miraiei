@@ -60,7 +60,7 @@
       <div class="form-actions">
         <button type="button" class="btn btn-ghost" id="resetBtn">条件をクリア</button>
         <button type="button" class="btn btn-secondary" id="reloadBtn">再読み込み</button>
-        <button type="button" class="btn btn-primary" onclick="location.href='pdf-new.html'">図面を保存する</button>
+        <button type="button" class="btn btn-primary" id="searchBtn">検索する</button>
       </div>
     </div>
   </div>
@@ -367,6 +367,13 @@
   });
 
   document.getElementById("reloadBtn").addEventListener("click", reload);
+
+  // 条件を変えた時点で一覧は絞り込まれているが、ボタンで検索したい人のために
+  // 改めて絞り込んで結果の位置までスクロールする
+  document.getElementById("searchBtn").addEventListener("click", () => {
+    render();
+    document.getElementById("resultArea").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   document.getElementById("deleteBtn").addEventListener("click", deleteCurrent);
 
   document.getElementById("viewerModal").addEventListener("click", (ev) => {
