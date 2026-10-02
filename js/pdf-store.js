@@ -154,6 +154,98 @@ function readFileAsArrayBuffer(file) {
   });
 }
 
+/* ---------- 保存容量の目安 ----------
+   Firestore無料枠の保存容量は1GiB。ファイルはBase64化して保存しているので
+   実際の容量は元のファイルの約4/3倍になる。正確な値はFirebaseコンソールの
+   「使用量」でしか分からないため、画面に出すのはファイルサイズからの概算。 */
+const FREE_STORAGE_BYTES = 1024 * 1024 * 1024;
+
+function storedBytesOf(fileSize) {
+  return Math.ceil((fileSize || 0) * 4 / 3) + 1024; // 1KBは検索用データなどの分
+}
+
+// 図面と取引の書類を合計した使用量(概算)。{ used, limit, drawingBytes, fileBytes }
+async function estimateStorageUsage() {
+  const sum = (snapshot) =>
+    snapshot.docs.reduce((total, doc) => total + storedBytesOf(doc.data().fileSize), 0);
+  const drawingBytes = sum(await db.collection(PDF_COLLECTION).get());
+  let fileBytes = 0;
+  try {
+    fileBytes = sum(await db.collection("orderFiles").get());
+  } catch (err) {
+    // 書類の許可がまだルールに無い場合は図面の分だけで計算する
+    console.warn("書類の容量を取得できませんでした", err);
+  }
+  return { used: drawingBytes + fileBytes, limit: FREE_STORAGE_BYTES, drawingBytes, fileBytes };
+}
+
+// 容量メーターを指定した要素に描く
+async function renderStorageMeter(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  try {
+    const { used, limit, drawingBytes, fileBytes } = await estimateStorageUsage();
+    const pct = Math.min(100, (used / limit) * 100);
+    const level = pct >= 90 ? "is-danger" : pct >= 70 ? "is-warn" : "";
+    el.innerHTML = `
+      <div class="storage-meter ${level}">
+        <div class="storage-meter-head">
+          <span>保存容量の使用状況（無料枠）</span>
+          <b>約 ${formatFileSize(used)} ／ ${formatFileSize(limit)}（${pct < 1 && used > 0 ? "1%未満" : Math.round(pct) + "%"}）</b>
+        </div>
+        <div class="storage-bar"><div style="width:${Math.max(pct, used > 0 ? 0.5 : 0)}%"></div></div>
+        <div class="storage-meter-note">
+          内訳：図面 約${formatFileSize(drawingBytes)}・取引の書類 約${formatFileSize(fileBytes)}。
+          ${pct >= 90 ? "残りがわずかです。不要なファイルの削除か、有料プランへの切り替えをご検討ください。"
+            : pct >= 70 ? "7割を超えました。早めに管理者へご相談ください。"
+            : "ファイルの大きさからの概算です。"}
+        </div>
+      </div>`;
+  } catch (err) {
+    console.warn("保存容量を計算できませんでした", err);
+    el.innerHTML = "";
+  }
+}
+
+/* ---------- 分割保存の共通処理(図面・取引の書類で共用) ---------- */
+
+// ファイル本体をBase64化し、docRef/chunks/0000, 0001… に分けて書き込む。戻り値はチャンク数。
+async function writeFileChunks(docRef, file, onProgress) {
+  const buffer = await readFileAsArrayBuffer(file);
+  const base64 = arrayBufferToBase64(buffer);
+  const chunkCount = Math.max(1, Math.ceil(base64.length / PDF_CHUNK_SIZE));
+  const chunksRef = docRef.collection("chunks");
+
+  if (onProgress) onProgress(0, chunkCount);
+  for (let i = 0; i < chunkCount; i++) {
+    const part = base64.substr(i * PDF_CHUNK_SIZE, PDF_CHUNK_SIZE);
+    await chunksRef.doc(String(i).padStart(4, "0")).set({ i, data: part });
+    if (onProgress) onProgress(i + 1, chunkCount);
+  }
+  return chunkCount;
+}
+
+// 分割保存されたチャンクを集めて元のファイル(Blob)に戻す
+async function readFileChunks(docRef, mimeType) {
+  const snapshot = await docRef.collection("chunks").get();
+  if (snapshot.empty) {
+    throw new Error("ファイル本体のデータが見つかりませんでした。");
+  }
+  const parts = snapshot.docs
+    .map((doc) => doc.data())
+    .sort((a, b) => a.i - b.i)
+    .map((c) => c.data);
+  return base64ToBlob(parts.join(""), mimeType);
+}
+
+// 本体チャンクを消す(検索用ドキュメントは呼び出し側で先に消しておく)
+async function deleteFileChunks(docRef) {
+  const snapshot = await docRef.collection("chunks").get();
+  for (const chunk of snapshot.docs) {
+    await chunk.ref.delete();
+  }
+}
+
 /* ---------- 保存 ---------- */
 
 /**
@@ -171,20 +263,8 @@ async function savePdfDrawing(file, meta, onProgress) {
     );
   }
 
-  const buffer = await readFileAsArrayBuffer(file);
-  const base64 = arrayBufferToBase64(buffer);
-  const chunkCount = Math.ceil(base64.length / PDF_CHUNK_SIZE);
-
   const docRef = db.collection(PDF_COLLECTION).doc();
-  const chunksRef = docRef.collection("chunks");
-
-  if (onProgress) onProgress(0, chunkCount);
-
-  for (let i = 0; i < chunkCount; i++) {
-    const part = base64.substr(i * PDF_CHUNK_SIZE, PDF_CHUNK_SIZE);
-    await chunksRef.doc(String(i).padStart(4, "0")).set({ i, data: part });
-    if (onProgress) onProgress(i + 1, chunkCount);
-  }
+  const chunkCount = await writeFileChunks(docRef, file, onProgress);
 
   const now = new Date();
   // drawingDateは "2026-09"(年月) / "2026"(年のみ) / ""(不明) のいずれか
@@ -235,15 +315,7 @@ async function fetchPdfDrawing(id) {
 
 // 分割保存されたチャンクを集めてPDFのBlobに戻す
 async function loadPdfBlob(id, mimeType) {
-  const snapshot = await db.collection(PDF_COLLECTION).doc(id).collection("chunks").get();
-  if (snapshot.empty) {
-    throw new Error("PDF本体のデータが見つかりませんでした。");
-  }
-  const parts = snapshot.docs
-    .map((doc) => doc.data())
-    .sort((a, b) => a.i - b.i)
-    .map((c) => c.data);
-  return base64ToBlob(parts.join(""), mimeType);
+  return readFileChunks(db.collection(PDF_COLLECTION).doc(id), mimeType);
 }
 
 /* ---------- 削除 ---------- */
@@ -253,11 +325,7 @@ async function loadPdfBlob(id, mimeType) {
 async function deletePdfDrawing(id) {
   const docRef = db.collection(PDF_COLLECTION).doc(id);
   await docRef.delete();
-
-  const snapshot = await docRef.collection("chunks").get();
-  for (const chunk of snapshot.docs) {
-    await chunk.ref.delete();
-  }
+  await deleteFileChunks(docRef);
 }
 
 /* ==========================================================
