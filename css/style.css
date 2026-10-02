@@ -1671,3 +1671,255 @@ footer.mock-footer {
 .status-menu .status-btn.is-current {
   border-color: var(--navy);
 }
+
+/* ---------- 取引の書類 ---------- */
+.modal-box-docs {
+  max-width: 860px;
+}
+
+.docs-upload .chip-group {
+  margin-bottom: 12px;
+}
+
+.docs-dropzone {
+  padding: 18px 16px;
+}
+
+.docs-upload .save-status {
+  margin-top: 8px;
+  min-height: 1.4em;
+}
+
+.docs-drawing-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0 6px;
+  padding: 12px 14px;
+  background: #f6f8fb;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15.5px;
+  color: var(--text-light);
+}
+
+.doc-group {
+  margin-top: 18px;
+}
+
+.doc-group-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.doc-group-title span {
+  display: inline-block;
+  min-width: 26px;
+  padding: 0 8px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: var(--text-light);
+  font-size: 14px;
+  text-align: center;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.doc-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-name {
+  display: block;
+  max-width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-name:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.doc-name:disabled {
+  color: var(--text-light);
+  cursor: default;
+}
+
+.doc-meta {
+  font-size: 14.5px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+.doc-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.doc-empty {
+  font-size: 15px;
+  color: #a7b0bd;
+  padding: 8px 4px;
+}
+
+/* 図面の選択 */
+.picker-filter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.picker-filter input[type="text"] {
+  flex: 1;
+  min-width: 220px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 17px;
+  font-family: inherit;
+}
+
+.picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.picker-row:hover {
+  background: #f7f9fb;
+}
+
+.picker-row input {
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.picker-row-main b {
+  display: block;
+  font-size: 17px;
+  color: var(--text);
+}
+
+.picker-row-main small {
+  font-size: 14.5px;
+  color: var(--text-light);
+}
+
+.picker-row.is-linked {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* 写真の表示 */
+.viewer-image {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+}
+
+.viewer-image img {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+}
+
+.viewer-download {
+  color: #e3e7ec !important;
+  padding-top: 80px;
+}
+
+/* ---------- 保存容量メーター ---------- */
+.storage-meter {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  --meter: #3f78bb;
+}
+
+.storage-meter.is-warn {
+  --meter: #d98a1c;
+  border-color: #f0d2a6;
+}
+
+.storage-meter.is-danger {
+  --meter: #c0392b;
+  border-color: #f0bcb6;
+  background: #fff7f6;
+}
+
+.storage-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 15.5px;
+  color: var(--text-light);
+}
+
+.storage-meter-head b {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.storage-bar {
+  height: 12px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: #e8ecf1;
+  overflow: hidden;
+}
+
+.storage-bar div {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--meter);
+}
+
+.storage-meter-note {
+  font-size: 14.5px;
+  color: var(--text-light);
+}
