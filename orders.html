@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>受発注・請求書の管理 | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page page-wide">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 受発注・請求書の管理</div>
+  <h1 class="page-title">受発注・請求書の管理</h1>
+  <p class="page-sub">取引ごとの納期・客先・ステータスの一覧です。ステータスは「次へ」ボタン、またはステータスをクリックして切り替えます。</p>
+
+  <div class="card">
+    <div class="form-grid form-grid-3">
+      <div class="field">
+        <label>受注拠点</label>
+        <div class="chip-group" id="filterBranch">
+          <label class="chip"><input type="radio" name="filterBranch" value="" checked><span>すべて</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label for="filterStatus">ステータス</label>
+        <select id="filterStatus"></select>
+      </div>
+      <div class="field">
+        <label for="filterCustomer">客先</label>
+        <select id="filterCustomer"><option value="">すべて</option></select>
+      </div>
+    </div>
+
+    <div class="result-bar" style="margin-bottom:0;">
+      <div>
+        <span class="count-label">表示中の取引：</span><span class="count-num" id="hitCount">0</span><span class="count-label">件</span>
+        <span class="count-label" style="margin-left:18px;">金額の合計（税抜）：</span><span class="amount-total" id="amountTotal">¥0</span>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="reloadBtn">再読み込み</button>
+        <button type="button" class="btn btn-primary" id="addBtn">＋ 取引を追加</button>
+      </div>
+    </div>
+
+    <!-- ステータス別の件数。押すとそのステータスだけに絞り込む -->
+    <div class="status-summary" id="statusSummary"></div>
+  </div>
+
+  <div id="orderArea" style="margin-top:20px;"></div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<!-- ステータスをクリックしたときに出る選択パネル -->
+<div class="status-menu" id="statusMenu" hidden></div>
+
+<!-- ===== 取引の追加・編集 ===== -->
+<div class="modal-overlay" id="orderModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="orderModalTitle">取引を追加</h3>
+      <button type="button" class="modal-close" id="orderModalClose" title="閉じる">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid modal-form-grid">
+        <div class="field">
+          <label for="orderDue">納期</label>
+          <div class="due-row">
+            <input type="date" id="orderDue">
+            <label class="check-label"><input type="checkbox" id="orderDueUnknown"> 未定</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>受注拠点 <span class="req">必須</span></label>
+          <div class="chip-group" id="orderBranchGroup"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="orderCustomer">客先名 <span class="req">必須</span></label>
+        <select id="orderCustomer"></select>
+        <input type="text" id="orderCustomerManual" class="manual-input" placeholder="客先名を入力してください" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="orderProduct">品名</label>
+        <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
+      </div>
+
+      <div class="form-grid modal-form-grid">
+        <div class="field">
+          <label for="orderAmount">金額（税抜・円）</label>
+          <input type="text" id="orderAmount" inputmode="numeric" placeholder="例：1,250,000" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="orderQuoteNo">見積番号</label>
+          <input type="text" id="orderQuoteNo" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="orderInvoiceDate">請求日</label>
+          <input type="date" id="orderInvoiceDate">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>ステータス</label>
+        <div class="chip-group" id="orderStatusGroup"></div>
+      </div>
+
+      <div class="field">
+        <label for="orderNote">備考</label>
+        <textarea id="orderNote" rows="3" placeholder="品名・数量・連絡事項など"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span>
+        <button type="button" class="btn btn-ghost btn-danger" id="orderDeleteBtn">この取引を削除</button>
+      </span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="orderCancelBtn">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="orderSaveBtn">保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/pdf-store.js"></script>
+<script src="js/order-store.js"></script>
+<script>
+  let orders = [];
+  let customerList = [];
+  let editingId = null; // nullなら新規追加
+  let busy = false;
+
+  const MANUAL_VALUE = "__manual__";
+  // ステータス絞り込みの特別な値
+  const FILTER_OPEN = "__open__";
+
+  /* ---------- 絞り込み ---------- */
+
+  function buildFilters() {
+    document.getElementById("filterBranch").insertAdjacentHTML(
+      "beforeend",
+      ORDER_BRANCHES.map(
+        (b) => `<label class="chip"><input type="radio" name="filterBranch" value="${b}"><span>${b}</span></label>`
+      ).join("")
+    );
+    document.getElementById("filterStatus").innerHTML =
+      `<option value="${FILTER_OPEN}">進行中のみ（入金済み・受注せずを除く）</option>` +
+      `<option value="">すべて</option>` +
+      ORDER_STATUSES.map((s) => `<option value="${s.value}">${s.value}</option>`).join("");
+  }
+
+  // 客先の絞り込みは、実際に取引がある客先から作る
+  function refreshCustomerFilter() {
+    const select = document.getElementById("filterCustomer");
+    const previous = select.value;
+    const names = Array.from(new Set(orders.map((o) => o.customer).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "ja"));
+    select.innerHTML =
+      `<option value="">すべて</option>` +
+      names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("");
+    if (names.includes(previous)) select.value = previous;
+  }
+
+  // 拠点・客先だけで絞り込んだ取引(ステータス別件数はこれを数える)
+  function ordersForBranchAndCustomer() {
+    const branch = document.querySelector('input[name="filterBranch"]:checked').value;
+    const customer = document.getElementById("filterCustomer").value;
+    return orders.filter((o) => (!branch || o.branch === branch) && (!customer || o.customer === customer));
+  }
+
+  function filteredOrders() {
+    const status = document.getElementById("filterStatus").value;
+    return ordersForBranchAndCustomer().filter((o) => {
+      if (status === FILTER_OPEN) return !isOrderClosed(o.status);
+      if (status && o.status !== status) return false;
+      return true;
+    });
+  }
+
+  // 納期の近い順。納期未定は最後。
+  function sortOrders(list) {
+    return list.slice().sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+  }
+
+  function todayText() {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  /* ---------- 一覧表示 ---------- */
+
+  function renderStatusSummary() {
+    const base = ordersForBranchAndCustomer();
+    const current = document.getElementById("filterStatus").value;
+    document.getElementById("statusSummary").innerHTML = ORDER_STATUSES.map((s) => {
+      const count = base.filter((o) => o.status === s.value).length;
+      return `
+        <button type="button" class="status-count ${s.cls} ${count === 0 ? "is-zero" : ""} ${current === s.value ? "is-active" : ""}"
+                data-summary="${s.value}" title="${s.value}だけを表示（もう一度押すと元に戻る）">
+          ${s.value} <b>${count}</b>
+        </button>`;
+    }).join("");
+  }
+
+  function renderOrders() {
+    closeStatusMenu();
+    renderStatusSummary();
+    const list = sortOrders(filteredOrders());
+    document.getElementById("hitCount").textContent = list.length;
+    document.getElementById("amountTotal").textContent = formatAmount(
+      list.reduce((sum, o) => sum + (typeof o.amount === "number" ? o.amount : 0), 0)
+    );
+    const area = document.getElementById("orderArea");
+
+    if (list.length === 0) {
+      area.innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">📋</div>
+          ${orders.length === 0
+            ? "まだ取引が登録されていません。「＋ 取引を追加」から登録してください。"
+            : "条件に合う取引はありません。"}
+        </div>`;
+      return;
+    }
+
+    const today = todayText();
+    area.innerHTML = `
+      <div class="card" style="padding:0;">
+        <div class="table-wrap">
+          <table class="data-table order-table">
+            <thead>
+              <tr>
+                <th>納期</th>
+                <th>受注拠点</th>
+                <th>客先名</th>
+                <th>品名</th>
+                <th class="num">金額（税抜）</th>
+                <th>見積番号</th>
+                <th>ステータス</th>
+                <th>請求日</th>
+                <th>備考</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map((o) => {
+                const late = o.dueDate && o.dueDate < today && isBeforeDelivery(o.status);
+                const next = nextOrderStatus(o.status);
+                return `
+                  <tr class="${orderStatusInfo(o.status).cls} ${isOrderClosed(o.status) ? "row-closed" : ""}">
+                    <td class="${late ? "due-late" : ""}">
+                      ${escapeHtml(formatDueDate(o.dueDate))}${late ? `<span class="late-mark">納期超過</span>` : ""}
+                    </td>
+                    <td>${escapeHtml(o.branch)}</td>
+                    <td class="order-customer">${escapeHtml(o.customer)}</td>
+                    <td class="order-product">${escapeHtml(o.productName || "")}</td>
+                    <td class="num">${formatAmount(o.amount)}</td>
+                    <td>${escapeHtml(o.quoteNo || "")}</td>
+                    <td>
+                      <button type="button" class="status-pill status-btn ${orderStatusInfo(o.status).cls}" data-status-menu="${o.id}" title="クリックしてステータスを選ぶ">
+                        ${escapeHtml(o.status)} ▾
+                      </button>
+                    </td>
+                    <td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>
+                    <td class="order-note">${escapeHtml(o.note)}</td>
+                    <td class="order-actions">
+                      ${next
+                        ? `<button type="button" class="btn btn-secondary btn-sm" data-next="${o.id}">次へ：${escapeHtml(next)} ▶</button>`
+                        : ""}
+                      <button type="button" class="btn btn-ghost btn-sm" data-edit="${o.id}">編集</button>
+                    </td>
+                  </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  async function reload() {
+    try {
+      orders = await fetchOrders();
+    } catch (err) {
+      console.error("取引一覧の取得に失敗しました", err);
+      document.getElementById("orderArea").innerHTML = `
+        <div class="card empty-state">
+          取引一覧を読み込めませんでした。
+          ${err && err.code === "permission-denied" ? "<br>Firestoreのルールに orders の許可が追加されているか確認してください。" : ""}
+        </div>`;
+      return;
+    }
+    refreshCustomerFilter();
+    renderOrders();
+  }
+
+  /* ---------- ステータスの切り替え ---------- */
+
+  async function changeStatus(id, status) {
+    if (busy) return;
+    const order = orders.find((o) => o.id === id);
+    if (!order || order.status === status) return;
+    busy = true;
+    try {
+      const fields = { status };
+      // 請求済みにしたとき請求日が空なら、今日の日付を入れておく(あとで編集で直せる)
+      if (status === "請求済み" && !order.invoiceDate) fields.invoiceDate = todayText();
+      const data = await updateOrder(id, fields);
+      Object.assign(order, fields, { updatedAtText: data.updatedAtText });
+      renderOrders();
+      toast(
+        fields.invoiceDate
+          ? `「${order.customer}」を「${status}」にしました（請求日：${formatOrderDate(fields.invoiceDate)}）`
+          : `「${order.customer}」を「${status}」にしました`
+      );
+    } catch (err) {
+      console.error("ステータスの変更に失敗しました", err);
+      toast("ステータスの変更に失敗しました。");
+    } finally {
+      busy = false;
+    }
+  }
+
+  let statusMenuFor = null;
+
+  function openStatusMenu(button) {
+    const id = button.dataset.statusMenu;
+    const order = orders.find((o) => o.id === id);
+    const menu = document.getElementById("statusMenu");
+    statusMenuFor = id;
+    menu.innerHTML = ORDER_STATUSES.map((s) => `
+      <button type="button" class="status-pill status-btn ${s.cls} ${s.value === order.status ? "is-current" : ""}" data-pick="${s.value}">
+        ${s.value === order.status ? "✓ " : ""}${s.value}
+      </button>`).join("");
+    const rect = button.getBoundingClientRect();
+    menu.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 220)) + "px";
+    menu.style.top = (rect.bottom + 4) + "px";
+    menu.hidden = false;
+  }
+
+  function closeStatusMenu() {
+    document.getElementById("statusMenu").hidden = true;
+    statusMenuFor = null;
+  }
+
+  document.getElementById("orderArea").addEventListener("click", (ev) => {
+    const menuBtn = ev.target.closest("[data-status-menu]");
+    if (menuBtn) {
+      if (statusMenuFor === menuBtn.dataset.statusMenu) closeStatusMenu();
+      else openStatusMenu(menuBtn);
+      return;
+    }
+    const nextBtn = ev.target.closest("[data-next]");
+    if (nextBtn) {
+      const order = orders.find((o) => o.id === nextBtn.dataset.next);
+      const next = order && nextOrderStatus(order.status);
+      if (next) changeStatus(order.id, next);
+      return;
+    }
+    const editBtn = ev.target.closest("[data-edit]");
+    if (editBtn) openOrderModal(editBtn.dataset.edit);
+  });
+
+  document.getElementById("statusMenu").addEventListener("click", (ev) => {
+    const pick = ev.target.closest("[data-pick]");
+    if (!pick || !statusMenuFor) return;
+    const id = statusMenuFor;
+    closeStatusMenu();
+    changeStatus(id, pick.dataset.pick);
+  });
+
+  document.addEventListener("mousedown", (ev) => {
+    const menu = document.getElementById("statusMenu");
+    if (menu.hidden || menu.contains(ev.target) || ev.target.closest("[data-status-menu]")) return;
+    closeStatusMenu();
+  });
+  window.addEventListener("scroll", closeStatusMenu, true);
+
+  /* ---------- 追加・編集画面 ---------- */
+
+  function buildModalChoices() {
+    document.getElementById("orderBranchGroup").innerHTML = ORDER_BRANCHES.map(
+      (b) => `<label class="chip"><input type="radio" name="orderBranch" value="${b}"><span>${b}</span></label>`
+    ).join("");
+    document.getElementById("orderStatusGroup").innerHTML = ORDER_STATUSES.map(
+      (s) => `<label class="chip"><input type="radio" name="orderStatus" value="${s.value}"><span>${s.value}</span></label>`
+    ).join("");
+  }
+
+  // 客先の選択肢は「客先一覧の編集」で登録した一覧を使う
+  function renderCustomerSelect(selected) {
+    const select = document.getElementById("orderCustomer");
+    const manual = document.getElementById("orderCustomerManual");
+    const inList = !selected || customerList.includes(selected);
+    select.innerHTML =
+      `<option value="">— 一覧から選択 —</option>` +
+      customerList.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join("") +
+      `<option value="${MANUAL_VALUE}">＋ 一覧にない客先を直接入力する</option>`;
+    select.value = inList ? (selected || "") : MANUAL_VALUE;
+    manual.value = inList ? "" : selected;
+    syncCustomerManual();
+  }
+
+  function syncCustomerManual() {
+    const isManual = document.getElementById("orderCustomer").value === MANUAL_VALUE;
+    document.getElementById("orderCustomerManual").style.display = isManual ? "block" : "none";
+  }
+
+  function readCustomer() {
+    const select = document.getElementById("orderCustomer");
+    return select.value === MANUAL_VALUE
+      ? document.getElementById("orderCustomerManual").value.trim()
+      : select.value;
+  }
+
+  function syncDueUnknown() {
+    const unknown = document.getElementById("orderDueUnknown").checked;
+    const due = document.getElementById("orderDue");
+    due.disabled = unknown;
+    if (unknown) due.value = "";
+  }
+
+  function setRadio(name, value) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach((el) => (el.checked = el.value === value));
+  }
+
+  function openOrderModal(id) {
+    const order = id ? orders.find((o) => o.id === id) : null;
+    editingId = order ? order.id : null;
+
+    document.getElementById("orderModalTitle").textContent = order ? "取引を編集" : "取引を追加";
+    document.getElementById("orderDeleteBtn").style.visibility = order ? "visible" : "hidden";
+
+    document.getElementById("orderDue").value = order ? order.dueDate || "" : "";
+    document.getElementById("orderDueUnknown").checked = !!order && !order.dueDate;
+    syncDueUnknown();
+    setRadio("orderBranch", order ? order.branch : "");
+    setRadio("orderStatus", order ? order.status : ORDER_STATUSES[0].value);
+    renderCustomerSelect(order ? order.customer : "");
+    document.getElementById("orderProduct").value = order ? order.productName || "" : "";
+    document.getElementById("orderAmount").value =
+      order && typeof order.amount === "number" ? order.amount.toLocaleString("ja-JP") : "";
+    document.getElementById("orderQuoteNo").value = order ? order.quoteNo || "" : "";
+    document.getElementById("orderInvoiceDate").value = order ? order.invoiceDate || "" : "";
+    document.getElementById("orderNote").value = order ? order.note || "" : "";
+
+    document.getElementById("orderModal").classList.add("open");
+  }
+
+  function closeOrderModal() {
+    document.getElementById("orderModal").classList.remove("open");
+  }
+
+  function readOrderForm() {
+    const branch = document.querySelector('input[name="orderBranch"]:checked');
+    const status = document.querySelector('input[name="orderStatus"]:checked');
+    return {
+      dueDate: document.getElementById("orderDueUnknown").checked ? "" : document.getElementById("orderDue").value,
+      branch: branch ? branch.value : "",
+      customer: readCustomer(),
+      productName: document.getElementById("orderProduct").value.trim(),
+      amount: parseAmount(document.getElementById("orderAmount").value),
+      quoteNo: document.getElementById("orderQuoteNo").value.trim(),
+      invoiceDate: document.getElementById("orderInvoiceDate").value,
+      status: status ? status.value : ORDER_STATUSES[0].value,
+      note: document.getElementById("orderNote").value.trim(),
+    };
+  }
+
+  function validateOrder(fields) {
+    if (!fields.dueDate && !document.getElementById("orderDueUnknown").checked) {
+      return "納期を入力してください（決まっていない場合は「未定」にチェック）。";
+    }
+    if (!fields.branch) return "受注拠点を選んでください。";
+    if (!fields.customer) return "客先名を選択、または入力してください。";
+    if (Number.isNaN(fields.amount)) return "金額は数字で入力してください（例：1,250,000）。";
+    return null;
+  }
+
+  async function saveOrder() {
+    if (busy) return;
+    const fields = readOrderForm();
+    const error = validateOrder(fields);
+    if (error) {
+      toast(error);
+      return;
+    }
+    busy = true;
+    document.getElementById("orderSaveBtn").disabled = true;
+    try {
+      if (editingId) {
+        await updateOrder(editingId, fields);
+        toast("取引を更新しました");
+      } else {
+        await addOrder(fields);
+        toast("取引を追加しました");
+      }
+      closeOrderModal();
+      await reload();
+    } catch (err) {
+      console.error("取引の保存に失敗しました", err);
+      toast(
+        err && err.code === "permission-denied"
+          ? "保存する権限がありません。Firestoreのルールを確認してください。"
+          : "取引の保存に失敗しました。"
+      );
+    } finally {
+      busy = false;
+      document.getElementById("orderSaveBtn").disabled = false;
+    }
+  }
+
+  async function removeOrder() {
+    if (busy || !editingId) return;
+    const order = orders.find((o) => o.id === editingId);
+    if (!confirm(`「${order.customer}」（納期 ${formatDueDate(order.dueDate)}）の取引を削除しますか？\nこの操作は元に戻せません。`)) return;
+    busy = true;
+    try {
+      await deleteOrder(editingId);
+      closeOrderModal();
+      toast("取引を削除しました");
+      await reload();
+    } catch (err) {
+      console.error("取引の削除に失敗しました", err);
+      toast("取引の削除に失敗しました。");
+    } finally {
+      busy = false;
+    }
+  }
+
+  /* ---------- イベント登録 ---------- */
+
+  document.getElementById("filterBranch").addEventListener("change", renderOrders);
+  document.getElementById("filterStatus").addEventListener("change", renderOrders);
+  document.getElementById("filterCustomer").addEventListener("change", renderOrders);
+  document.getElementById("reloadBtn").addEventListener("click", reload);
+  document.getElementById("statusSummary").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-summary]");
+    if (!btn) return;
+    const select = document.getElementById("filterStatus");
+    select.value = select.value === btn.dataset.summary ? FILTER_OPEN : btn.dataset.summary;
+    renderOrders();
+  });
+  document.getElementById("addBtn").addEventListener("click", () => openOrderModal(null));
+
+  document.getElementById("orderModalClose").addEventListener("click", closeOrderModal);
+  document.getElementById("orderCancelBtn").addEventListener("click", closeOrderModal);
+  document.getElementById("orderSaveBtn").addEventListener("click", saveOrder);
+  document.getElementById("orderDeleteBtn").addEventListener("click", removeOrder);
+  document.getElementById("orderCustomer").addEventListener("change", () => {
+    syncCustomerManual();
+    if (document.getElementById("orderCustomer").value === MANUAL_VALUE) {
+      document.getElementById("orderCustomerManual").focus();
+    }
+  });
+  document.getElementById("orderDueUnknown").addEventListener("change", syncDueUnknown);
+
+  // 金額は入力欄を離れたときに「1,250,000」のようにカンマ区切りへ整える
+  document.getElementById("orderAmount").addEventListener("blur", (ev) => {
+    const value = parseAmount(ev.target.value);
+    if (typeof value === "number" && !Number.isNaN(value)) ev.target.value = value.toLocaleString("ja-JP");
+  });
+
+  /* ---------- 初期化 ---------- */
+
+  (async () => {
+    buildFilters();
+    buildModalChoices();
+    const ok = await initPage();
+    if (!ok) return;
+    customerList = (await loadCustomerList()).list;
+    await reload();
+  })();
+</script>
+
+</body>
+</html>
