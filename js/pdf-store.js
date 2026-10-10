@@ -170,11 +170,14 @@ async function estimateStorageUsage() {
     snapshot.docs.reduce((total, doc) => total + storedBytesOf(doc.data().fileSize), 0);
   const drawingBytes = sum(await db.collection(PDF_COLLECTION).get());
   let fileBytes = 0;
-  try {
-    fileBytes = sum(await db.collection("orderFiles").get());
-  } catch (err) {
-    // 書類の許可がまだルールに無い場合は図面の分だけで計算する
-    console.warn("書類の容量を取得できませんでした", err);
+  // 取引の書類(orderFiles)と、取り込んだ元の注文書・御見積書(caseDocs)
+  for (const name of ["orderFiles", "caseDocs"]) {
+    try {
+      fileBytes += sum(await db.collection(name).get());
+    } catch (err) {
+      // 許可がまだルールに無い場合はその分を除いて計算する
+      console.warn(`${name}の容量を取得できませんでした`, err);
+    }
   }
   return { used: drawingBytes + fileBytes, limit: FREE_STORAGE_BYTES, drawingBytes, fileBytes };
 }
@@ -195,7 +198,7 @@ async function renderStorageMeter(elementId) {
         </div>
         <div class="storage-bar"><div style="width:${Math.max(pct, used > 0 ? 0.5 : 0)}%"></div></div>
         <div class="storage-meter-note">
-          内訳：図面 約${formatFileSize(drawingBytes)}・取引の書類 約${formatFileSize(fileBytes)}。
+          内訳：図面 約${formatFileSize(drawingBytes)}・書類（取引の書類、注文書・御見積書） 約${formatFileSize(fileBytes)}。
           ${pct >= 90 ? "残りがわずかです。不要なファイルの削除か、有料プランへの切り替えをご検討ください。"
             : pct >= 70 ? "7割を超えました。早めに管理者へご相談ください。"
             : "ファイルの大きさからの概算です。"}
