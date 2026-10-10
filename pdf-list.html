@@ -25,8 +25,8 @@
 </header>
 
 <main class="page">
-  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 過去の図面をさがす</div>
-  <h1 class="page-title">過去の図面をさがす</h1>
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の図面をさがす</a> ＞ 保存したPDF図面</div>
+  <h1 class="page-title">保存したPDF図面をさがす</h1>
   <p class="page-sub">客先・品名・図面作成日で絞り込みます。一覧をクリックするとPDFが開きます。</p>
 
   <div class="card">
@@ -36,8 +36,8 @@
         <select id="filterCustomer"><option value="">すべて</option></select>
       </div>
       <div class="field">
-        <label for="filterProduct">品名（部分一致）</label>
-        <input type="text" id="filterProduct" placeholder="品名の一部を入力">
+        <label for="filterProduct">品名・図面番号（部分一致）</label>
+        <input type="text" id="filterProduct" placeholder="品名や図面番号の一部を入力">
       </div>
       <div class="field">
         <label>図面作成日</label>
@@ -99,6 +99,7 @@
 <script src="js/firebase-config.js"></script>
 <script src="js/common.js"></script>
 <script src="js/pdf-store.js"></script>
+<script src="js/case-store.js"></script>
 <script>
   let PDF_DRAWINGS = [];
   let currentViewerId = null;
@@ -139,7 +140,8 @@
     const f = readFilters();
     return PDF_DRAWINGS.filter((d) => {
       if (f.customer && d.customer !== f.customer) return false;
-      if (f.product && !String(d.productName || "").toLowerCase().includes(f.product.toLowerCase())) return false;
+      if (f.product && ![d.productName, d.drawingNo, d.productCode]
+        .some((v) => String(v || "").toLowerCase().includes(f.product.toLowerCase()))) return false;
       if (f.year === "unknown") {
         if (d.drawingYear) return false; // 作成年が不明のものだけ
       } else if (f.year && String(d.drawingYear) !== f.year) {
@@ -238,6 +240,7 @@
               <div class="r-meta">
                 <span class="badge badge-customer">${escapeHtml(d.customer)}</span>
                 ${optionBadgesHtml(d)}
+                ${d.drawingNo ? `<span class="dot">品番：${escapeHtml(d.productCode || "-")}　図面番号：${escapeHtml(d.drawingNo)}</span>` : ""}
                 <span class="dot">図面作成日：${formatDrawingDate(d.drawingDate)}</span>
                 <span class="dot">${escapeHtml(d.fileName)}</span>
                 <span class="dot">${formatFileSize(d.fileSize)}</span>
@@ -345,7 +348,21 @@
       return;
     }
     rebuildFilterOptions();
+    applyCustomerParam();
     render();
+  }
+
+  // 客先の選択画面から ?customer=神栄 のように来たときは、その客先で絞り込んでおく(最初の1回だけ)
+  let customerParamApplied = false;
+  function applyCustomerParam() {
+    if (customerParamApplied) return;
+    customerParamApplied = true;
+    const wanted = new URLSearchParams(location.search).get("customer");
+    if (!wanted) return;
+    const sel = document.getElementById("filterCustomer");
+    const hit = Array.from(sel.options).find(
+      (o) => o.value && normalizeCustomerName(o.value) === normalizeCustomerName(wanted));
+    if (hit) sel.value = hit.value;
   }
 
   /* ---------- イベント登録 ---------- */

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注文書・御見積書データの取り込み | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page page-wide case-page">
+  <div class="breadcrumb">
+    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の図面をさがす</a> ＞ データの取り込み
+  </div>
+  <h1 class="page-title">注文書・御見積書データの取り込み</h1>
+  <p class="page-sub">PDFを読み取って作った「取り込み用ファイル（○○_取り込み用.json）」を選び、内容を確認してから保存します。</p>
+
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">📥</div>
+      <div class="dropzone-main">ここに取り込み用ファイルをドラッグ＆ドロップ</div>
+      <div class="dropzone-sub">または</div>
+      <label class="btn btn-secondary">
+        ファイルを選ぶ
+        <input type="file" id="fileInput" accept=".json,application/json" hidden>
+      </label>
+      <div class="dropzone-note">ファイル名が「_取り込み用.json」で終わるファイルです。</div>
+    </div>
+  </div>
+
+  <div id="previewArea"></div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/pdf-store.js"></script>
+<script src="js/case-store.js"></script>
+<script>
+  let BUNDLE = null;
+  let ITEMS = [];      // 画面で直した値を反映した明細
+  let ORIGINAL = [];   // 読み取ったときの値(修正箇所に色を付けるため)
+  let EXISTING = new Set();
+  let saving = false;
+
+  /* ---------- ファイルの読み込み ---------- */
+
+  async function loadBundleFile(file) {
+    if (!file) return;
+    if (saving) return;
+    let bundle;
+    try {
+      bundle = validateCaseBundle(JSON.parse(await file.text()));
+    } catch (err) {
+      document.getElementById("previewArea").innerHTML = `
+        <div class="card empty-state"><div class="empty-icon">⚠️</div>
+        ファイルを読み込めませんでした。<br>${escapeHtml(err.message || err)}</div>`;
+      return;
+    }
+    BUNDLE = bundle;
+    ITEMS = bundle.items.map((it) => ({ ...it }));
+    ORIGINAL = bundle.items.map((it) => ({ ...it }));
+    EXISTING = new Set();
+    render();
+    try {
+      EXISTING = await findExistingCaseItemIds(bundle);
+      render();
+    } catch (err) {
+      console.warn("登録済みデータを確認できませんでした", err);
+    }
+  }
+
+  /* ---------- 確認表 ---------- */
+
+  // 紙に書かれた合計と、読み取った単価から計算した合計を比べる
+  function totalsHtml() {
+    const lines = [];
+    // "13568"のような数字だけのキーは先に並んでしまうので、伝票番号順に並べ直す
+    const byNo = (obj) => Object.keys(obj).sort((a, b) => a.localeCompare(b, "ja", { numeric: true }));
+    const slipTotals = BUNDLE.slipTotals || {};
+    byNo(slipTotals).forEach((slip) => {
+      const sum = ITEMS.filter((it) => it.orderSlipNo === slip)
+        .reduce((t, it) => t + Number(it.orderUnitPrice || 0) * Number(it.qty || 0), 0);
+      const ok = sum === slipTotals[slip];
+      lines.push(`<span>注文書 ${escapeHtml(slip)}：${formatYen(sum)}
+        <span class="${ok ? "ok" : "ng"}">${ok ? "✓ 紙の合計と一致" : `✗ 紙の合計は${formatYen(slipTotals[slip])}`}</span></span>`);
+    });
+    const quoteTotals = BUNDLE.quoteTotals || {};
+    byNo(quoteTotals).forEach((q) => {
+      const sum = ITEMS.filter((it) => it.quoteNo === q)
+        .reduce((t, it) => t + Number(it.outsourceUnitPrice || 0) * Number(it.outsourceQty || 0), 0);
+      const ok = sum === quoteTotals[q];
+      lines.push(`<span>御見積書 ${escapeHtml(q)}：${formatYen(sum)}
+        <span class="${ok ? "ok" : "ng"}">${ok ? "✓ 紙の小計と一致" : `✗ 紙の小計は${formatYen(quoteTotals[q])}`}</span></span>`);
+    });
+    return lines.join("");
+  }
+
+  function render() {
+    const area = document.getElementById("previewArea");
+    if (!BUNDLE) {
+      area.innerHTML = "";
+      return;
+    }
+    const checkCount = ITEMS.filter((it) => it.needsCheck).length;
+    const codes = Array.from(new Set(ITEMS.map((it) => it.productCode)));
+    const overwrite = ITEMS.filter((it) => EXISTING.has(caseItemId(BUNDLE.customer, it))).length;
+
+    area.innerHTML = `
+      <div class="card">
+        <div class="case-summary">
+          <div class="case-summary-item"><span>客先</span><b>${escapeHtml(BUNDLE.customer)}</b></div>
+          <div class="case-summary-item"><span>品番</span><b>${escapeHtml(codes.join("、"))}</b></div>
+          <div class="case-summary-item"><span>明細（図面）</span><b>${ITEMS.length}点</b></div>
+          <div class="case-summary-item"><span>要確認</span><b>${checkCount}点</b></div>
+        </div>
+        <hr class="divider">
+        <div class="field-note" style="margin-bottom:10px;">元のPDF：${escapeHtml(BUNDLE.sourceFile || "-")}
+          ${BUNDLE.document ? `　<a href="#" class="text-link" id="viewDocLink">注文書・御見積書を見る</a>` : ""}</div>
+        <div class="import-totals" id="totalsArea">${totalsHtml()}</div>
+        ${overwrite ? `<div class="case-note" style="margin:16px 0 0;">⚠️ ${overwrite}点はすでに登録されています。保存すると今回の内容で上書きされます（「修正」で直した内容も上書きされます）。</div>` : ""}
+      </div>
+
+      <div class="card">
+        <p class="field-note" style="margin-top:0;">手書きの単価は読み間違いの可能性があります。「図面」ボタンで図面を、上の「注文書・御見積書を見る」で元の書類を確認し、
+          違っていれば表の中で直接直してください（直した欄はオレンジ色になります）。</p>
+        <div class="table-wrap">
+          <table class="data-table case-table import-table">
+            <thead>
+              <tr>
+                <th>品番</th>
+                <th>商品名</th>
+                <th>図面番号</th>
+                <th class="num">数量</th>
+                <th class="num">受注単価</th>
+                <th class="num">外注単価</th>
+                <th>外注先</th>
+                <th>受注年月日</th>
+                <th>図面</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ITEMS.map((it, i) => `
+                ${it.needsCheck ? `<tr class="row-check"><td colspan="9"><span class="badge badge-check" style="margin:0 8px 0 0;">要確認</span>${escapeHtml(it.note)}</td></tr>` : ""}
+                <tr class="${it.needsCheck ? "row-check" : ""}">
+                  <td>${escapeHtml(it.productCode)}</td>
+                  <td><input type="text" data-i="${i}" data-key="productName" value="${escapeHtml(it.productName)}"></td>
+                  <td>${escapeHtml(it.drawingNo)}</td>
+                  <td class="num">${escapeHtml(it.qty)}</td>
+                  <td class="num"><input type="number" data-i="${i}" data-key="orderUnitPrice" value="${escapeHtml(it.orderUnitPrice ?? "")}"></td>
+                  <td class="num"><input type="number" data-i="${i}" data-key="outsourceUnitPrice" value="${escapeHtml(it.outsourceUnitPrice ?? "")}"></td>
+                  <td>${escapeHtml(it.outsourcer || "-")}</td>
+                  <td>${escapeHtml(formatCaseDate(it.orderDate))}</td>
+                  <td>${it.drawing ? `<button type="button" class="btn btn-secondary btn-sm" data-view="${i}">図面</button>` : "なし"}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="result-bar" style="margin:0;">
+          <div id="saveStatus" class="save-status">内容を確認したら「保存する」を押してください。</div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost" id="cancelBtn">やめる</button>
+            <button type="button" class="btn btn-primary" id="saveBtn">保存する</button>
+          </div>
+        </div>
+      </div>`;
+
+    area.querySelectorAll("input[data-key]").forEach((input) => {
+      markChanged(input);
+      input.addEventListener("input", () => {
+        const it = ITEMS[Number(input.dataset.i)];
+        const key = input.dataset.key;
+        it[key] = input.type === "number" ? (input.value === "" ? "" : Number(input.value)) : input.value;
+        markChanged(input);
+        document.getElementById("totalsArea").innerHTML = totalsHtml();
+      });
+    });
+    area.querySelectorAll("[data-view]").forEach((btn) =>
+      btn.addEventListener("click", () => viewItemDrawing(Number(btn.dataset.view))));
+    const docLink = document.getElementById("viewDocLink");
+    if (docLink) docLink.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      openCaseViewer({
+        title: BUNDLE.document.title || "注文書・御見積書",
+        fileName: BUNDLE.document.fileName,
+        loadBlob: async () => base64ToBlob(BUNDLE.document.base64, "application/pdf"),
+      });
+    });
+    document.getElementById("saveBtn").addEventListener("click", save);
+    document.getElementById("cancelBtn").addEventListener("click", () => {
+      if (saving) return;
+      BUNDLE = null;
+      document.getElementById("fileInput").value = "";
+      render();
+    });
+  }
+
+  function markChanged(input) {
+    const i = Number(input.dataset.i);
+    const key = input.dataset.key;
+    const before = ORIGINAL[i][key] ?? "";
+    const now = ITEMS[i][key] ?? "";
+    input.classList.toggle("is-changed", String(before) !== String(now));
+  }
+
+  function viewItemDrawing(i) {
+    const it = ITEMS[i];
+    openCaseViewer({
+      title: `${it.productName}（図面番号 ${it.drawingNo}）`,
+      metaHtml: `<span>元のPDFの${it.drawing.page}ページ</span>
+        <span>受注単価：${formatYen(it.orderUnitPrice)}</span><span>外注単価：${formatYen(it.outsourceUnitPrice)}</span>`,
+      fileName: it.drawing.fileName,
+      loadBlob: async () => base64ToBlob(it.drawing.base64, "application/pdf"),
+    });
+  }
+
+  /* ---------- 保存 ---------- */
+
+  async function save() {
+    if (!BUNDLE || saving) return;
+    const bad = ITEMS.findIndex((it) => !String(it.productName || "").trim());
+    if (bad >= 0) {
+      toast(`図面番号 ${ITEMS[bad].drawingNo} の商品名が空欄です`);
+      return;
+    }
+    saving = true;
+    const status = document.getElementById("saveStatus");
+    const btn = document.getElementById("saveBtn");
+    btn.disabled = true;
+    document.getElementById("cancelBtn").disabled = true;
+    try {
+      await saveCaseImport(BUNDLE, ITEMS, (done, total, label) => {
+        status.textContent = `保存中… ${done} / ${total}（${label}）`;
+      });
+      const groupKey = customerGroupOf(BUNDLE.customer);
+      const codes = Array.from(new Set(ITEMS.map((it) => it.productCode)));
+      status.innerHTML = `✅ ${ITEMS.length}点を保存しました。` + codes.map((c) =>
+        ` <a class="text-link" href="case-detail.html?customer=${encodeURIComponent(groupKey)}&code=${encodeURIComponent(c)}">${escapeHtml(c)} の突き合わせ表を開く ›</a>`).join("");
+      btn.textContent = "保存しました";
+      toast("保存しました");
+    } catch (err) {
+      console.error("保存に失敗しました", err);
+      status.textContent = "保存に失敗しました：" + (err.message || err) +
+        "（Firestoreのルールに caseItems / caseDocs の設定が入っているか確認してください。もう一度「保存する」を押すと続きからではなく最初からやり直します）";
+      btn.disabled = false;
+      document.getElementById("cancelBtn").disabled = false;
+    } finally {
+      saving = false;
+    }
+  }
+
+  /* ---------- イベント登録 ---------- */
+
+  document.getElementById("fileInput").addEventListener("change", (ev) => loadBundleFile(ev.target.files[0]));
+
+  const dropzone = document.getElementById("dropzone");
+  ["dragenter", "dragover"].forEach((type) =>
+    dropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      dropzone.classList.add("dragging");
+    }));
+  ["dragleave", "drop"].forEach((type) =>
+    dropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      dropzone.classList.remove("dragging");
+    }));
+  dropzone.addEventListener("drop", (ev) => loadBundleFile(ev.dataTransfer.files[0]));
+
+  initPage();
+</script>
+
+</body>
+</html>

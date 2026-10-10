@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>品番の一覧 | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page page-wide case-page">
+  <div class="breadcrumb">
+    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の図面をさがす</a> ＞ <span id="crumbCustomer"></span>
+  </div>
+  <div class="page-toolbar">
+    <a href="case-import.html" class="btn btn-ghost btn-sm">📥 データを取り込む</a>
+  </div>
+  <h1 class="page-title" id="pageTitle">品番の一覧</h1>
+  <p class="page-sub">品番（案件）を選ぶと、注文書の受注単価と御見積書の外注単価を突き合わせた表が開きます。</p>
+
+  <div class="card">
+    <div class="field" style="margin-bottom:0;">
+      <label for="keyword">品番・品名・図面番号でしぼり込む</label>
+      <input type="text" id="keyword" placeholder="例：CAM-1581 / スタンド / 10202">
+    </div>
+  </div>
+
+  <div id="resultArea"><div class="card empty-state">読み込み中…</div></div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/common.js"></script>
+<script src="js/pdf-store.js"></script>
+<script src="js/case-store.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
+  let CASES = [];
+
+  document.getElementById("crumbCustomer").textContent = groupKey;
+  document.getElementById("pageTitle").textContent = `${groupKey} の品番の一覧`;
+  document.title = `${groupKey} の品番の一覧 | 未来栄 図面管理システム`;
+
+  function matchKeyword(row, kw) {
+    return [row.productCode, row.productName, row.drawingNo, "MN-" + row.drawingNo]
+      .some((v) => String(v || "").toLowerCase().includes(kw));
+  }
+
+  function render() {
+    const area = document.getElementById("resultArea");
+    const kw = document.getElementById("keyword").value.trim().toLowerCase();
+
+    if (CASES.length === 0) {
+      // 取り込み前の客先は、これまでの「保存したPDF図面」の検索へ案内する
+      const pdfLink = groupKey === CASE_OTHER_GROUP
+        ? "pdf-list.html"
+        : `pdf-list.html?customer=${encodeURIComponent(groupKey)}`;
+      area.innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">🗂️</div>
+          ${escapeHtml(groupKey)} の注文書・御見積書のデータはまだ取り込まれていません。
+          <div style="margin-top:14px;"><a href="${pdfLink}" class="text-link">保存したPDF図面から探す ›</a></div>
+          <div style="margin-top:8px;"><a href="case-import.html" class="text-link">データを取り込む ›</a></div>
+        </div>`;
+      return;
+    }
+
+    const hits = CASES
+      .map((c) => ({ c, matched: kw ? c.rows.filter((r) => matchKeyword(r, kw)) : [] }))
+      .filter(({ c, matched }) => !kw || matched.length > 0);
+
+    if (hits.length === 0) {
+      area.innerHTML = `<div class="card empty-state"><div class="empty-icon">🔍</div>該当する品番がありません。</div>`;
+      return;
+    }
+
+    area.innerHTML = `
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table case-table">
+            <thead>
+              <tr>
+                <th>品番</th>
+                <th>品名</th>
+                <th class="num">点数</th>
+                <th>受注年月日</th>
+                <th>外注先</th>
+                <th class="num">受注金額</th>
+                <th class="num">外注金額</th>
+                <th class="num">粗利率</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${hits.map(({ c, matched }) => {
+                const rate = marginRate(c.orderTotal, c.outsourceTotal);
+                const dates = c.firstOrderDate === c.lastOrderDate
+                  ? formatCaseDate(c.firstOrderDate)
+                  : `${formatCaseDate(c.firstOrderDate)}〜${formatCaseDate(c.lastOrderDate)}`;
+                const names = (matched.length ? matched : c.rows).map((r) => r.productName);
+                const first = names[0] || "";
+                const label = names.length > 1 ? `${first} ほか${names.length - 1}点` : first;
+                const href = `case-detail.html?customer=${encodeURIComponent(groupKey)}&code=${encodeURIComponent(c.code)}` +
+                  (kw ? `&q=${encodeURIComponent(kw)}` : "");
+                return `
+                  <tr class="case-row" data-href="${escapeHtml(href)}">
+                    <td class="case-code"><a href="${escapeHtml(href)}">${escapeHtml(c.code)}</a></td>
+                    <td class="case-names">${matched.length ? "一致：" : ""}${escapeHtml(label)}</td>
+                    <td class="num">${c.count}</td>
+                    <td>${escapeHtml(dates)}</td>
+                    <td>${escapeHtml(c.outsourcers.join("、") || "-")}</td>
+                    <td class="num">${formatYen(c.orderTotal)}</td>
+                    <td class="num">${formatYen(c.outsourceTotal)}</td>
+                    <td class="num">${rate === null ? "-" : rate.toFixed(1) + "%"}</td>
+                    <td>${c.needsCheckCount ? `<span class="badge badge-check">要確認 ${c.needsCheckCount}</span>` : ""}</td>
+                  </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+
+    area.querySelectorAll("tr[data-href]").forEach((tr) => {
+      tr.addEventListener("click", () => (location.href = tr.dataset.href));
+    });
+  }
+
+  document.getElementById("keyword").addEventListener("input", render);
+
+  (async () => {
+    const ok = await initPage();
+    if (!ok) return;
+    try {
+      CASES = groupCaseItemsByCode(await fetchCaseItemsByGroup(groupKey));
+      render();
+    } catch (err) {
+      console.error("案件データの取得に失敗しました", err);
+      document.getElementById("resultArea").innerHTML = `
+        <div class="card empty-state">
+          <div class="empty-icon">⚠️</div>
+          データを読み込めませんでした。<br>
+          Firestoreのセキュリティルールに <code>caseItems</code> の設定が入っているか確認してください。
+        </div>`;
+    }
+  })();
+</script>
+
+</body>
+</html>
