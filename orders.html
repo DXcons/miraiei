@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011e">
+<link rel="stylesheet" href="css/style.css?v=20261011g">
 </head>
 <body>
 
@@ -79,6 +79,11 @@
           <label for="orderReceived">受注日</label>
           <input type="date" id="orderReceived">
           <div class="field-note">この日付の月のフォルダに入ります。</div>
+        </div>
+        <div class="field">
+          <label for="orderNoInput">受注№</label>
+          <input type="text" id="orderNoInput" placeholder="空なら自動（例：MDA2610001）" autocomplete="off">
+          <div class="field-note">注文書・納品書に印字する番号です。</div>
         </div>
         <div class="field">
           <label for="orderDue">納期</label>
@@ -234,11 +239,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011e"></script>
-<script src="js/common.js?v=20261011e"></script>
-<script src="js/pdf-store.js?v=20261011e"></script>
-<script src="js/case-store.js?v=20261011e"></script>
-<script src="js/order-store.js?v=20261011e"></script>
+<script src="js/firebase-config.js?v=20261011g"></script>
+<script src="js/common.js?v=20261011g"></script>
+<script src="js/pdf-store.js?v=20261011g"></script>
+<script src="js/case-store.js?v=20261011g"></script>
+<script src="js/order-store.js?v=20261011g"></script>
 <script>
   let orders = [];
   let orderFiles = []; // 全取引の書類(一覧用データのみ)
@@ -731,6 +736,7 @@
     // 新しく登録するときは、いま開いている客先を最初から選んでおく
     renderCustomerSelect(order ? order.customer : (NAV.customer && NAV.customer !== CASE_OTHER_GROUP ? NAV.customer : ""));
     document.getElementById("orderReceived").value = order ? order.orderDate || orderReceivedDate(order) : todayText();
+    document.getElementById("orderNoInput").value = order ? order.orderNo || "" : "";
     document.getElementById("orderProduct").value = order ? order.productName || "" : "";
     document.getElementById("orderCaseCode").value = order ? order.caseCode || "" : "";
     document.getElementById("orderAmount").value =
@@ -756,6 +762,7 @@
       productName: document.getElementById("orderProduct").value.trim(),
       caseCode: document.getElementById("orderCaseCode").value.trim(),
       orderDate: document.getElementById("orderReceived").value,
+      orderNo: document.getElementById("orderNoInput").value.trim(),
       amount: parseAmount(document.getElementById("orderAmount").value),
       quoteNo: document.getElementById("orderQuoteNo").value.trim(),
       invoiceDate: document.getElementById("orderInvoiceDate").value,
@@ -796,6 +803,8 @@
         if (same) {
           toast("この品番の案件はすでにあります。案件のページを開きます。");
         } else {
+          // 受注№が空なら、受注日の月の次の番号を付ける
+          if (!fields.orderNo) fields.orderNo = nextOrderNo(orders, fields.orderDate);
           await addOrder(fields);
           toast("案件を登録しました。続けて書類や単価を入れてください。");
         }

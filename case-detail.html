@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011e">
+<link rel="stylesheet" href="css/style.css?v=20261011g">
 </head>
 <body>
 
@@ -34,6 +34,9 @@
 
   <!-- 1. 案件の情報(受発注・請求書の管理と同じデータ) -->
   <div class="card" id="infoArea"></div>
+
+  <!-- 1.5 注文書・納品書をつくる -->
+  <div class="card" id="docMakeArea"></div>
 
   <!-- 2. 書類 -->
   <div class="card">
@@ -168,6 +171,11 @@
           <input type="date" id="orderReceived">
         </div>
         <div class="field">
+          <label for="orderNoInput">受注№（注文書・納品書に印字）</label>
+          <input type="text" id="orderNoInput" placeholder="例：MDA2607023" autocomplete="off">
+          <div class="field-note">空なら受注日から自動で付けます。</div>
+        </div>
+        <div class="field">
           <label for="orderDue">納期</label>
           <div class="due-row">
             <input type="date" id="orderDue">
@@ -217,14 +225,133 @@
   </div>
 </div>
 
+<!-- ===== 注文書・材料注文書の作成・編集 ===== -->
+<div class="modal-overlay" id="poModal">
+  <div class="modal-box modal-box-po">
+    <div class="modal-head">
+      <h3 id="poTitle">注文書</h3>
+      <button type="button" class="modal-close" onclick="closePoModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="po-form">
+        <div class="field">
+          <label for="poVendor">宛先（外注先） <span class="req">必須</span></label>
+          <input type="text" id="poVendor" list="poVendorList" placeholder="例：㈱城南キー" autocomplete="off">
+          <datalist id="poVendorList"></datalist>
+        </div>
+        <div class="field">
+          <label for="poVendorShort">略称（メーカー・手配先の欄）</label>
+          <input type="text" id="poVendorShort" placeholder="例：城南" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="poVendorPerson">担当者（○○ 様）</label>
+          <input type="text" id="poVendorPerson" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="poIssueDate">発行日</label>
+          <input type="date" id="poIssueDate">
+        </div>
+      </div>
+
+      <div class="filter-label" style="margin:6px 0 8px;">明細 <span class="field-note">「結びつける行」を選ぶと、その行の外注単価（内訳）に自動で入ります。</span></div>
+      <div class="table-wrap"><table class="po-lines" id="poLines"></table></div>
+      <div class="po-line-actions">
+        <select id="poAddFromRow"></select>
+        <button type="button" class="btn btn-secondary btn-sm" id="poAddRowBtn">＋ 表の行から追加</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="poAddBlankBtn">＋ 空の行</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="poAddNoteBtn">＋ 注記の行（例：※ブランク材支給日）</button>
+        <span class="po-total" id="poTotal"></span>
+      </div>
+
+      <div class="po-form" style="margin-top:16px;">
+        <div class="field">
+          <label for="poDest">納入先</label>
+          <select id="poDest">
+            <option value="factory">弊社工場</option>
+            <option value="head">弊社（本社）</option>
+            <option value="other">ほかの会社へ直送</option>
+          </select>
+        </div>
+        <div class="field" data-dest-other>
+          <label for="poDestName">直送先の名前</label>
+          <input type="text" id="poDestName" list="poVendorList" autocomplete="off">
+        </div>
+        <div class="field" data-dest-other>
+          <label for="poDestTel">直送先のTEL</label>
+          <input type="text" id="poDestTel" autocomplete="off">
+        </div>
+        <div class="field" data-dest-other>
+          <label for="poDestAddress">直送先の住所</label>
+          <input type="text" id="poDestAddress" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="poShipNote">送状記載事項</label>
+          <input type="text" id="poShipNote" value="無" autocomplete="off">
+        </div>
+        <div class="field" style="grid-column: span 3;">
+          <label for="poRemarks">備考欄</label>
+          <input type="text" id="poRemarks" autocomplete="off">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span><button type="button" class="btn btn-ghost btn-danger" id="poDeleteBtn">この注文書を削除</button></span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" onclick="closePoModal()">キャンセル</button>
+        <button type="button" class="btn btn-secondary" id="poSavePrintBtn">保存して印刷</button>
+        <button type="button" class="btn btn-primary" id="poSaveBtn">保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 納品書 ===== -->
+<div class="modal-overlay" id="dnModal">
+  <div class="modal-box modal-box-po">
+    <div class="modal-head">
+      <h3>納品書をつくる</h3>
+      <button type="button" class="modal-close" onclick="closeDnModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="po-form">
+        <div class="field">
+          <label for="dnCustomer">宛名</label>
+          <input type="text" id="dnCustomer" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="dnIssueDate">発行日（各行の日付にも使います）</label>
+          <input type="date" id="dnIssueDate">
+        </div>
+        <div class="field">
+          <label for="dnSlipNo">伝票№</label>
+          <input type="text" id="dnSlipNo" autocomplete="off">
+        </div>
+      </div>
+      <div class="filter-label" style="margin:6px 0 8px;">納品する品物 <span class="field-note">チェックした行が納品書に載ります。名称・備考はここで直せます。</span></div>
+      <div class="table-wrap"><table class="po-lines" id="dnLines"></table></div>
+      <div class="po-line-actions"><span class="po-total" id="dnTotal"></span></div>
+    </div>
+    <div class="modal-foot">
+      <span></span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeDnModal()">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="dnPrintBtn">🖨 印刷する（PDFで保存もここから）</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="sealInput" accept="image/*" hidden>
+
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011e"></script>
-<script src="js/common.js?v=20261011e"></script>
-<script src="js/pdf-store.js?v=20261011e"></script>
-<script src="js/case-store.js?v=20261011e"></script>
-<script src="js/order-store.js?v=20261011e"></script>
+<script src="js/firebase-config.js?v=20261011g"></script>
+<script src="js/common.js?v=20261011g"></script>
+<script src="js/pdf-store.js?v=20261011g"></script>
+<script src="js/case-store.js?v=20261011g"></script>
+<script src="js/order-store.js?v=20261011g"></script>
+<script src="js/doc-store.js?v=20261011g"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -301,6 +428,7 @@
             <select id="statusSelect" class="status-select ${st.cls}">
               ${ORDER_STATUSES.map((s) => `<option value="${s.value}" ${s.value === ORDER.status ? "selected" : ""}>${s.value}</option>`).join("")}
             </select></div>
+          <div><span>受注№</span><b>${escapeHtml(ORDER.orderNo || "—")}</b></div>
           <div><span>受注日</span><b>${escapeHtml(formatOrderDate(orderReceivedDate(ORDER)))}</b></div>
           <div><span>納期</span><b>${escapeHtml(formatDueDate(ORDER.dueDate))}</b></div>
           <div><span>受注拠点</span><b>${escapeHtml(ORDER.branch || "—")}</b></div>
@@ -348,6 +476,7 @@
     document.getElementById("orderCustomerField").style.display = groupKey === CASE_OTHER_GROUP ? "" : "none";
     document.getElementById("orderCustomer").value = caseCustomerName() === CASE_OTHER_GROUP ? "" : caseCustomerName();
     document.getElementById("orderReceived").value = o ? orderReceivedDate(o) : ((ROWS.find((r) => r.orderDate) || {}).orderDate || "");
+    document.getElementById("orderNoInput").value = o ? o.orderNo || "" : "";
     document.getElementById("orderDue").value = o ? o.dueDate || "" : "";
     document.getElementById("orderDueUnknown").checked = !!o && !o.dueDate;
     syncDueUnknown();
@@ -400,6 +529,9 @@
       status: status ? status.value : "入金済み",
       note: document.getElementById("orderNote").value.trim(),
     };
+    // 受注№：入力が無ければ受注日から自動で付ける
+    fields.orderNo = document.getElementById("orderNoInput").value.trim() ||
+      (ORDER && ORDER.orderNo) || nextOrderNo(ALL_ORDERS, fields.orderDate);
     if (!fields.customer) return toast("客先名を入力してください。");
     if (!fields.dueDate && !document.getElementById("orderDueUnknown").checked) return toast("納期を入力してください（決まっていない場合は「未定」にチェック）。");
     if (!fields.branch) return toast("受注拠点を選んでください。");
@@ -413,9 +545,11 @@
       } else {
         const id = await addOrder(fields);
         ORDER = { id, ...fields };
+        ALL_ORDERS.push(ORDER);
       }
       closeOrderModal();
       renderInfo();
+      renderDocMake();
       toast(isOrderClosed(ORDER.status) ? "保存しました" : "保存しました（進行中の案件の一覧に出ます）");
     } catch (err) {
       console.error("保存に失敗しました", err);
@@ -424,6 +558,332 @@
       busy = false;
       document.getElementById("orderSaveBtn").disabled = false;
     }
+  }
+
+  /* ==========================================================
+     1.5 注文書・材料注文書・納品書
+     ========================================================== */
+
+  let ALL_ORDERS = [];   // 受注№の採番用
+  let ALL_POS = [];      // 外注先の候補づくり用(全案件の注文書)
+  let POS = [];          // この案件の注文書
+  let poEditing = null;
+
+  function renderDocMake() {
+    const area = document.getElementById("docMakeArea");
+    const no = ORDER && ORDER.orderNo;
+    const head = `
+      <div class="section-head">
+        <h2 class="section-title">🧾 注文書・納品書をつくる</h2>
+        <span class="field-note">受注№：<b>${escapeHtml(no || "未設定")}</b>
+          ${ORDER && !no ? `<button type="button" class="btn btn-ghost btn-sm" id="assignNoBtn">自動で付ける</button>` : ""}</span>
+      </div>`;
+    if (!ORDER) {
+      area.innerHTML = head + `<div class="info-empty">注文書・納品書を作るには、先に上の「納期・ステータス」を登録してください（受注№が付きます）。</div>`;
+      return;
+    }
+    // (assignNoBtn のイベントは下で付ける)
+    area.innerHTML = head + `
+      <div class="doc-make-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="newPoBtn">＋ 注文書（下請けへ）</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="newMatBtn">＋ 材料注文書</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="dnBtn">🧾 納品書をつくる（客先へ）</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="sealBtn" title="注文書の右上の印欄に出す担当者印の画像">印影の画像を登録</button>
+      </div>
+      ${POS.length ? `
+        <div class="table-wrap">
+          <table class="data-table case-table">
+            <thead><tr><th>種類</th><th>宛先</th><th>発行日</th><th class="num">明細</th><th class="num">金額（税抜）</th><th>納入先</th><th></th></tr></thead>
+            <tbody>
+              ${POS.slice().sort((a, b) => String(a.issueDate).localeCompare(String(b.issueDate))).map((po) => `
+                <tr>
+                  <td>${escapeHtml(PO_KINDS[po.kind] || "注文書")}</td>
+                  <td><b>${escapeHtml(po.vendor)}</b></td>
+                  <td>${escapeHtml(formatOrderDate(po.issueDate))}</td>
+                  <td class="num">${(po.lines || []).filter((l) => l.qty || l.unitPrice).length}行</td>
+                  <td class="num">${formatYen(poTotal(po))}</td>
+                  <td>${escapeHtml((po.deliverTo && po.deliverTo.name) || "")}</td>
+                  <td style="text-align:right;">
+                    <button type="button" class="btn btn-secondary btn-sm" data-po-print="${po.id}">🖨 印刷</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-po-edit="${po.id}">編集</button>
+                  </td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>` : `<div class="doc-empty">まだ注文書はありません。下請けや材料屋に注文するときに「＋ 注文書」「＋ 材料注文書」から作ってください。</div>`}`;
+    const assignBtn = document.getElementById("assignNoBtn");
+    if (assignBtn) assignBtn.addEventListener("click", async () => {
+      await ensureOrderNo();
+      renderInfo();
+      renderDocMake();
+      toast(`受注№「${ORDER.orderNo}」を付けました`);
+    });
+    document.getElementById("newPoBtn").addEventListener("click", () => openPoModal("order"));
+    document.getElementById("newMatBtn").addEventListener("click", () => openPoModal("material"));
+    document.getElementById("dnBtn").addEventListener("click", openDnModal);
+    document.getElementById("sealBtn").addEventListener("click", () => document.getElementById("sealInput").click());
+    area.querySelectorAll("[data-po-print]").forEach((b) => b.addEventListener("click", () => printPO(POS.find((p) => p.id === b.dataset.poPrint))));
+    area.querySelectorAll("[data-po-edit]").forEach((b) => b.addEventListener("click", () => openPoModal(null, POS.find((p) => p.id === b.dataset.poEdit))));
+  }
+
+  // 受注№が無ければ受注日から付けて保存する
+  async function ensureOrderNo() {
+    if (!ORDER || ORDER.orderNo) return ORDER && ORDER.orderNo;
+    const no = nextOrderNo(ALL_ORDERS, orderReceivedDate(ORDER));
+    await updateOrder(ORDER.id, { orderNo: no });
+    ORDER.orderNo = no;
+    const inAll = ALL_ORDERS.find((o) => o.id === ORDER.id);
+    if (inAll) inAll.orderNo = no;
+    return no;
+  }
+
+  async function printPO(po) {
+    if (!po) return;
+    printDocument(purchaseOrderHtml(po, await loadSealImage()), "landscape");
+  }
+
+  /* ---------- 注文書の作成・編集 ---------- */
+
+  const PO_COLUMNS = {
+    order: [
+      ["name", "図面№/部品名称", "text", "w-name"], ["spec", "表示型式", "text", "w-spec"], ["material", "材質", "text", "w-s"],
+      ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-xs"], ["maker", "ﾒｰｶｰ", "text", "w-s"],
+      ["arranger", "手配先", "text", "w-s"], ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "text", "w-s"],
+    ],
+    material: [
+      ["name", "名称", "text", "w-s"], ["size", "SIZE", "text", "w-spec"], ["material", "材質", "text", "w-s"],
+      ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-xs"], ["maker", "ﾒｰｶｰ", "text", "w-s"],
+      ["arranger", "手配先", "text", "w-s"], ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "text", "w-s"],
+    ],
+  };
+
+  function vendorInfo(name) {
+    return knownVendors(ALL_POS).find((v) => v.name === name) || null;
+  }
+
+  function openPoModal(kind, po) {
+    poEditing = po
+      ? JSON.parse(JSON.stringify(po))
+      : { kind, vendor: "", vendorShort: "", vendorPerson: "", issueDate: todayText(), shipNote: "無", remarks: "",
+          deliverTo: { ...OWN_DESTINATIONS[0] }, lines: [] };
+    document.getElementById("poTitle").textContent =
+      `${PO_KINDS[poEditing.kind]}${po ? "の編集" : "をつくる"}（受注№ ${ORDER.orderNo || "保存時に自動で付けます"}）`;
+    document.getElementById("poVendorList").innerHTML = knownVendors(ALL_POS)
+      .map((v) => `<option value="${escapeHtml(v.name)}"></option>`).join("");
+    document.getElementById("poVendor").value = poEditing.vendor || "";
+    document.getElementById("poVendorShort").value = poEditing.vendorShort || "";
+    document.getElementById("poVendorPerson").value = poEditing.vendorPerson || "";
+    document.getElementById("poIssueDate").value = poEditing.issueDate || "";
+    const dest = poEditing.deliverTo || OWN_DESTINATIONS[0];
+    document.getElementById("poDest").value = dest.key || "other";
+    document.getElementById("poDestName").value = dest.key ? "" : dest.name || "";
+    document.getElementById("poDestTel").value = dest.key ? "" : dest.tel || "";
+    document.getElementById("poDestAddress").value = dest.key ? "" : dest.address || "";
+    syncDestFields();
+    document.getElementById("poShipNote").value = poEditing.shipNote || "無";
+    document.getElementById("poRemarks").value = poEditing.remarks || "";
+    document.getElementById("poAddFromRow").innerHTML = `<option value="">表の行を選ぶ…</option>` +
+      ROWS.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.drawingNo)}　${escapeHtml(r.productName || "")}（${escapeHtml(r.qty)}個）</option>`).join("");
+    document.getElementById("poDeleteBtn").style.visibility = po ? "visible" : "hidden";
+    renderPoLines();
+    document.getElementById("poModal").classList.add("open");
+  }
+
+  function closePoModal() {
+    document.getElementById("poModal").classList.remove("open");
+    poEditing = null;
+  }
+
+  function syncDestFields() {
+    const other = document.getElementById("poDest").value === "other";
+    document.querySelectorAll("[data-dest-other]").forEach((el) => (el.style.display = other ? "" : "none"));
+  }
+
+  function renderPoLines() {
+    const cols = PO_COLUMNS[poEditing.kind];
+    const rowOptions = (selected) => `<option value="">なし</option>` + ROWS.map((r) =>
+      `<option value="${escapeHtml(r.id)}" ${r.id === selected ? "selected" : ""}>${escapeHtml(r.drawingNo)}</option>`).join("");
+    document.getElementById("poLines").innerHTML = `
+      <thead><tr><th>№</th>${cols.map((c) => `<th>${c[1]}</th>`).join("")}<th>金額</th><th title="この明細の金額を、表のどの行の外注単価に入れるか">結びつける行</th><th></th></tr></thead>
+      <tbody>
+        ${poEditing.lines.length ? poEditing.lines.map((l, i) => `
+          <tr>
+            <td class="c">${i + 1}</td>
+            ${cols.map(([key, , type, w]) => `<td><input class="${w}" type="${type}" data-li="${i}" data-lk="${key}" value="${escapeHtml(l[key] ?? "")}"></td>`).join("")}
+            <td class="num">${formatYen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+            <td><select data-li="${i}" data-lk="itemId">${rowOptions(l.itemId)}</select></td>
+            <td><button type="button" class="btn btn-ghost btn-sm" data-ldel="${i}">削除</button></td>
+          </tr>`).join("")
+        : `<tr><td colspan="${cols.length + 4}" class="doc-empty">下の「＋ 表の行から追加」で、注文する部品を追加してください。</td></tr>`}
+      </tbody>`;
+    document.getElementById("poTotal").textContent = `合計（税抜）：${formatYen(poTotal(poEditing))}`;
+    document.querySelectorAll("#poLines [data-lk]").forEach((el) => {
+      const ev = el.tagName === "SELECT" ? "change" : "input";
+      el.addEventListener(ev, () => {
+        const l = poEditing.lines[Number(el.dataset.li)];
+        l[el.dataset.lk] = el.type === "number" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+        if (el.dataset.lk === "qty" || el.dataset.lk === "unitPrice") {
+          el.closest("tr").querySelector("td.num").textContent = formatYen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0));
+          document.getElementById("poTotal").textContent = `合計（税抜）：${formatYen(poTotal(poEditing))}`;
+        }
+      });
+    });
+    document.querySelectorAll("#poLines [data-ldel]").forEach((b) => b.addEventListener("click", () => {
+      poEditing.lines.splice(Number(b.dataset.ldel), 1);
+      renderPoLines();
+    }));
+  }
+
+  function blankLine() {
+    const short = document.getElementById("poVendorShort").value.trim();
+    return { name: "", spec: "", size: "", material: "", qty: "", unit: poEditing.kind === "material" ? "個" : "個",
+             maker: short, arranger: short, unitPrice: "", due: "", itemId: "" };
+  }
+
+  // 表の行(部品)から明細を作る。材料注文書では、材質と数量だけ引き継ぐ
+  function addLineFromRow(id) {
+    const r = ROWS.find((x) => x.id === id);
+    if (!r) return;
+    const l = blankLine();
+    l.itemId = r.id;
+    l.material = r.material || "";
+    l.qty = r.qty || 1;
+    if (poEditing.kind === "order") l.name = `${r.drawingNo}　${r.productName || ""}`.trim();
+    poEditing.lines.push(l);
+    renderPoLines();
+  }
+
+  function readPoForm() {
+    const destKey = document.getElementById("poDest").value;
+    const deliverTo = destKey === "other"
+      ? { key: "", name: document.getElementById("poDestName").value.trim(), tel: document.getElementById("poDestTel").value.trim(),
+          address: document.getElementById("poDestAddress").value.trim() }
+      : { ...OWN_DESTINATIONS.find((d) => d.key === destKey) };
+    return {
+      ...poEditing,
+      caseKey, groupKey, caseCode: code,
+      vendor: document.getElementById("poVendor").value.trim(),
+      vendorShort: document.getElementById("poVendorShort").value.trim(),
+      vendorPerson: document.getElementById("poVendorPerson").value.trim(),
+      issueDate: document.getElementById("poIssueDate").value,
+      shipNote: document.getElementById("poShipNote").value.trim() || "無",
+      remarks: document.getElementById("poRemarks").value.trim(),
+      deliverTo,
+      // 何も入っていない行は捨てる
+      lines: poEditing.lines.filter((l) => ["name", "spec", "size", "qty", "unitPrice"].some((k) => String(l[k] ?? "").trim() !== "")),
+    };
+  }
+
+  async function savePo(andPrint) {
+    if (busy || !poEditing) return;
+    const po = readPoForm();
+    if (!po.vendor) return toast("宛先（外注先）を入力してください。");
+    if (!po.lines.length) return toast("明細を1行以上入れてください。");
+    busy = true;
+    try {
+      po.orderNo = await ensureOrderNo();
+      const saved = await savePurchaseOrder(po, ROWS);
+      POS = POS.filter((p) => p.id !== saved.id).concat(saved);
+      ALL_POS = ALL_POS.filter((p) => p.id !== saved.id).concat(saved);
+      closePoModal();
+      renderDocMake();
+      renderInfo();
+      render();
+      toast("注文書を保存しました（外注単価にも反映しました）");
+      if (andPrint) await printPO(saved);
+    } catch (err) {
+      console.error("注文書の保存に失敗しました", err);
+      toast("保存できませんでした：" + (err.message || err) +
+        (err && err.code === "permission-denied" ? "（Firestoreのルールに purchaseOrders を追加してください）" : ""));
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function removePo() {
+    if (busy || !poEditing || !poEditing.id) return;
+    if (!confirm(`${poEditing.vendor} への${PO_KINDS[poEditing.kind]}を削除しますか？\n（表の外注単価に入れた分も外れます）`)) return;
+    busy = true;
+    try {
+      await deletePurchaseOrder(poEditing, ROWS);
+      POS = POS.filter((p) => p.id !== poEditing.id);
+      ALL_POS = ALL_POS.filter((p) => p.id !== poEditing.id);
+      closePoModal();
+      renderDocMake();
+      render();
+      toast("注文書を削除しました");
+    } catch (err) {
+      console.error("削除に失敗しました", err);
+      toast("削除に失敗しました。");
+    } finally {
+      busy = false;
+    }
+  }
+
+  /* ---------- 納品書 ---------- */
+
+  let dnLines = [];
+
+  function openDnModal() {
+    document.getElementById("dnCustomer").value = CUSTOMER_FORMAL_NAMES[groupKey] || (ORDER && ORDER.customer) || "";
+    document.getElementById("dnIssueDate").value = todayText();
+    document.getElementById("dnSlipNo").value = (ORDER && ORDER.orderNo) || "";
+    dnLines = ROWS.map((r) => ({
+      checked: true,
+      name: `${r.drawingNo}　${r.productName || ""}`.trim(),
+      qty: r.qty || "", unit: "個", unitPrice: r.orderUnitPrice ?? "",
+      // DIDは注文番号ごとに備考へ入れていた
+      note: codeLabel === "注文番号" ? r.productCode : "",
+    }));
+    renderDnLines();
+    document.getElementById("dnModal").classList.add("open");
+  }
+
+  function closeDnModal() {
+    document.getElementById("dnModal").classList.remove("open");
+  }
+
+  function renderDnLines() {
+    document.getElementById("dnLines").innerHTML = `
+      <thead><tr><th></th><th>名称</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th><th>備考欄</th></tr></thead>
+      <tbody>${dnLines.length ? dnLines.map((l, i) => `
+        <tr>
+          <td><input type="checkbox" data-di="${i}" data-dk="checked" ${l.checked ? "checked" : ""}></td>
+          <td><input class="w-name" type="text" data-di="${i}" data-dk="name" value="${escapeHtml(l.name)}"></td>
+          <td><input class="w-n" type="number" data-di="${i}" data-dk="qty" value="${escapeHtml(l.qty)}"></td>
+          <td><input class="w-xs" type="text" data-di="${i}" data-dk="unit" value="${escapeHtml(l.unit)}"></td>
+          <td><input class="w-p" type="number" data-di="${i}" data-dk="unitPrice" value="${escapeHtml(l.unitPrice)}"></td>
+          <td class="num">${formatYen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
+          <td><input class="w-spec" type="text" data-di="${i}" data-dk="note" value="${escapeHtml(l.note)}"></td>
+        </tr>`).join("") : `<tr><td colspan="7" class="doc-empty">表の行がありません。先に「＋ 行を追加」で品物を入れてください。</td></tr>`}</tbody>`;
+    const sum = () => dnLines.filter((l) => l.checked).reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
+    const showTotal = () => {
+      const s = sum();
+      document.getElementById("dnTotal").textContent = `合計 ${formatYen(s)}　消費税(10%) ${formatYen(Math.floor(s * 0.1))}　総合計 ${formatYen(s + Math.floor(s * 0.1))}`;
+    };
+    showTotal();
+    document.querySelectorAll("#dnLines [data-dk]").forEach((el) => el.addEventListener(el.type === "checkbox" ? "change" : "input", () => {
+      const l = dnLines[Number(el.dataset.di)];
+      l[el.dataset.dk] = el.type === "checkbox" ? el.checked : el.type === "number" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+      el.closest("tr").querySelector("td.num").textContent = formatYen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0));
+      showTotal();
+    }));
+  }
+
+  async function printDn() {
+    const lines = dnLines.filter((l) => l.checked);
+    if (!lines.length) return toast("納品する品物にチェックを入れてください。");
+    const issueDate = document.getElementById("dnIssueDate").value;
+    if (!document.getElementById("dnSlipNo").value.trim() && ORDER) {
+      document.getElementById("dnSlipNo").value = await ensureOrderNo();
+      renderDocMake();
+    }
+    printDocument(deliveryNoteHtml({
+      customerName: document.getElementById("dnCustomer").value.trim(),
+      issueDate,
+      slipNo: document.getElementById("dnSlipNo").value.trim(),
+      lines: lines.map((l) => ({ ...l, date: issueDate })),
+    }), "portrait");
   }
 
   /* ==========================================================
@@ -917,6 +1377,53 @@
   document.getElementById("addRowBtn").addEventListener("click", () => openEdit(null));
   document.getElementById("keyword").addEventListener("input", render);
 
+  // 注文書の画面
+  document.getElementById("poVendor").addEventListener("change", () => {
+    const v = vendorInfo(document.getElementById("poVendor").value.trim());
+    const shortEl = document.getElementById("poVendorShort");
+    if (v && v.short && !shortEl.value) {
+      shortEl.value = v.short;
+      // まだ空のメーカー・手配先にも略称を入れる
+      poEditing.lines.forEach((l) => { if (!l.maker) l.maker = v.short; if (!l.arranger) l.arranger = v.short; });
+      renderPoLines();
+    }
+  });
+  document.getElementById("poDest").addEventListener("change", syncDestFields);
+  document.getElementById("poDestName").addEventListener("change", () => {
+    const v = vendorInfo(document.getElementById("poDestName").value.trim());
+    if (!v) return;
+    if (!document.getElementById("poDestTel").value) document.getElementById("poDestTel").value = v.tel || "";
+    if (!document.getElementById("poDestAddress").value) document.getElementById("poDestAddress").value = v.address || "";
+  });
+  document.getElementById("poAddRowBtn").addEventListener("click", () => {
+    const id = document.getElementById("poAddFromRow").value;
+    if (!id) return toast("追加する表の行を選んでください。");
+    addLineFromRow(id);
+  });
+  document.getElementById("poAddBlankBtn").addEventListener("click", () => { poEditing.lines.push(blankLine()); renderPoLines(); });
+  document.getElementById("poAddNoteBtn").addEventListener("click", () => {
+    const l = { ...blankLine(), maker: "", arranger: "", unit: "" };
+    if (poEditing.kind === "material") l.size = "※"; else l.spec = "※";
+    poEditing.lines.push(l);
+    renderPoLines();
+  });
+  document.getElementById("poSaveBtn").addEventListener("click", () => savePo(false));
+  document.getElementById("poSavePrintBtn").addEventListener("click", () => savePo(true));
+  document.getElementById("poDeleteBtn").addEventListener("click", removePo);
+  document.getElementById("dnPrintBtn").addEventListener("click", printDn);
+  document.getElementById("sealInput").addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    try {
+      await saveSealImage(await imageFileToDataUrl(file));
+      toast("印影を登録しました。注文書の印欄に出ます。");
+    } catch (err) {
+      console.error("印影の登録に失敗しました", err);
+      toast("印影を登録できませんでした：" + (err.message || err));
+    }
+  });
+
   document.getElementById("orderSaveBtn").addEventListener("click", saveOrderInfo);
   document.getElementById("orderDueUnknown").addEventListener("change", syncDueUnknown);
   document.getElementById("orderAmountFromTable").addEventListener("click", () => {
@@ -979,10 +1486,18 @@
     }
     // 取引・書類は読めなくても表は出す
     try {
-      ORDER = findCaseOrder(await fetchOrders(), groupKey, code);
+      ALL_ORDERS = await fetchOrders();
+      ORDER = findCaseOrder(ALL_ORDERS, groupKey, code);
     } catch (err) {
       console.warn("取引を取得できませんでした", err);
     }
+    try {
+      ALL_POS = await fetchAllPurchaseOrders();
+      POS = ALL_POS.filter((p) => p.caseKey === caseKey);
+    } catch (err) {
+      console.warn("注文書を取得できませんでした（Firestoreのルールに purchaseOrders が必要です）", err);
+    }
+    renderDocMake();
     try {
       FILES = await fetchOrderFiles();
     } catch (err) {
