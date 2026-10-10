@@ -2129,6 +2129,20 @@ footer.mock-footer {
   background: #fff4ee;
 }
 
+/* 「検索する：〜でしぼり込む」の見出しを目立たせる */
+.field label.search-label {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.field label.search-label small {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
 #readStatus {
   font-weight: 700;
   color: var(--success);
