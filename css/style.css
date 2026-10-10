@@ -1557,6 +1557,7 @@ footer.mock-footer {
 
 .order-table .order-actions {
   text-align: right;
+  min-width: 170px;
 }
 
 /* 「次へ」と「編集」は縦に並べて表の横幅を抑える */
@@ -2138,6 +2139,67 @@ footer.mock-footer {
   background: #fff4ee;
 }
 
+/* 進行中の案件：年・月のフォルダ */
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.folder-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s, transform 0.1s, border-color 0.15s;
+}
+
+.folder-tile:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.folder-icon {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.folder-title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.folder-count {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.folder-tile.is-empty {
+  background: #f8f9fb;
+  box-shadow: none;
+}
+
+.folder-tile.is-empty .folder-icon {
+  opacity: 0.45;
+}
+
+.folder-tile.is-empty .folder-count {
+  color: #a3abb6;
+  font-weight: 600;
+}
+
+.folder-tile.is-current {
+  border: 2px solid var(--accent);
+}
+
 /* ホーム：進行中／過去の2枚 */
 .choice-grid.home-grid {
   grid-template-columns: repeat(2, 1fr);
@@ -2207,7 +2269,7 @@ footer.mock-footer {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 14px;
 }
 
