@@ -91,6 +91,19 @@ function orderYearMonth(order) {
   return m ? { year: Number(m[1]), month: Number(m[2]) } : null;
 }
 
+/* ---------- 受注№(注文書・納品書に印字する社内の番号) ----------
+   「MDA＋受注日の年2桁＋月2桁＋その月の連番3桁」。例 MDA2607023 */
+function nextOrderNo(orders, dateText) {
+  const d = /^(\d{4})-(\d{2})/.exec(dateText || "") || /^(\d{4})-(\d{2})/.exec(new Date().toISOString());
+  const prefix = `MDA${d[1].slice(2)}${d[2]}`;
+  const used = orders
+    .map((o) => String(o.orderNo || ""))
+    .filter((no) => no.startsWith(prefix))
+    .map((no) => Number(no.slice(prefix.length)) || 0);
+  const next = (used.length ? Math.max(...used) : 0) + 1;
+  return prefix + String(next).padStart(3, "0");
+}
+
 /* ---------- 読み書き ---------- */
 
 async function fetchOrders() {
