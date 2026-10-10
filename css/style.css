@@ -2138,6 +2138,39 @@ footer.mock-footer {
   background: #fff4ee;
 }
 
+/* ホーム：進行中／過去の2枚 */
+.choice-grid.home-grid {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 980px;
+  margin: 12px auto 0;
+}
+
+@media (max-width: 760px) {
+  .choice-grid.home-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home-grid .choice-card {
+  padding: 34px 30px;
+}
+
+.home-grid .choice-card h2 {
+  font-size: 24px;
+}
+
+.choice-points {
+  text-align: left;
+  margin: 4px 0 0;
+  padding: 12px 16px 12px 34px;
+  background: #f7f9fb;
+  border-radius: 10px;
+  font-size: 16px;
+  color: var(--text);
+  line-height: 1.8;
+  align-self: stretch;
+}
+
 /* 案件の一覧などに出すステータスの札(色は受発注管理と同じ) */
 .case-table .status-pill[class*="st-"] {
   background: var(--st-bg);
