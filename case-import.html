@@ -152,9 +152,13 @@
         <span class="${ok ? "ok" : "ng"}">${ok ? "✓ 紙の合計と一致" : `✗ 紙の合計は${formatYen(slipTotals[slip])}`}</span></span>`);
     });
     const quoteTotals = BUNDLE.quoteTotals || {};
+    // 外注の内訳がある明細は、内訳の行ごとに見積書と照合する
+    const quoteLines = ITEMS.flatMap((it) => caseCostLines(it).length
+      ? caseCostLines(it)
+      : [{ quoteNo: it.quoteNo, unitPrice: it.outsourceUnitPrice, qty: it.outsourceQty }]);
     byNo(quoteTotals).forEach((q) => {
-      const sum = ITEMS.filter((it) => it.quoteNo === q)
-        .reduce((t, it) => t + Number(it.outsourceUnitPrice || 0) * Number(it.outsourceQty || 0), 0);
+      const sum = quoteLines.filter((c) => c.quoteNo === q)
+        .reduce((t, c) => t + Number(c.unitPrice || 0) * Number(c.qty || 0), 0);
       const ok = sum === quoteTotals[q];
       lines.push(`<span>御見積書 ${escapeHtml(q)}：${formatYen(sum)}
         <span class="${ok ? "ok" : "ng"}">${ok ? "✓ 紙の小計と一致" : `✗ 紙の小計は${formatYen(quoteTotals[q])}`}</span></span>`);
@@ -170,13 +174,14 @@
     }
     const checkCount = ITEMS.filter((it) => it.needsCheck).length;
     const codes = Array.from(new Set(ITEMS.map((it) => it.productCode)));
+    const codeLabel = caseCodeLabel(customerGroupOf(BUNDLE.customer));
     const overwrite = ITEMS.filter((it) => EXISTING.has(caseItemId(BUNDLE.customer, it))).length;
 
     area.innerHTML = `
       <div class="card">
         <div class="case-summary">
           <div class="case-summary-item"><span>客先</span><b>${escapeHtml(BUNDLE.customer)}</b></div>
-          <div class="case-summary-item"><span>品番</span><b>${escapeHtml(codes.join("、"))}</b></div>
+          <div class="case-summary-item"><span>${escapeHtml(codeLabel)}</span><b>${escapeHtml(codes.join("、"))}</b></div>
           <div class="case-summary-item"><span>明細（図面）</span><b>${ITEMS.length}点</b></div>
           <div class="case-summary-item"><span>要確認</span><b>${checkCount}点</b></div>
         </div>
@@ -199,7 +204,7 @@
           <table class="data-table case-table import-table">
             <thead>
               <tr>
-                <th>品番</th>
+                <th>${escapeHtml(codeLabel)}</th>
                 <th>商品名</th>
                 <th>図面番号</th>
                 <th class="num">数量</th>
@@ -219,11 +224,24 @@
                   <td>${escapeHtml(it.drawingNo)}</td>
                   <td class="num">${escapeHtml(it.qty)}</td>
                   <td class="num"><input type="number" data-i="${i}" data-key="orderUnitPrice" value="${escapeHtml(it.orderUnitPrice ?? "")}"></td>
-                  <td class="num"><input type="number" data-i="${i}" data-key="outsourceUnitPrice" value="${escapeHtml(it.outsourceUnitPrice ?? "")}"></td>
-                  <td>${escapeHtml(it.outsourcer || "-")}</td>
+                  <td class="num">${caseCostLines(it).length
+                    ? `<b>${formatYen(sumCostLines(caseCostLines(it)))}</b>`
+                    : `<input type="number" data-i="${i}" data-key="outsourceUnitPrice" value="${escapeHtml(it.outsourceUnitPrice ?? "")}">`}</td>
+                  <td>${escapeHtml(outsourcerLabel(it) || "-")}</td>
                   <td>${escapeHtml(formatCaseDate(it.orderDate))}</td>
                   <td>${it.drawing ? `<button type="button" class="btn btn-secondary btn-sm" data-view="${i}">図面</button>` : "なし"}</td>
-                </tr>`).join("")}
+                </tr>
+                ${caseCostLines(it).length ? `
+                  <tr class="cost-row"><td></td><td colspan="8">
+                    <table class="cost-table">
+                      <thead><tr><th>工程</th><th>外注先</th><th class="num">単価（1個あたり）</th><th>根拠</th></tr></thead>
+                      <tbody>${caseCostLines(it).map((c) => `
+                        <tr><td>${escapeHtml(c.process)}</td><td>${escapeHtml(c.vendor)}</td>
+                          <td class="num">${formatYen(c.unitPrice)}</td><td>${escapeHtml(c.ref || "")}</td></tr>`).join("")}
+                      </tbody>
+                    </table>
+                    <div class="field-note">内訳の金額は、保存したあと突き合わせ表の「修正」から直せます。</div>
+                  </td></tr>` : ""}`).join("")}
             </tbody>
           </table>
         </div>

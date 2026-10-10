@@ -37,8 +37,8 @@
   <div class="card">
     <div class="case-filter-row">
       <div class="field" style="margin-bottom:0; flex:1;">
-        <label for="keyword">品名・図面番号でしぼり込む</label>
-        <input type="text" id="keyword" placeholder="例：スタンド / 10202">
+        <label for="keyword">品名・図面番号・外注先でしぼり込む（SHAFTは「シャフト」でもヒットします）</label>
+        <input type="text" id="keyword" placeholder="例：スタンド / シャフト / 10202">
       </div>
       <button type="button" class="btn btn-secondary" id="docBtn" hidden>📄 元の注文書・御見積書を見る</button>
     </div>
@@ -85,6 +85,12 @@
         </div>
       </div>
       <div class="field">
+        <label>外注の内訳（材料・熱処理・加工など、外注先が複数あるとき）</label>
+        <div id="costEditArea"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="addCostBtn" style="margin-top:8px;">＋ 内訳の行を追加</button>
+        <div class="field-note">内訳があると、外注単価は内訳の単価（1個あたり）の合計になります。</div>
+      </div>
+      <div class="field">
         <label for="editNote">メモ</label>
         <textarea id="editNote" rows="3"></textarea>
       </div>
@@ -110,6 +116,9 @@
   const code = params.get("code") || "";
   let ROWS = [];
   let editingId = null;
+  let editingCosts = [];
+  const openCosts = new Set(); // 内訳を開いている行
+  const codeLabel = caseCodeLabel(groupKey);
 
   const listHref = `case-list.html?customer=${encodeURIComponent(groupKey)}`;
   document.getElementById("crumbCustomer").textContent = groupKey;
@@ -148,9 +157,10 @@
       return;
     }
 
-    const kw = document.getElementById("keyword").value.trim().toLowerCase();
+    const kw = document.getElementById("keyword").value.trim();
     const rows = kw
-      ? ROWS.filter((r) => [r.productName, r.drawingNo, "MN-" + r.drawingNo].some((v) => String(v || "").toLowerCase().includes(kw)))
+      ? ROWS.filter((r) => matchesSearch([r.productName, r.drawingNo, "MN-" + r.drawingNo, r.outsourcer,
+          ...caseCostLines(r).map((c) => c.vendor + " " + c.process)], kw))
       : ROWS;
 
     area.innerHTML = `
@@ -162,7 +172,7 @@
           <table class="data-table case-table">
             <thead>
               <tr>
-                <th>品番</th>
+                <th>${escapeHtml(codeLabel)}</th>
                 <th>商品名</th>
                 <th>図面番号</th>
                 <th class="num">受注単価</th>
@@ -183,14 +193,16 @@
                   </td>
                   <td>${escapeHtml(r.drawingNo)}</td>
                   <td class="num">${formatYen(r.orderUnitPrice)}</td>
-                  <td class="num">${formatYen(r.outsourceUnitPrice)}</td>
-                  <td>${escapeHtml(r.outsourcer || "-")}</td>
+                  <td class="num">${formatYen(r.outsourceUnitPrice)}${caseCostLines(r).length
+                    ? `<button type="button" class="cost-toggle" data-cost="${escapeHtml(r.id)}">内訳${openCosts.has(r.id) ? "▴" : "▾"}</button>` : ""}</td>
+                  <td>${escapeHtml(outsourcerLabel(r) || "-")}</td>
                   <td>${escapeHtml(formatCaseDate(r.orderDate))}</td>
                   <td>${r.drawingId
                     ? `<button type="button" class="btn btn-secondary btn-sm" data-view="${escapeHtml(r.id)}">図面表示</button>`
                     : `<span class="text-muted">なし</span>`}</td>
                   <td><button type="button" class="btn btn-ghost btn-sm" data-edit="${escapeHtml(r.id)}">修正</button></td>
-                </tr>`).join("")}
+                </tr>
+                ${openCosts.has(r.id) ? costRowHtml(r) : ""}`).join("")}
             </tbody>
           </table>
         </div>
@@ -200,6 +212,14 @@
       btn.addEventListener("click", (ev) => {
         ev.stopPropagation();
         viewDrawing(btn.dataset.view);
+      }));
+    area.querySelectorAll("[data-cost]").forEach((btn) =>
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const id = btn.dataset.cost;
+        if (openCosts.has(id)) openCosts.delete(id);
+        else openCosts.add(id);
+        render();
       }));
     area.querySelectorAll("[data-edit]").forEach((btn) =>
       btn.addEventListener("click", (ev) => {
@@ -211,6 +231,31 @@
       tr.addEventListener("click", () => openEdit(tr.dataset.id)));
   }
 
+  // 外注の内訳(工程ごとの外注先と単価)の行
+  function costRowHtml(r) {
+    const costs = caseCostLines(r);
+    return `
+      <tr class="cost-row">
+        <td></td>
+        <td colspan="8">
+          <table class="cost-table">
+            <thead><tr><th>工程</th><th>外注先</th><th class="num">単価（1個あたり）</th><th class="num">数量</th><th>根拠</th></tr></thead>
+            <tbody>
+              ${costs.map((c) => `
+                <tr>
+                  <td>${escapeHtml(c.process || "-")}</td>
+                  <td>${escapeHtml(c.vendor || "-")}</td>
+                  <td class="num">${formatYen(c.unitPrice)}</td>
+                  <td class="num">${escapeHtml(c.qty || "-")}</td>
+                  <td>${escapeHtml(c.ref || "")}</td>
+                </tr>`).join("")}
+              <tr><td colspan="2"><b>合計</b></td><td class="num"><b>${formatYen(sumCostLines(costs))}</b></td><td colspan="2"></td></tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>`;
+  }
+
   function viewDrawing(id) {
     const r = ROWS.find((x) => x.id === id);
     if (!r) return;
@@ -218,11 +263,11 @@
       title: `${r.productName}（図面番号 ${r.drawingNo}）`,
       metaHtml: `
         <span class="badge badge-customer">${escapeHtml(r.customer)}</span>
-        <span>品番：${escapeHtml(r.productCode)}</span>
+        <span>${escapeHtml(codeLabel)}：${escapeHtml(r.productCode)}</span>
         <span>受注単価：${formatYen(r.orderUnitPrice)}</span>
         <span>外注単価：${formatYen(r.outsourceUnitPrice)}</span>
         <span>材質：${escapeHtml(r.material || "-")}</span>`,
-      fileName: `${r.productCode}_MN-${r.drawingNo}.pdf`,
+      fileName: `${r.productCode}_${r.drawingNo}.pdf`,
       loadBlob: () => loadPdfBlob(r.drawingId, "application/pdf"),
     });
   }
@@ -244,8 +289,68 @@
     document.getElementById("editQty").value = r.qty ?? "";
     document.getElementById("editNote").value = r.note || "";
     document.getElementById("editCheck").checked = !!r.needsCheck;
+    editingCosts = caseCostLines(r).map((c) => ({ ...c }));
+    renderCostEdit();
     document.getElementById("editModal").classList.add("open");
   }
+
+  // 内訳の入力欄。内訳が1行でもあれば外注単価・外注先は内訳から自動で決まる
+  function renderCostEdit() {
+    const area = document.getElementById("costEditArea");
+    const hasCosts = editingCosts.length > 0;
+    document.getElementById("editOutPrice").readOnly = hasCosts;
+    document.getElementById("editOutsourcer").readOnly = hasCosts;
+    if (!hasCosts) {
+      area.innerHTML = "";
+      return;
+    }
+    area.innerHTML = `
+      <table class="cost-table cost-edit-table">
+        <thead><tr><th>工程</th><th>外注先</th><th class="num">単価（1個）</th><th>根拠</th><th></th></tr></thead>
+        <tbody>
+          ${editingCosts.map((c, i) => `
+            <tr>
+              <td><input type="text" data-ci="${i}" data-ck="process" value="${escapeHtml(c.process || "")}"></td>
+              <td><input type="text" data-ci="${i}" data-ck="vendor" value="${escapeHtml(c.vendor || "")}"></td>
+              <td class="num"><input type="number" data-ci="${i}" data-ck="unitPrice" value="${escapeHtml(c.unitPrice ?? "")}"></td>
+              <td><input type="text" data-ci="${i}" data-ck="ref" value="${escapeHtml(c.ref || "")}"></td>
+              <td><button type="button" class="btn btn-ghost btn-sm" data-cdel="${i}">削除</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+    area.querySelectorAll("input[data-ck]").forEach((input) =>
+      input.addEventListener("input", () => {
+        const c = editingCosts[Number(input.dataset.ci)];
+        c[input.dataset.ck] = input.type === "number" ? (input.value === "" ? null : Number(input.value)) : input.value;
+        syncCostTotals();
+      }));
+    area.querySelectorAll("[data-cdel]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        editingCosts.splice(Number(btn.dataset.cdel), 1);
+        renderCostEdit();
+      }));
+    syncCostTotals();
+  }
+
+  function syncCostTotals() {
+    if (!editingCosts.length) return;
+    document.getElementById("editOutPrice").value = sumCostLines(editingCosts);
+    document.getElementById("editOutsourcer").value =
+      Array.from(new Set(editingCosts.map((c) => c.vendor).filter(Boolean))).join("、");
+  }
+
+  document.getElementById("addCostBtn").addEventListener("click", () => {
+    // 内訳を作り始めるときは、いまの外注先・外注単価を1行目に入れておく
+    if (!editingCosts.length) {
+      const price = document.getElementById("editOutPrice").value;
+      const vendor = document.getElementById("editOutsourcer").value.trim();
+      if (price !== "" || vendor) {
+        editingCosts.push({ process: "", vendor, unitPrice: price === "" ? null : Number(price), qty: Number(document.getElementById("editQty").value) || 0, ref: "" });
+      }
+    }
+    editingCosts.push({ process: "", vendor: "", unitPrice: null, qty: Number(document.getElementById("editQty").value) || 0, ref: "" });
+    renderCostEdit();
+  });
 
   function closeEdit() {
     document.getElementById("editModal").classList.remove("open");
@@ -267,7 +372,16 @@
       qty: numOrNull("editQty") || 0,
       note: document.getElementById("editNote").value.trim(),
       needsCheck: document.getElementById("editCheck").checked,
+      // 空の行は捨てる
+      costs: editingCosts
+        .filter((c) => (c.vendor || "").trim() || (c.process || "").trim() || (c.unitPrice !== null && c.unitPrice !== ""))
+        .map((c) => ({ vendor: (c.vendor || "").trim(), process: (c.process || "").trim(), unitPrice: c.unitPrice ?? null,
+          qty: Number(c.qty) || 0, quoteNo: c.quoteNo || "", ref: (c.ref || "").trim() })),
     };
+    if (fields.costs.length) {
+      fields.outsourceUnitPrice = sumCostLines(fields.costs);
+      fields.outsourcer = Array.from(new Set(fields.costs.map((c) => c.vendor).filter(Boolean))).join("、");
+    }
     const btn = document.getElementById("editSaveBtn");
     btn.disabled = true;
     try {

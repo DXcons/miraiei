@@ -140,8 +140,8 @@
     const f = readFilters();
     return PDF_DRAWINGS.filter((d) => {
       if (f.customer && d.customer !== f.customer) return false;
-      if (f.product && ![d.productName, d.drawingNo, d.productCode]
-        .some((v) => String(v || "").toLowerCase().includes(f.product.toLowerCase()))) return false;
+      // 英語の品名(SHAFT)もカタカナ(シャフト)で探せる
+      if (f.product && !matchesSearch([d.productName, d.drawingNo, d.productCode], f.product)) return false;
       if (f.year === "unknown") {
         if (d.drawingYear) return false; // 作成年が不明のものだけ
       } else if (f.year && String(d.drawingYear) !== f.year) {
@@ -240,7 +240,7 @@
               <div class="r-meta">
                 <span class="badge badge-customer">${escapeHtml(d.customer)}</span>
                 ${optionBadgesHtml(d)}
-                ${d.drawingNo ? `<span class="dot">品番：${escapeHtml(d.productCode || "-")}　図面番号：${escapeHtml(d.drawingNo)}</span>` : ""}
+                ${d.drawingNo ? `<span class="dot">${escapeHtml(caseCodeLabel(customerGroupOf(d.customer)))}：${escapeHtml(d.productCode || "-")}　図面番号：${escapeHtml(d.drawingNo)}</span>` : ""}
                 <span class="dot">図面作成日：${formatDrawingDate(d.drawingDate)}</span>
                 <span class="dot">${escapeHtml(d.fileName)}</span>
                 <span class="dot">${formatFileSize(d.fileSize)}</span>

@@ -32,12 +32,12 @@
     <a href="case-import.html" class="btn btn-ghost btn-sm">📥 データを取り込む</a>
   </div>
   <h1 class="page-title" id="pageTitle">品番の一覧</h1>
-  <p class="page-sub">品番（案件）を選ぶと、注文書の受注単価と御見積書の外注単価を突き合わせた表が開きます。</p>
+  <p class="page-sub">行を選ぶと、注文書の受注単価と御見積書の外注単価を突き合わせた表が開きます。</p>
 
   <div class="card">
     <div class="field" style="margin-bottom:0;">
-      <label for="keyword">品番・品名・図面番号でしぼり込む</label>
-      <input type="text" id="keyword" placeholder="例：CAM-1581 / スタンド / 10202">
+      <label for="keyword" id="keywordLabel">品番・品名・図面番号でしぼり込む</label>
+      <input type="text" id="keyword" placeholder="例：CAM-1581 / スタンド / シャフト / 10202">
     </div>
   </div>
 
@@ -59,17 +59,20 @@
   let CASES = [];
 
   document.getElementById("crumbCustomer").textContent = groupKey;
-  document.getElementById("pageTitle").textContent = `${groupKey} の品番の一覧`;
-  document.title = `${groupKey} の品番の一覧 | 未来栄 図面管理システム`;
+  document.title = `${groupKey} の一覧 | 未来栄 図面管理システム`;
 
+  const codeLabel = caseCodeLabel(groupKey);
+  document.getElementById("pageTitle").textContent = `${groupKey} の${codeLabel}の一覧`;
+  document.getElementById("keywordLabel").textContent = `${codeLabel}・品名・図面番号でしぼり込む（SHAFTは「シャフト」でもヒットします）`;
+
+  // 英語の品名(SHAFT)もカタカナ(シャフト)で探せる。図面番号のハイフンの有無も問わない
   function matchKeyword(row, kw) {
-    return [row.productCode, row.productName, row.drawingNo, "MN-" + row.drawingNo]
-      .some((v) => String(v || "").toLowerCase().includes(kw));
+    return matchesSearch([row.productCode, row.productName, row.drawingNo, "MN-" + row.drawingNo, row.outsourcer], kw);
   }
 
   function render() {
     const area = document.getElementById("resultArea");
-    const kw = document.getElementById("keyword").value.trim().toLowerCase();
+    const kw = document.getElementById("keyword").value.trim();
 
     if (CASES.length === 0) {
       // 取り込み前の客先は、これまでの「保存したPDF図面」の検索へ案内する
@@ -91,7 +94,7 @@
       .filter(({ c, matched }) => !kw || matched.length > 0);
 
     if (hits.length === 0) {
-      area.innerHTML = `<div class="card empty-state"><div class="empty-icon">🔍</div>該当する品番がありません。</div>`;
+      area.innerHTML = `<div class="card empty-state"><div class="empty-icon">🔍</div>該当する${escapeHtml(codeLabel)}がありません。</div>`;
       return;
     }
 
@@ -101,7 +104,7 @@
           <table class="data-table case-table">
             <thead>
               <tr>
-                <th>品番</th>
+                <th>${escapeHtml(codeLabel)}</th>
                 <th>品名</th>
                 <th class="num">点数</th>
                 <th>受注年月日</th>
