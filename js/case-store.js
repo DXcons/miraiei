@@ -245,15 +245,72 @@ function base64ToFile(base64, fileName) {
   return new File([blob], fileName, { type: "application/pdf" });
 }
 
-// すでに登録済みの明細のID(上書きになるものを画面で知らせるため)
-async function findExistingCaseItemIds(bundle) {
-  const ids = bundle.items.map((it) => caseItemId(bundle.customer, it));
+/**
+ * 取り込む各明細を、どのドキュメントIDに書くか決める。
+ * 同じ案件(客先グループ＋品番)に同じ図面番号の行がすでにあれば、その行を上書きする
+ * (伝票番号が同じもの → 伝票番号が空の手入力の行 の順に探す)。
+ * これで、進行中に手入力していた案件をあとでまとめて取り込んでも行が二重にならない。
+ * 戻り値: { ids: [明細ごとのID], existing: Set(上書きになる明細の番号) }
+ */
+async function resolveImportTargets(bundle, items) {
+  const group = customerGroupOf(bundle.customer);
+  const all = await fetchCaseItems();
+  const byKey = new Map();
+  all.forEach((d) => {
+    const key = `${customerGroupOf(d.customer)}|${d.productCode}|${d.drawingNo}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(d);
+  });
+  const used = new Set();
+  const ids = [];
   const existing = new Set();
-  for (const id of ids) {
-    const doc = await db.collection(CASE_ITEM_COLLECTION).doc(id).get();
-    if (doc.exists) existing.add(id);
+  items.forEach((it, i) => {
+    const candidates = (byKey.get(`${group}|${it.productCode}|${it.drawingNo}`) || []).filter((d) => !used.has(d.id));
+    const hit = candidates.find((d) => (d.orderSlipNo || "") === (it.orderSlipNo || "")) ||
+      candidates.find((d) => !d.orderSlipNo);
+    if (hit) {
+      used.add(hit.id);
+      existing.add(i);
+      ids.push(hit.id);
+    } else {
+      ids.push(caseItemId(bundle.customer, it));
+    }
+  });
+  return { ids, existing };
+}
+
+// すでに登録済みで上書きになる明細の番号(画面で知らせるため)
+async function findExistingCaseItemIds(bundle) {
+  return (await resolveImportTargets(bundle, bundle.items)).existing;
+}
+
+/* ---------- 手入力の行(進行中の案件) ---------- */
+
+// 新しい行を足す。同じ案件に同じ図面番号の行があればエラー
+async function addCaseItemManual(item) {
+  const id = caseItemId(item.customer, { ...item, orderSlipNo: item.orderSlipNo || "" });
+  const all = await fetchCaseItems();
+  const group = customerGroupOf(item.customer);
+  if (all.some((d) => customerGroupOf(d.customer) === group && d.productCode === item.productCode && d.drawingNo === item.drawingNo)) {
+    throw new Error(`図面番号「${item.drawingNo}」の行はすでにあります。その行の「修正」から直してください。`);
   }
-  return existing;
+  const data = {
+    ...item,
+    costs: caseCostLines(item),
+    drawingId: item.drawingId || "",
+    docId: "",
+    sourceFile: "",
+    manual: true,
+    createdBy: auth.currentUser ? auth.currentUser.email : "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  await db.collection(CASE_ITEM_COLLECTION).doc(id).set(data);
+  return { id, ...data };
+}
+
+// 行を消す(図面や書類は消さない)
+async function deleteCaseItem(id) {
+  await db.collection(CASE_ITEM_COLLECTION).doc(id).delete();
 }
 
 /**
@@ -269,6 +326,7 @@ async function saveCaseImport(bundle, items, onProgress) {
   const total = items.length + (bundle.document ? 1 : 0);
   let done = 0;
   const step = (label) => onProgress && onProgress(++done, total, label);
+  const { ids: targetIds } = await resolveImportTargets(bundle, items);
 
   // 元の注文書・御見積書
   let docId = "";
@@ -291,9 +349,9 @@ async function saveCaseImport(bundle, items, onProgress) {
     step("注文書・御見積書");
   }
 
-  for (let it of items) {
+  for (let n = 0; n < items.length; n++) {
     // 図面(1枚ずつのPDF)。過去の図面の検索画面にも出るよう pdfDrawings に入れる
-    it = { ...it }; // 画面側の明細を書き換えないよう写しを使う
+    let it = { ...items[n] }; // 画面側の明細を書き換えないよう写しを使う
     const drawingId = caseDrawingId(customer, it);
     if (it.drawing && it.drawing.base64) {
       const dRef = db.collection(PDF_COLLECTION).doc(drawingId);
@@ -338,7 +396,7 @@ async function saveCaseImport(bundle, items, onProgress) {
       it.outsourcer = costVendors(costs).join("、");
     }
 
-    await db.collection(CASE_ITEM_COLLECTION).doc(caseItemId(customer, it)).set({
+    await db.collection(CASE_ITEM_COLLECTION).doc(targetIds[n]).set({
       customer,
       costs,
       productCode: it.productCode,

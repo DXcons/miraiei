@@ -126,9 +126,33 @@ async function deleteOrder(id) {
 
 const ORDER_FILE_COLLECTION = "orderFiles";
 
-// 書類の種類(表示順)。図面は「紐づけ」なのでアップロードの選択肢には出さない。
-const ORDER_DOC_TYPES = ["見積書", "図面", "納品書", "請求書", "写真", "その他"];
-const ORDER_UPLOAD_TYPES = ORDER_DOC_TYPES.filter((t) => t !== "図面");
+// 書類の種類(表示順)。「見積書」は外注先からの見積書(以前からの呼び方のまま)。
+// 図面は、ここにアップロードするほか、「図面を保存する」で保存したものを紐づけることもできる。
+const ORDER_DOC_TYPES = ["客先の注文書", "見積書", "外注先への注文書", "図面", "納品書", "請求書", "写真", "その他"];
+const ORDER_UPLOAD_TYPES = ORDER_DOC_TYPES;
+
+/* ---------- 案件との対応 ----------
+   取引(orders)は caseCode(品番。DIDは注文番号)を持ち、客先グループ＋品番で
+   「過去の図面をさがす」の案件ページ(case-detail.html)と対応する。
+   案件ページで追加した書類は orderFiles.orderId に「案件キー」を入れて保存するので、
+   取引を登録する前でも書類を貯めておける。 */
+function caseKeyOf(groupKey, code) {
+  return `case__${groupKey}__${String(code || "").trim()}`;
+}
+
+function orderCaseKey(order) {
+  return order && order.caseCode ? caseKeyOf(customerGroupOf(order.customer), order.caseCode) : null;
+}
+
+function caseDetailUrl(groupKey, code) {
+  return `case-detail.html?customer=${encodeURIComponent(groupKey)}&code=${encodeURIComponent(code)}`;
+}
+
+// 案件(客先グループ＋品番)に対応する取引。無ければnull
+function findCaseOrder(orders, groupKey, code) {
+  return orders.find((o) => o.caseCode && String(o.caseCode).trim() === String(code).trim() &&
+    customerGroupOf(o.customer) === groupKey) || null;
+}
 
 // 写真は長い辺をこの大きさまで縮め、JPEGにして容量を節約する
 const IMAGE_MAX_EDGE = 2400;
