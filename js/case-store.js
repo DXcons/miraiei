@@ -22,7 +22,7 @@ const CASE_IMPORT_FORMAT = "miraiei-case-import";
    codeLabel は表の「品番」列の呼び方(DIDは注文書の「注文番号」が品番にあたる)。 */
 const CASE_CUSTOMER_GROUPS = [
   { key: "CAM'S", label: "CAM'S", sub: "", aliases: ["CAM'S", "CAMS", "キャムズ"], codeLabel: "品番" },
-  { key: "神栄", label: "神栄", sub: "", aliases: ["神栄"], codeLabel: "品番" },
+  { key: "伸栄", label: "伸栄", sub: "伸栄商會", aliases: ["伸栄", "伸榮", "伸栄商会", "伸栄商會", "伸榮商會", "神栄"], codeLabel: "品番" },
   { key: "DID", label: "DID", sub: "大同テクノ", aliases: ["DID", "大同テクノ"], codeLabel: "注文番号" },
   { key: "その他", label: "その他", sub: "", aliases: [], codeLabel: "品番" },
 ];
@@ -67,18 +67,29 @@ function formatCaseDate(value) {
 
 /* ---------- 外注の内訳 ----------
    1つの部品に外注先が複数ある(材料・熱処理・加工など)場合は costs に1工程1行で持つ。
-   外注単価は costs の単価(1個あたり)の合計。CAM'Sのように1社だけなら costs は空。 */
+   外注単価は costs の単価(1個あたり)の合計。材料費・運賃も出ていくお金なので含める。
+   ただし kind:"reference" の行(見積はもらったが発注しなかった先など)は参考表示のみで合計しない。
+   CAM'Sのように1社だけなら costs は空。 */
 function caseCostLines(item) {
   return Array.isArray(item.costs) && item.costs.length ? item.costs : [];
 }
 
+function isReferenceCost(c) {
+  return c.kind === "reference";
+}
+
 function sumCostLines(costs) {
-  return costs.reduce((t, c) => t + (Number(c.unitPrice) || 0), 0);
+  return costs.filter((c) => !isReferenceCost(c)).reduce((t, c) => t + (Number(c.unitPrice) || 0), 0);
+}
+
+// 実際に支払う外注先(参考行は除く)
+function costVendors(costs) {
+  return Array.from(new Set(costs.filter((c) => !isReferenceCost(c)).map((c) => c.vendor).filter(Boolean)));
 }
 
 // 表に出す外注先。複数なら「金太 ほか3社」
 function outsourcerLabel(item) {
-  const vendors = Array.from(new Set(caseCostLines(item).map((c) => c.vendor).filter(Boolean)));
+  const vendors = costVendors(caseCostLines(item));
   if (vendors.length > 1) return `${vendors[0]} ほか${vendors.length - 1}社`;
   return vendors[0] || item.outsourcer || "";
 }
@@ -192,7 +203,7 @@ function summarizeCaseRows(code, rows) {
     firstOrderDate: dates[0] || "",
     lastOrderDate: dates[dates.length - 1] || "",
     outsourcers: Array.from(new Set(rows.flatMap((d) =>
-      caseCostLines(d).length ? caseCostLines(d).map((c) => c.vendor) : [d.outsourcer]).filter(Boolean))),
+      caseCostLines(d).length ? costVendors(caseCostLines(d)) : [d.outsourcer]).filter(Boolean))),
     needsCheckCount: rows.filter((d) => d.needsCheck).length,
   };
 }
@@ -320,10 +331,11 @@ async function saveCaseImport(bundle, items, onProgress) {
       qty: Number(c.qty) || 0,
       quoteNo: c.quoteNo || "",
       ref: c.ref || "",
+      kind: c.kind || "",
     }));
     if (costs.length) {
       it.outsourceUnitPrice = sumCostLines(costs);
-      it.outsourcer = Array.from(new Set(costs.map((c) => c.vendor).filter(Boolean))).join("、");
+      it.outsourcer = costVendors(costs).join("、");
     }
 
     await db.collection(CASE_ITEM_COLLECTION).doc(caseItemId(customer, it)).set({
