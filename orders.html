@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011c">
+<link rel="stylesheet" href="css/style.css?v=20261011e">
 </head>
 <body>
 
@@ -234,11 +234,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011c"></script>
-<script src="js/common.js?v=20261011c"></script>
-<script src="js/pdf-store.js?v=20261011c"></script>
-<script src="js/case-store.js?v=20261011c"></script>
-<script src="js/order-store.js?v=20261011c"></script>
+<script src="js/firebase-config.js?v=20261011e"></script>
+<script src="js/common.js?v=20261011e"></script>
+<script src="js/pdf-store.js?v=20261011e"></script>
+<script src="js/case-store.js?v=20261011e"></script>
+<script src="js/order-store.js?v=20261011e"></script>
 <script>
   let orders = [];
   let orderFiles = []; // 全取引の書類(一覧用データのみ)
@@ -278,23 +278,42 @@
     if (names.includes(previous)) select.value = previous;
   }
 
-  /* ---------- 客先 → 月(年)のフォルダ ----------
-     URLの ?customer=CAM'S&year=2026&month=10 で、いまどこを開いているかを表す。
-       客先なし          … 客先のカード
-       客先のみ          … 今年の1〜12月のフォルダ ＋ ほかの年のフォルダ
-       客先＋年(今年以外) … その年の1〜12月のフォルダ
-       客先＋年＋月      … 案件の一覧表
-     month=none は受注日の無い案件。 */
+  /* ---------- 客先 → 月のフォルダ ----------
+     URLの ?customer=CAM'S&month=2026-10 で、いまどこを開いているかを表す。
+       客先なし     … 客先のカード
+       客先のみ     … 当月・前月・前々月のフォルダ(＋それより前／受注日なし)
+       客先＋month  … 案件の一覧表
+     month は "2026-10"(その月)、"older"(前々月より前)、"none"(受注日なし)。
+     受注日が当月より先(未来)の案件は当月のフォルダに入れる。 */
   const NAV = (() => {
     const p = new URLSearchParams(location.search);
-    return { customer: p.get("customer") || "", year: p.get("year") || "", month: p.get("month") || "" };
+    return { customer: p.get("customer") || "", month: p.get("month") || "" };
   })();
-  const THIS_YEAR = new Date().getFullYear();
+
+  // 当月・前月・前々月の "YYYY-MM"(年をまたいでもよいように日付で計算する)
+  const RECENT_MONTHS = [0, 1, 2].map((back) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - back);
+    return { key: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`, year: d.getFullYear(), month: d.getMonth() + 1,
+             label: ["当月", "前月", "前々月"][back] };
+  });
+  const CURRENT_KEY = RECENT_MONTHS[0].key;
+  const OLDEST_KEY = RECENT_MONTHS[2].key;
+
+  // 取引がどのフォルダに入るか："YYYY-MM" / "older" / "none"
+  function folderKeyOf(o) {
+    const ym = orderYearMonth(o);
+    if (!ym) return "none";
+    const key = `${ym.year}-${pad2(ym.month)}`;
+    if (key > CURRENT_KEY) return CURRENT_KEY;
+    if (key < OLDEST_KEY) return "older";
+    return key;
+  }
 
   function navUrl(nav) {
     const q = new URLSearchParams();
     if (nav.customer) q.set("customer", nav.customer);
-    if (nav.year) q.set("year", nav.year);
     if (nav.month) q.set("month", nav.month);
     const s = q.toString();
     return "orders.html" + (s ? "?" + s : "");
@@ -303,22 +322,26 @@
   function navLevel() {
     if (!NAV.customer) return "customer";
     if (NAV.month) return "list";
-    if (NAV.year && Number(NAV.year) !== THIS_YEAR) return "year";
     return "months";
   }
 
-  // 一覧の対象：選んだ客先グループ・年・月の取引
+  // 一覧の対象：選んだ客先グループ・フォルダの取引
   function inNavFolder(o) {
     if (NAV.customer && customerGroupOf(o.customer) !== NAV.customer) return false;
-    if (NAV.month === "none") return !orderYearMonth(o);
-    const ym = orderYearMonth(o);
-    if (NAV.year && (!ym || ym.year !== Number(NAV.year))) return false;
-    if (NAV.month && (!ym || ym.month !== Number(NAV.month))) return false;
+    if (NAV.month && folderKeyOf(o) !== NAV.month) return false;
     return true;
   }
 
   const activeOrders = () => orders.filter((o) => !isOrderClosed(o.status));
-  const monthLabel = (y, m) => (y === THIS_YEAR ? `${m}月` : `${y}年${m}月`);
+
+  function folderLabel(key) {
+    if (key === "older") return "それより前";
+    if (key === "none") return "受注日なし";
+    const r = RECENT_MONTHS.find((x) => x.key === key);
+    if (r) return `${r.year !== RECENT_MONTHS[0].year ? r.year + "年" : ""}${r.month}月（${r.label}）`;
+    const [y, m] = key.split("-");
+    return `${y}年${Number(m)}月`;
+  }
 
   function renderBreadcrumbAndTitle() {
     const parts = [`<a href="home.html">ホーム</a>`];
@@ -329,13 +352,12 @@
       parts.push(level === "months" ? escapeHtml(NAV.customer) : `<a href="${escapeHtml(navUrl({ customer: NAV.customer }))}">${escapeHtml(NAV.customer)}</a>`);
       title = `${NAV.customer} の進行中の案件`;
     }
-    if (NAV.year && Number(NAV.year) !== THIS_YEAR) {
-      parts.push(level === "year" ? `${escapeHtml(NAV.year)}年` : `<a href="${escapeHtml(navUrl({ customer: NAV.customer, year: NAV.year }))}">${escapeHtml(NAV.year)}年</a>`);
-    }
     if (NAV.month) {
-      const label = NAV.month === "none" ? "受注日なし" : monthLabel(Number(NAV.year), Number(NAV.month));
-      parts.push(escapeHtml(label));
-      title = `${NAV.customer}　${NAV.month === "none" ? "受注日なし" : `${NAV.year}年${NAV.month}月`}受注の案件`;
+      parts.push(escapeHtml(folderLabel(NAV.month)));
+      const r = RECENT_MONTHS.find((x) => x.key === NAV.month);
+      title = `${NAV.customer}　` + (r ? `${r.year}年${r.month}月受注の案件`
+        : NAV.month === "older" ? `${RECENT_MONTHS[2].year}年${RECENT_MONTHS[2].month}月より前に受注した案件`
+        : "受注日が入っていない案件");
     }
     document.getElementById("breadcrumb").innerHTML = parts.join(" ＞ ");
     document.getElementById("pageTitle").textContent = title;
@@ -378,42 +400,22 @@
     }
 
     const mine = active.filter((o) => customerGroupOf(o.customer) === NAV.customer);
-    const countYm = (y, m) => mine.filter((o) => {
-      const ym = orderYearMonth(o);
-      return ym && ym.year === y && (m === undefined || ym.month === m);
-    }).length;
-    const now = new Date();
-    const tiles = [];
-
-    if (level === "months") {
-      // ほかの年(主に去年以前)のフォルダ → 今年の1〜12月
-      const years = Array.from(new Set(mine.map((o) => orderYearMonth(o)).filter(Boolean).map((ym) => ym.year)))
-        .filter((y) => y !== THIS_YEAR).sort((a, b) => a - b);
-      years.forEach((y) => tiles.push(folderTile({
-        href: navUrl({ customer: NAV.customer, year: y }), icon: "🗂️", title: `${y}年`, count: countYm(y),
-      })));
-      for (let m = 1; m <= 12; m++) {
-        tiles.push(folderTile({
-          href: navUrl({ customer: NAV.customer, year: THIS_YEAR, month: m }), icon: "📁",
-          title: `${m}月`, count: countYm(THIS_YEAR, m), current: m === now.getMonth() + 1,
-        }));
-      }
-      const none = mine.filter((o) => !orderYearMonth(o)).length;
-      if (none) tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, month: "none" }), icon: "❔", title: "受注日なし", count: none }));
-    } else {
-      const y = Number(NAV.year);
-      for (let m = 1; m <= 12; m++) {
-        tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, year: y, month: m }), icon: "📁", title: `${y}年${m}月`, count: countYm(y, m) }));
-      }
-    }
+    const count = (key) => mine.filter((o) => folderKeyOf(o) === key).length;
+    const tiles = RECENT_MONTHS.map((r, i) => folderTile({
+      href: navUrl({ customer: NAV.customer, month: r.key }), icon: "📁",
+      title: folderLabel(r.key), count: count(r.key), current: i === 0,
+    }));
+    // 前々月より前・受注日なしは、案件があるときだけ出す
+    if (count("older")) tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, month: "older" }), icon: "🗂️", title: "それより前", count: count("older") }));
+    if (count("none")) tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, month: "none" }), icon: "❔", title: "受注日なし", count: count("none") }));
 
     area.innerHTML = `
       <div class="card">
         <div class="section-head">
-          <h2 class="section-title">${level === "months" ? `受注した月を選んでください（${THIS_YEAR}年は月ごと、それより前は年ごと）` : `${escapeHtml(NAV.year)}年の受注した月を選んでください`}</h2>
+          <h2 class="section-title">受注した月を選んでください</h2>
           <span class="field-note">進行中の案件 ${mine.length}件</span>
         </div>
-        <div class="folder-grid">${tiles.join("")}</div>
+        <div class="folder-grid folder-grid-recent">${tiles.join("")}</div>
       </div>`;
   }
 

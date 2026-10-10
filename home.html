@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ホーム | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011c">
+<link rel="stylesheet" href="css/style.css?v=20261011e">
 </head>
 <body>
 
@@ -25,6 +25,9 @@
 </header>
 
 <main class="page">
+  <!-- Firestore無料枠(1GB)の残り容量。図面・書類を保存するたびに減る -->
+  <div id="storageMeter" class="home-storage"></div>
+
   <h1 class="page-title">何をしますか？</h1>
   <p class="page-sub">行いたい作業を選択してください。</p>
 
@@ -64,9 +67,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/common.js"></script>
+<script src="js/common.js?v=20261011e"></script>
+<script src="js/pdf-store.js?v=20261011e"></script>
 <script>
-  initPage();
+  (async () => {
+    const ok = await initPage();
+    if (ok) renderStorageMeter("storageMeter");
+  })();
 </script>
 
 </body>
