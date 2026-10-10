@@ -194,7 +194,8 @@ async function renderStorageMeter(elementId) {
       <div class="storage-meter ${level}">
         <div class="storage-meter-head">
           <span>保存容量の使用状況（無料枠）</span>
-          <b>約 ${formatFileSize(used)} ／ ${formatFileSize(limit)}（${pct < 1 && used > 0 ? "1%未満" : Math.round(pct) + "%"}）</b>
+          <b>残り 約${formatFileSize(Math.max(0, limit - used))}
+            <small>（使用 約${formatFileSize(used)} ／ ${formatFileSize(limit)}・${pct < 1 && used > 0 ? "1%未満" : Math.round(pct) + "%"}）</small></b>
         </div>
         <div class="storage-bar"><div style="width:${Math.max(pct, used > 0 ? 0.5 : 0)}%"></div></div>
         <div class="storage-meter-note">
