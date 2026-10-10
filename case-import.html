@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>注文書・御見積書データの取り込み | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261010b">
+<link rel="stylesheet" href="css/style.css?v=20261010d">
 </head>
 <body>
 
@@ -60,13 +60,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261010b"></script>
-<script src="js/common.js?v=20261010b"></script>
-<script src="js/pdf-store.js?v=20261010b"></script>
-<script src="js/case-store.js?v=20261010b"></script>
+<script src="js/firebase-config.js?v=20261010d"></script>
+<script src="js/common.js?v=20261010d"></script>
+<script src="js/pdf-store.js?v=20261010d"></script>
+<script src="js/case-store.js?v=20261010d"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="js/pdf-text-import.js?v=20261010b"></script>
+<script src="js/pdf-text-import.js?v=20261010d"></script>
 <script>
   let BUNDLE = null;
   let ITEMS = [];      // 画面で直した値を反映した明細
@@ -173,14 +173,15 @@
     const quoteTotals = BUNDLE.quoteTotals || {};
     // 外注の内訳がある明細は、内訳の行ごとに見積書と照合する
     const quoteLines = ITEMS.flatMap((it) => caseCostLines(it).length
-      ? caseCostLines(it)
+      ? caseCostLines(it).filter((c) => !isReferenceCost(c))
       : [{ quoteNo: it.quoteNo, unitPrice: it.outsourceUnitPrice, qty: it.outsourceQty }]);
     byNo(quoteTotals).forEach((q) => {
       const sum = quoteLines.filter((c) => c.quoteNo === q)
         .reduce((t, c) => t + Number(c.unitPrice || 0) * Number(c.qty || 0), 0);
       const ok = sum === quoteTotals[q];
-      lines.push(`<span>御見積書 ${escapeHtml(q)}：${formatYen(sum)}
-        <span class="${ok ? "ok" : "ng"}">${ok ? "✓ 紙の小計と一致" : `✗ 紙の小計は${formatYen(quoteTotals[q])}`}</span></span>`);
+      // q は見積書の番号、または「注文書番号（外注先）」
+      lines.push(`<span>外注 ${escapeHtml(q)}：${formatYen(sum)}
+        <span class="${ok ? "ok" : "ng"}">${ok ? "✓ 書類の合計と一致" : `✗ 書類の合計は${formatYen(quoteTotals[q])}`}</span></span>`);
     });
     return lines.join("");
   }
@@ -255,7 +256,7 @@
                     <table class="cost-table">
                       <thead><tr><th>工程</th><th>外注先</th><th class="num">単価（1個あたり）</th><th>根拠</th></tr></thead>
                       <tbody>${caseCostLines(it).map((c) => `
-                        <tr><td>${escapeHtml(c.process)}</td><td>${escapeHtml(c.vendor)}</td>
+                        <tr class="${isReferenceCost(c) ? "cost-ref" : ""}"><td>${isReferenceCost(c) ? "【参考・合計に含めない】" : ""}${escapeHtml(c.process)}</td><td>${escapeHtml(c.vendor)}</td>
                           <td class="num">${formatYen(c.unitPrice)}</td><td>${escapeHtml(c.ref || "")}</td></tr>`).join("")}
                       </tbody>
                     </table>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>単価の突き合わせ | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261010c">
+<link rel="stylesheet" href="css/style.css?v=20261010d">
 </head>
 <body>
 
@@ -107,10 +107,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261010c"></script>
-<script src="js/common.js?v=20261010c"></script>
-<script src="js/pdf-store.js?v=20261010c"></script>
-<script src="js/case-store.js?v=20261010c"></script>
+<script src="js/firebase-config.js?v=20261010d"></script>
+<script src="js/common.js?v=20261010d"></script>
+<script src="js/pdf-store.js?v=20261010d"></script>
+<script src="js/case-store.js?v=20261010d"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -243,8 +243,8 @@
             <thead><tr><th>工程</th><th>外注先</th><th class="num">単価（1個あたり）</th><th class="num">数量</th><th>根拠</th></tr></thead>
             <tbody>
               ${costs.map((c) => `
-                <tr>
-                  <td>${escapeHtml(c.process || "-")}</td>
+                <tr class="${isReferenceCost(c) ? "cost-ref" : ""}">
+                  <td>${isReferenceCost(c) ? "【参考・合計に含めない】" : ""}${escapeHtml(c.process || "-")}</td>
                   <td>${escapeHtml(c.vendor || "-")}</td>
                   <td class="num">${formatYen(c.unitPrice)}</td>
                   <td class="num">${escapeHtml(c.qty || "-")}</td>
@@ -307,10 +307,11 @@
     }
     area.innerHTML = `
       <table class="cost-table cost-edit-table">
-        <thead><tr><th>工程</th><th>外注先</th><th class="num">単価（1個）</th><th>根拠</th><th></th></tr></thead>
+        <thead><tr><th title="見積だけで発注しなかった先など。外注単価の合計に含めません">参考</th><th>工程</th><th>外注先</th><th class="num">単価（1個）</th><th>根拠</th><th></th></tr></thead>
         <tbody>
           ${editingCosts.map((c, i) => `
             <tr>
+              <td><input type="checkbox" data-ci="${i}" data-ck="kind" ${isReferenceCost(c) ? "checked" : ""} style="width:auto;"></td>
               <td><input type="text" data-ci="${i}" data-ck="process" value="${escapeHtml(c.process || "")}"></td>
               <td><input type="text" data-ci="${i}" data-ck="vendor" value="${escapeHtml(c.vendor || "")}"></td>
               <td class="num"><input type="number" data-ci="${i}" data-ck="unitPrice" value="${escapeHtml(c.unitPrice ?? "")}"></td>
@@ -322,7 +323,8 @@
     area.querySelectorAll("input[data-ck]").forEach((input) =>
       input.addEventListener("input", () => {
         const c = editingCosts[Number(input.dataset.ci)];
-        c[input.dataset.ck] = input.type === "number" ? (input.value === "" ? null : Number(input.value)) : input.value;
+        if (input.type === "checkbox") c.kind = input.checked ? "reference" : "";
+        else c[input.dataset.ck] = input.type === "number" ? (input.value === "" ? null : Number(input.value)) : input.value;
         syncCostTotals();
       }));
     area.querySelectorAll("[data-cdel]").forEach((btn) =>
@@ -336,8 +338,7 @@
   function syncCostTotals() {
     if (!editingCosts.length) return;
     document.getElementById("editOutPrice").value = sumCostLines(editingCosts);
-    document.getElementById("editOutsourcer").value =
-      Array.from(new Set(editingCosts.map((c) => c.vendor).filter(Boolean))).join("、");
+    document.getElementById("editOutsourcer").value = costVendors(editingCosts).join("、");
   }
 
   document.getElementById("addCostBtn").addEventListener("click", () => {
@@ -377,11 +378,11 @@
       costs: editingCosts
         .filter((c) => (c.vendor || "").trim() || (c.process || "").trim() || (c.unitPrice !== null && c.unitPrice !== ""))
         .map((c) => ({ vendor: (c.vendor || "").trim(), process: (c.process || "").trim(), unitPrice: c.unitPrice ?? null,
-          qty: Number(c.qty) || 0, quoteNo: c.quoteNo || "", ref: (c.ref || "").trim() })),
+          qty: Number(c.qty) || 0, quoteNo: c.quoteNo || "", ref: (c.ref || "").trim(), kind: c.kind || "" })),
     };
     if (fields.costs.length) {
       fields.outsourceUnitPrice = sumCostLines(fields.costs);
-      fields.outsourcer = Array.from(new Set(fields.costs.map((c) => c.vendor).filter(Boolean))).join("、");
+      fields.outsourcer = costVendors(fields.costs).join("、");
     }
     const btn = document.getElementById("editSaveBtn");
     btn.disabled = true;
