@@ -72,6 +72,25 @@ function parseAmount(text) {
   return /^\d+$/.test(cleaned) ? Number(cleaned) : NaN;
 }
 
+/* ---------- 受注日(月ごとのフォルダ分けに使う) ----------
+   orderDate("2026-10-10")を持つ。以前に登録した取引で受注日が無いものは、
+   登録した日(createdAt)を代わりに使う。どちらも無ければ""。 */
+function orderReceivedDate(order) {
+  if (order.orderDate) return order.orderDate;
+  const ts = order.createdAt;
+  if (ts && typeof ts.toDate === "function") {
+    const d = ts.toDate();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+  return "";
+}
+
+// "2026-10-10" → { year: 2026, month: 10 }。日付が無ければnull
+function orderYearMonth(order) {
+  const m = /^(\d{4})-(\d{2})/.exec(orderReceivedDate(order));
+  return m ? { year: Number(m[1]), month: Number(m[2]) } : null;
+}
+
 /* ---------- 読み書き ---------- */
 
 async function fetchOrders() {
