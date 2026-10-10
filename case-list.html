@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>品番の一覧 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261010d">
+<link rel="stylesheet" href="css/style.css?v=20261011a">
 </head>
 <body>
 
@@ -26,13 +26,14 @@
 
 <main class="page page-wide case-page">
   <div class="breadcrumb">
-    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の図面をさがす</a> ＞ <span id="crumbCustomer"></span>
+    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">案件・図面をさがす</a> ＞ <span id="crumbCustomer"></span>
   </div>
   <div class="page-toolbar">
-    <a href="case-import.html" class="btn btn-ghost btn-sm">📥 データを取り込む</a>
+    <a href="case-new.html" class="btn btn-ghost btn-sm">＋ 新しい案件を登録する</a>
+    <a href="case-import.html" id="importLink" class="btn btn-ghost btn-sm">📥 データを取り込む</a>
   </div>
   <h1 class="page-title" id="pageTitle">品番の一覧</h1>
-  <p class="page-sub">行を選ぶと、注文書の受注単価と御見積書の外注単価を突き合わせた表が開きます。</p>
+  <p class="page-sub">行を選ぶと案件のページが開きます（書類・納期・ステータスと、受注単価と外注単価の突き合わせ表）。</p>
 
   <div class="card">
     <div class="field" style="margin-bottom:0;">
@@ -50,16 +51,35 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261010d"></script>
-<script src="js/common.js?v=20261010d"></script>
-<script src="js/pdf-store.js?v=20261010d"></script>
-<script src="js/case-store.js?v=20261010d"></script>
+<script src="js/firebase-config.js?v=20261011a"></script>
+<script src="js/common.js?v=20261011a"></script>
+<script src="js/pdf-store.js?v=20261011a"></script>
+<script src="js/case-store.js?v=20261011a"></script>
+<script src="js/order-store.js?v=20261011a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
   let CASES = [];
 
   document.getElementById("crumbCustomer").textContent = groupKey;
+  document.getElementById("importLink").href = `case-import.html?customer=${encodeURIComponent(groupKey)}`;
+
+  // 表の行がまだ無い案件(品番を登録した進行中の取引)も一覧に入れる
+  function mergeOrders(cases, orders) {
+    const byCode = new Map(cases.map((c) => [c.code, c]));
+    orders.filter((o) => o.caseCode && customerGroupOf(o.customer) === groupKey).forEach((o) => {
+      const code = String(o.caseCode).trim();
+      if (byCode.has(code)) {
+        byCode.get(code).order = o;
+      } else {
+        const c = summarizeCaseRows(code, []);
+        c.order = o;
+        byCode.set(code, c);
+        cases.push(c);
+      }
+    });
+    return cases;
+  }
   document.title = `${groupKey} の一覧 | 未来栄 図面管理システム`;
 
   const codeLabel = caseCodeLabel(groupKey);
@@ -83,16 +103,17 @@
       area.innerHTML = `
         <div class="card empty-state">
           <div class="empty-icon">🗂️</div>
-          ${escapeHtml(groupKey)} の注文書・御見積書のデータはまだ取り込まれていません。
-          <div style="margin-top:14px;"><a href="${pdfLink}" class="text-link">保存したPDF図面から探す ›</a></div>
-          <div style="margin-top:8px;"><a href="case-import.html" class="text-link">データを取り込む ›</a></div>
+          ${escapeHtml(groupKey)} の案件はまだありません。
+          <div style="margin-top:14px;"><a href="case-new.html" class="text-link">新しい案件を登録する ›</a></div>
+          <div style="margin-top:8px;"><a href="${pdfLink}" class="text-link">保存したPDF図面から探す ›</a></div>
         </div>`;
       return;
     }
 
     const hits = CASES
       .map((c) => ({ c, matched: kw ? c.rows.filter((r) => matchKeyword(r, kw)) : [] }))
-      .filter(({ c, matched }) => !kw || matched.length > 0);
+      .filter(({ c, matched }) => !kw || matched.length > 0 ||
+        matchesSearch([c.code, c.order && c.order.productName], kw));
 
     if (hits.length === 0) {
       area.innerHTML = `<div class="card empty-state"><div class="empty-icon">🔍</div>該当する${escapeHtml(codeLabel)}がありません。</div>`;
@@ -106,6 +127,7 @@
             <thead>
               <tr>
                 <th>${escapeHtml(codeLabel)}</th>
+                <th>ステータス</th>
                 <th>品名</th>
                 <th class="num">点数</th>
                 <th>受注年月日</th>
@@ -124,12 +146,14 @@
                   : `${formatCaseDate(c.firstOrderDate)}〜${formatCaseDate(c.lastOrderDate)}`;
                 const names = (matched.length ? matched : c.rows).map((r) => r.productName);
                 const first = names[0] || "";
-                const label = names.length > 1 ? `${first} ほか${names.length - 1}点` : first;
-                const href = `case-detail.html?customer=${encodeURIComponent(groupKey)}&code=${encodeURIComponent(c.code)}` +
-                  (kw ? `&q=${encodeURIComponent(kw)}` : "");
+                const label = names.length > 1 ? `${first} ほか${names.length - 1}点`
+                  : first || (c.order && c.order.productName) || "（表はまだありません）";
+                const href = caseDetailUrl(groupKey, c.code) + (kw && matched.length ? `&q=${encodeURIComponent(kw)}` : "");
+                const st = c.order ? orderStatusInfo(c.order.status) : null;
                 return `
                   <tr class="case-row" data-href="${escapeHtml(href)}">
                     <td class="case-code"><a href="${escapeHtml(href)}">${escapeHtml(c.code)}</a></td>
+                    <td>${st ? `<span class="status-pill ${st.cls}">${escapeHtml(c.order.status)}</span>` : `<span class="text-muted">—</span>`}</td>
                     <td class="case-names">${matched.length ? "一致：" : ""}${escapeHtml(label)}</td>
                     <td class="num">${c.count}</td>
                     <td>${escapeHtml(dates)}</td>
@@ -157,6 +181,11 @@
     if (!ok) return;
     try {
       CASES = groupCaseItemsByCode(await fetchCaseItemsByGroup(groupKey));
+      try {
+        mergeOrders(CASES, await fetchOrders());
+      } catch (err) {
+        console.warn("取引を取得できませんでした", err);
+      }
       render();
     } catch (err) {
       console.error("案件データの取得に失敗しました", err);

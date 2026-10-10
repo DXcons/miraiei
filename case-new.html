@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>案件を登録する・書類を追加する | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css?v=20261011a">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page case-page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 案件を登録する・書類を追加する</div>
+  <h1 class="page-title">案件を登録する・書類を追加する</h1>
+  <p class="page-sub">客先と品番を選ぶと案件のページが開きます。新しい品番なら、そのまま新しい案件になります。<br>
+    案件のページで、書類（注文書・見積書・図面など）の追加、単価の入力、納期・ステータスの登録ができます。</p>
+
+  <div class="card">
+    <div class="filter-label" style="margin-bottom:12px;">① 客先を選ぶ</div>
+    <div class="chip-group" id="customerChoices"></div>
+    <div class="field" id="otherNameField" style="display:none; margin-top:14px; max-width:420px;">
+      <label for="otherName">客先名 <span class="req">必須</span></label>
+      <input type="text" id="otherName" placeholder="例：TANIDA" autocomplete="off">
+    </div>
+
+    <hr class="divider">
+
+    <div class="filter-label" style="margin-bottom:12px;" id="codeHeading">② 品番を入力する</div>
+    <div class="case-filter-row">
+      <div class="field" style="margin-bottom:0; flex:1; max-width:520px;">
+        <input type="text" id="codeInput" list="codeList" placeholder="例：CAM-1581" autocomplete="off">
+        <datalist id="codeList"></datalist>
+        <div class="field-note" id="codeHint">これまでの品番は、入力欄をクリックすると候補に出ます。</div>
+      </div>
+      <button type="button" class="btn btn-primary" id="openBtn">案件のページを開く ›</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head">
+      <h2 class="section-title">進行中の案件</h2>
+      <a class="text-link" href="orders.html">受発注・請求書の管理で全部見る ›</a>
+    </div>
+    <div id="openCases"><div class="empty-state">読み込み中…</div></div>
+  </div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js?v=20261011a"></script>
+<script src="js/common.js?v=20261011a"></script>
+<script src="js/pdf-store.js?v=20261011a"></script>
+<script src="js/case-store.js?v=20261011a"></script>
+<script src="js/order-store.js?v=20261011a"></script>
+<script>
+  let ITEMS = [];
+  let ORDERS = [];
+
+  function selectedGroup() {
+    const el = document.querySelector('input[name="caseCustomer"]:checked');
+    return el ? el.value : "";
+  }
+
+  function buildCustomerChoices() {
+    document.getElementById("customerChoices").innerHTML = CASE_CUSTOMER_GROUPS.map((g, i) => `
+      <label class="chip chip-lg"><input type="radio" name="caseCustomer" value="${escapeHtml(g.key)}" ${i === 0 ? "checked" : ""}>
+        <span>${escapeHtml(g.label)}${g.sub ? `（${escapeHtml(g.sub)}）` : ""}</span></label>`).join("");
+  }
+
+  // 客先を選び直したら、品番の呼び方と候補を入れ替える
+  function syncCustomer() {
+    const group = selectedGroup();
+    const label = caseCodeLabel(group);
+    document.getElementById("otherNameField").style.display = group === CASE_OTHER_GROUP ? "" : "none";
+    document.getElementById("codeHeading").textContent = `② ${label}を入力する`;
+    document.getElementById("codeInput").placeholder =
+      group === "DID" ? "例：M67182" : group === "伸栄" ? "例：35-115061" : group === "CAM'S" ? "例：CAM-1581" : "例：品番";
+    const codes = new Set();
+    ITEMS.filter((d) => customerGroupOf(d.customer) === group).forEach((d) => codes.add(d.productCode));
+    ORDERS.filter((o) => o.caseCode && customerGroupOf(o.customer) === group).forEach((o) => codes.add(o.caseCode));
+    document.getElementById("codeList").innerHTML = Array.from(codes).sort()
+      .map((c) => `<option value="${escapeHtml(c)}"></option>`).join("");
+    document.getElementById("codeHint").textContent = codes.size
+      ? `これまでの${label}（${codes.size}件）は、入力欄をクリックすると候補に出ます。`
+      : `この客先の${label}はまだありません。入力すると新しい案件になります。`;
+  }
+
+  function openCase() {
+    const group = selectedGroup();
+    const code = document.getElementById("codeInput").value.trim();
+    if (!code) return toast(`${caseCodeLabel(group)}を入力してください。`);
+    let url = caseDetailUrl(group, code);
+    if (group === CASE_OTHER_GROUP) {
+      const name = document.getElementById("otherName").value.trim();
+      if (!name) return toast("客先名を入力してください。");
+      url += `&name=${encodeURIComponent(name)}`;
+    }
+    location.href = url;
+  }
+
+  // 品番が登録されている、終わっていない取引
+  function renderOpenCases() {
+    const list = ORDERS.filter((o) => o.caseCode && !isOrderClosed(o.status))
+      .sort((a, b) => (a.dueDate || "9999").localeCompare(b.dueDate || "9999"));
+    const area = document.getElementById("openCases");
+    if (!list.length) {
+      area.innerHTML = `<div class="doc-empty">品番が登録された進行中の案件はありません。</div>`;
+      return;
+    }
+    area.innerHTML = `
+      <div class="table-wrap">
+        <table class="data-table case-table">
+          <thead><tr><th>客先</th><th>品番</th><th>品名</th><th>納期</th><th>ステータス</th><th></th></tr></thead>
+          <tbody>
+            ${list.map((o) => {
+              const group = customerGroupOf(o.customer);
+              const st = orderStatusInfo(o.status);
+              return `
+                <tr class="case-row" data-href="${escapeHtml(caseDetailUrl(group, o.caseCode))}">
+                  <td>${escapeHtml(o.customer)}</td>
+                  <td class="case-code"><a href="${escapeHtml(caseDetailUrl(group, o.caseCode))}">${escapeHtml(o.caseCode)}</a></td>
+                  <td class="case-names">${escapeHtml(o.productName || "")}</td>
+                  <td>${escapeHtml(formatDueDate(o.dueDate))}</td>
+                  <td><span class="status-pill ${st.cls}">${escapeHtml(o.status)}</span></td>
+                  <td><a class="btn btn-secondary btn-sm" href="${escapeHtml(caseDetailUrl(group, o.caseCode))}">開く ›</a></td>
+                </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>`;
+    area.querySelectorAll("tr[data-href]").forEach((tr) =>
+      tr.addEventListener("click", (ev) => { if (!ev.target.closest("a")) location.href = tr.dataset.href; }));
+  }
+
+  document.getElementById("customerChoices").addEventListener("change", syncCustomer);
+  document.getElementById("openBtn").addEventListener("click", openCase);
+  document.getElementById("codeInput").addEventListener("keydown", (ev) => { if (ev.key === "Enter") openCase(); });
+
+  (async () => {
+    buildCustomerChoices();
+    syncCustomer();
+    const ok = await initPage();
+    if (!ok) return;
+    try { ITEMS = await fetchCaseItems(); } catch (err) { console.warn("明細を取得できませんでした", err); }
+    try { ORDERS = await fetchOrders(); } catch (err) { console.warn("取引を取得できませんでした", err); }
+    syncCustomer();
+    renderOpenCases();
+  })();
+</script>
+
+</body>
+</html>

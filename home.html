@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ホーム | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20261011a">
 </head>
 <body>
 
@@ -29,22 +29,26 @@
   <p class="page-sub">行いたい作業を選択してください。</p>
 
   <div class="choice-grid cols-3">
-    <div class="choice-card" onclick="location.href='pdf-new.html'">
-      <div class="choice-icon">🗄️</div>
-      <h2>図面を保存する</h2>
-      <p>PDFの図面を、客先・図面作成日・品名とあわせて登録します。</p>
+    <div class="choice-card" onclick="location.href='case-new.html'">
+      <div class="choice-icon">🗂️</div>
+      <h2>案件を登録する・<br>書類を追加する</h2>
+      <p>客先と品番を選んで、注文書・見積書・図面の追加や、単価の入力をします。進行中の案件も、納品済みの案件もここから。</p>
     </div>
     <div class="choice-card" onclick="location.href='search-customer.html'">
       <div class="choice-icon">🔍</div>
-      <h2>過去の図面をさがす</h2>
+      <h2>案件・図面をさがす</h2>
       <p>客先・品番から、受注単価と外注単価を突き合わせた表と図面を見ます。</p>
     </div>
     <div class="choice-card" onclick="location.href='orders.html'">
       <div class="choice-icon">📋</div>
       <h2>受発注・請求書の管理</h2>
-      <p>取引ごとの納期・客先・ステータスを一覧で管理します。</p>
+      <p>案件ごとの納期・ステータス・請求を一覧で管理します。</p>
     </div>
   </div>
+
+  <p class="home-sub-link">
+    <a href="pdf-new.html" class="text-link">案件に関係なく、図面のPDFだけを保存する ›</a>
+  </p>
 </main>
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>

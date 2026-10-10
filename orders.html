@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>受発注・請求書の管理 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20261011a">
 </head>
 <body>
 
@@ -98,9 +98,16 @@
         <input type="text" id="orderCustomerManual" class="manual-input" placeholder="客先名を入力してください" autocomplete="off">
       </div>
 
-      <div class="field">
-        <label for="orderProduct">品名</label>
-        <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
+      <div class="form-grid modal-form-grid">
+        <div class="field">
+          <label for="orderProduct">品名</label>
+          <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="orderCaseCode">品番（DIDは注文番号）</label>
+          <input type="text" id="orderCaseCode" placeholder="例：CAM-1581" autocomplete="off">
+          <div class="field-note">入れると、案件のページ（書類・突き合わせ表）とつながります。</div>
+        </div>
       </div>
 
       <div class="form-grid modal-form-grid">
@@ -165,7 +172,7 @@
       </div>
 
       <div class="docs-drawing-bar">
-        <span>図面は「図面を保存する」で保存したものを紐づけます。</span>
+        <span>図面は上で「図面」を選んで追加するか、保存済みの図面を紐づけます。</span>
         <button type="button" class="btn btn-secondary btn-sm" id="linkDrawingBtn">＋ 保存済みの図面から紐づける</button>
       </div>
 
@@ -226,10 +233,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js"></script>
-<script src="js/common.js"></script>
-<script src="js/pdf-store.js"></script>
-<script src="js/order-store.js"></script>
+<script src="js/firebase-config.js?v=20261011a"></script>
+<script src="js/common.js?v=20261011a"></script>
+<script src="js/pdf-store.js?v=20261011a"></script>
+<script src="js/case-store.js?v=20261011a"></script>
+<script src="js/order-store.js?v=20261011a"></script>
 <script>
   let orders = [];
   let orderFiles = []; // 全取引の書類(一覧用データのみ)
@@ -347,6 +355,7 @@
                 <th>受注拠点</th>
                 <th>客先名</th>
                 <th>品名</th>
+                <th>品番</th>
                 <th class="num">金額（税抜）</th>
                 <th>見積番号</th>
                 <th>ステータス</th>
@@ -367,6 +376,9 @@
                     <td>${escapeHtml(o.branch)}</td>
                     <td class="order-customer">${escapeHtml(o.customer)}</td>
                     <td class="order-product">${escapeHtml(o.productName || "")}</td>
+                    <td>${o.caseCode
+                      ? `<a class="text-link" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}" title="案件のページ（書類・突き合わせ表）を開く">${escapeHtml(o.caseCode)} ›</a>`
+                      : `<span class="text-muted">—</span>`}</td>
                     <td class="num">${formatAmount(o.amount)}</td>
                     <td>${escapeHtml(o.quoteNo || "")}</td>
                     <td>
@@ -416,7 +428,13 @@
 
   // 一覧の「📎 書類（n）」に出す件数 = 保存した書類 + 紐づけた図面
   function docCount(order) {
-    return orderFiles.filter((f) => f.orderId === order.id).length + (order.drawingIds || []).length;
+    return filesOfOrder(order).length + (order.drawingIds || []).length;
+  }
+
+  // この取引の書類 = 取引に追加した書類 ＋ 案件のページで追加した書類(品番があるとき)
+  function filesOfOrder(order) {
+    const key = orderCaseKey(order);
+    return orderFiles.filter((f) => f.orderId === order.id || (key && f.orderId === key));
   }
 
   /* ---------- ステータスの切り替え ---------- */
@@ -568,6 +586,7 @@
     setRadio("orderStatus", order ? order.status : ORDER_STATUSES[0].value);
     renderCustomerSelect(order ? order.customer : "");
     document.getElementById("orderProduct").value = order ? order.productName || "" : "";
+    document.getElementById("orderCaseCode").value = order ? order.caseCode || "" : "";
     document.getElementById("orderAmount").value =
       order && typeof order.amount === "number" ? order.amount.toLocaleString("ja-JP") : "";
     document.getElementById("orderQuoteNo").value = order ? order.quoteNo || "" : "";
@@ -589,6 +608,7 @@
       branch: branch ? branch.value : "",
       customer: readCustomer(),
       productName: document.getElementById("orderProduct").value.trim(),
+      caseCode: document.getElementById("orderCaseCode").value.trim(),
       amount: parseAmount(document.getElementById("orderAmount").value),
       quoteNo: document.getElementById("orderQuoteNo").value.trim(),
       invoiceDate: document.getElementById("orderInvoiceDate").value,
@@ -741,8 +761,7 @@
         : { key: "drawing:" + id, icon: "⚠️", name: "（削除された図面）", meta: "元の図面が削除されています", removeLabel: "紐づけを外す", missing: true });
     });
 
-    orderFiles
-      .filter((f) => f.orderId === order.id)
+    filesOfOrder(order)
       .sort((a, b) => (a.createdAtText || "").localeCompare(b.createdAtText || ""))
       .forEach((f) => {
         (groups[f.docType] || groups["その他"]).push({

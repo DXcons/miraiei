@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>単価の突き合わせ | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261010d">
+<title>案件 | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css?v=20261011a">
 </head>
 <body>
 
@@ -26,12 +26,38 @@
 
 <main class="page page-wide case-page">
   <div class="breadcrumb">
-    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の図面をさがす</a> ＞
+    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">案件・図面をさがす</a> ＞
     <a id="crumbCustomer" href="#"></a> ＞ <span id="crumbCode"></span>
   </div>
-  <h1 class="page-title" id="pageTitle">単価の突き合わせ</h1>
-  <p class="page-sub">注文書の受注単価と、御見積書の外注単価を図面番号で突き合わせています。<span class="badge badge-check">要確認</span> の行は、行をクリックすると理由が見られます。</p>
+  <h1 class="page-title" id="pageTitle">案件</h1>
+  <p class="page-sub">この案件の納期・ステータス、書類、受注単価と外注単価の突き合わせ表を1か所で管理します。</p>
 
+  <!-- 1. 案件の情報(受発注・請求書の管理と同じデータ) -->
+  <div class="card" id="infoArea"></div>
+
+  <!-- 2. 書類 -->
+  <div class="card">
+    <div class="section-head">
+      <h2 class="section-title">📎 書類</h2>
+      <span class="field-note">届いた書類から順に追加していけます。</span>
+    </div>
+    <div class="docs-upload">
+      <div class="chip-group" id="docTypeGroup"></div>
+      <div class="dropzone docs-dropzone" id="docsDropzone">
+        <div class="dropzone-main">ここにファイルをドラッグ＆ドロップ</div>
+        <div class="dropzone-sub">または</div>
+        <label class="btn btn-secondary">
+          ファイルを選ぶ
+          <input type="file" id="docsFileInput" multiple hidden>
+        </label>
+        <div class="dropzone-note">上で選んだ種類として保存します。PDF・Excel・写真など、1ファイル20MBまで。</div>
+      </div>
+      <div id="docsUploadStatus" class="save-status"></div>
+    </div>
+    <div id="docsList"></div>
+  </div>
+
+  <!-- 3. 突き合わせ表 -->
   <div class="card case-summary" id="summaryArea"></div>
 
   <div class="card">
@@ -41,7 +67,8 @@
           <small>（SHAFTは「シャフト」でもヒットします）</small></label>
         <input type="text" id="keyword" placeholder="例：スタンド / シャフト / 10202">
       </div>
-      <button type="button" class="btn btn-secondary" id="docBtn" hidden>📄 元の注文書・御見積書を見る</button>
+      <button type="button" class="btn btn-primary" id="addRowBtn">＋ 行を追加</button>
+      <a class="btn btn-secondary" id="importLink" href="case-import.html">📥 まとめて取り込む</a>
     </div>
   </div>
 
@@ -50,7 +77,7 @@
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
 
-<!-- ===== 修正モーダル ===== -->
+<!-- ===== 行の追加・修正 ===== -->
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
     <div class="modal-head">
@@ -61,16 +88,36 @@
       <div id="editNoteArea"></div>
       <div class="form-grid modal-form-grid">
         <div class="field">
+          <label for="editDrawingNo">図面番号 <span class="req">必須</span></label>
+          <input type="text" id="editDrawingNo" placeholder="例：10202 / 35-115061-BB">
+        </div>
+        <div class="field">
           <label for="editName">商品名</label>
           <input type="text" id="editName">
+        </div>
+        <div class="field">
+          <label for="editMaterial">材質</label>
+          <input type="text" id="editMaterial" placeholder="例：SS400">
+        </div>
+        <div class="field">
+          <label for="editQty">数量</label>
+          <input type="number" id="editQty" min="0" step="1">
+        </div>
+        <div class="field">
+          <label for="editOrderPrice">受注単価（円）</label>
+          <input type="number" id="editOrderPrice" min="0" step="1">
         </div>
         <div class="field">
           <label for="editDate">受注年月日</label>
           <input type="date" id="editDate">
         </div>
         <div class="field">
-          <label for="editOrderPrice">受注単価（円）</label>
-          <input type="number" id="editOrderPrice" min="0" step="1">
+          <label for="editSlip">客先の注文書の番号</label>
+          <input type="text" id="editSlip" placeholder="例：13562-1">
+        </div>
+        <div class="field">
+          <label for="editDrawingFile">図面</label>
+          <select id="editDrawingFile"></select>
         </div>
         <div class="field">
           <label for="editOutPrice">外注単価（円）</label>
@@ -80,16 +127,12 @@
           <label for="editOutsourcer">外注先</label>
           <input type="text" id="editOutsourcer">
         </div>
-        <div class="field">
-          <label for="editQty">数量</label>
-          <input type="number" id="editQty" min="0" step="1">
-        </div>
       </div>
       <div class="field">
         <label>外注の内訳（材料・熱処理・加工など、外注先が複数あるとき）</label>
         <div id="costEditArea"></div>
         <button type="button" class="btn btn-ghost btn-sm" id="addCostBtn" style="margin-top:8px;">＋ 内訳の行を追加</button>
-        <div class="field-note">内訳があると、外注単価は内訳の単価（1個あたり）の合計になります。</div>
+        <div class="field-note">内訳があると、外注単価は内訳の単価（1個あたり）の合計になります。材料費・運賃も含めます。</div>
       </div>
       <div class="field">
         <label for="editNote">メモ</label>
@@ -98,8 +141,74 @@
       <label class="check-label"><input type="checkbox" id="editCheck"> 要確認の印を付ける</label>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-ghost" onclick="closeEdit()">キャンセル</button>
-      <button type="button" class="btn btn-primary" id="editSaveBtn">保存する</button>
+      <span><button type="button" class="btn btn-ghost btn-danger" id="editDeleteBtn">この行を削除</button></span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeEdit()">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="editSaveBtn">保存する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 納期・ステータスの登録・編集(受発注・請求書の管理と同じ項目) ===== -->
+<div class="modal-overlay" id="orderModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="orderModalTitle">納期・ステータスの登録</h3>
+      <button type="button" class="modal-close" onclick="closeOrderModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" id="orderCustomerField">
+        <label for="orderCustomer">客先名 <span class="req">必須</span></label>
+        <input type="text" id="orderCustomer" autocomplete="off">
+      </div>
+      <div class="form-grid modal-form-grid">
+        <div class="field">
+          <label for="orderDue">納期</label>
+          <div class="due-row">
+            <input type="date" id="orderDue">
+            <label class="check-label"><input type="checkbox" id="orderDueUnknown"> 未定</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>受注拠点 <span class="req">必須</span></label>
+          <div class="chip-group" id="orderBranchGroup"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="orderProduct">品名（受発注の一覧に出る名前）</label>
+        <input type="text" id="orderProduct" autocomplete="off">
+      </div>
+      <div class="form-grid modal-form-grid">
+        <div class="field">
+          <label for="orderAmount">金額（税抜・円）</label>
+          <input type="text" id="orderAmount" inputmode="numeric" autocomplete="off">
+          <button type="button" class="btn btn-ghost btn-sm" id="orderAmountFromTable" style="margin-top:6px;">表の受注金額を入れる</button>
+        </div>
+        <div class="field">
+          <label for="orderQuoteNo">見積番号</label>
+          <input type="text" id="orderQuoteNo" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="orderInvoiceDate">請求日</label>
+          <input type="date" id="orderInvoiceDate">
+        </div>
+      </div>
+      <div class="field">
+        <label>ステータス</label>
+        <div class="chip-group" id="orderStatusGroup"></div>
+      </div>
+      <div class="field">
+        <label for="orderNote">備考</label>
+        <textarea id="orderNote" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span></span>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeOrderModal()">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="orderSaveBtn">保存する</button>
+      </div>
     </div>
   </div>
 </div>
@@ -107,53 +216,355 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261010d"></script>
-<script src="js/common.js?v=20261010d"></script>
-<script src="js/pdf-store.js?v=20261010d"></script>
-<script src="js/case-store.js?v=20261010d"></script>
+<script src="js/firebase-config.js?v=20261011a"></script>
+<script src="js/common.js?v=20261011a"></script>
+<script src="js/pdf-store.js?v=20261011a"></script>
+<script src="js/case-store.js?v=20261011a"></script>
+<script src="js/order-store.js?v=20261011a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
-  const code = params.get("code") || "";
+  const code = (params.get("code") || "").trim();
+  const caseKey = caseKeyOf(groupKey, code);
+  const codeLabel = caseCodeLabel(groupKey);
   let ROWS = [];
-  let editingId = null;
+  let ORDER = null;      // この案件の取引(受発注・請求書の管理)。未登録ならnull
+  let FILES = [];        // この案件の書類(orderFiles)
+  let editingId = null;  // nullで新しい行の追加
   let editingCosts = [];
   const openCosts = new Set(); // 内訳を開いている行
-  const codeLabel = caseCodeLabel(groupKey);
+  let busy = false;
 
   const listHref = `case-list.html?customer=${encodeURIComponent(groupKey)}`;
   document.getElementById("crumbCustomer").textContent = groupKey;
   document.getElementById("crumbCustomer").href = listHref;
   document.getElementById("crumbCode").textContent = code;
-  document.getElementById("pageTitle").textContent = `${code} の単価の突き合わせ`;
-  document.title = `${code} 単価の突き合わせ | 未来栄 図面管理システム`;
+  document.getElementById("pageTitle").textContent = `${groupKey}　${codeLabel} ${code}`;
+  document.title = `${code}（${groupKey}） | 未来栄 図面管理システム`;
   document.getElementById("keyword").value = params.get("q") || "";
+  document.getElementById("importLink").href = `case-import.html?customer=${encodeURIComponent(groupKey)}`;
 
-  // 注文書の伝票番号 → 図面番号の順(注文書に並んでいた順番)
+  // 客先名。取引があればその名前、「その他」で新しく作るときはURLの name、ほかは客先グループ名
+  function caseCustomerName() {
+    if (ORDER && ORDER.customer) return ORDER.customer;
+    if (ROWS[0] && ROWS[0].customer) return ROWS[0].customer;
+    return params.get("name") || groupKey;
+  }
+
+  // 注文書の番号 → 図面番号の順(注文書に並んでいた順番)
   function sortRows(rows) {
     return rows.sort((a, b) =>
-      String(a.orderSlipNo).localeCompare(String(b.orderSlipNo), "ja", { numeric: true }) ||
+      String(a.orderSlipNo || "").localeCompare(String(b.orderSlipNo || ""), "ja", { numeric: true }) ||
       String(a.drawingNo).localeCompare(String(b.drawingNo), "ja", { numeric: true }));
   }
+
+  /* ==========================================================
+     1. 案件の情報
+     ========================================================== */
+
+  function renderInfo() {
+    const area = document.getElementById("infoArea");
+    if (!ORDER) {
+      area.innerHTML = `
+        <div class="section-head">
+          <h2 class="section-title">📋 納期・ステータス</h2>
+        </div>
+        <div class="info-empty">
+          まだ登録されていません。登録すると「受発注・請求書の管理」の一覧にも出ます。
+          <button type="button" class="btn btn-primary btn-sm" id="orderOpenBtn">納期・ステータスを登録する</button>
+        </div>`;
+    } else {
+      const st = orderStatusInfo(ORDER.status);
+      area.innerHTML = `
+        <div class="section-head">
+          <h2 class="section-title">📋 納期・ステータス</h2>
+          <button type="button" class="btn btn-ghost btn-sm" id="orderOpenBtn">編集</button>
+        </div>
+        <div class="info-grid">
+          <div><span>ステータス</span>
+            <select id="statusSelect" class="status-select ${st.cls}">
+              ${ORDER_STATUSES.map((s) => `<option value="${s.value}" ${s.value === ORDER.status ? "selected" : ""}>${s.value}</option>`).join("")}
+            </select></div>
+          <div><span>納期</span><b>${escapeHtml(formatDueDate(ORDER.dueDate))}</b></div>
+          <div><span>受注拠点</span><b>${escapeHtml(ORDER.branch || "—")}</b></div>
+          <div><span>金額（税抜）</span><b>${formatAmount(ORDER.amount)}</b></div>
+          <div><span>見積番号</span><b>${escapeHtml(ORDER.quoteNo || "—")}</b></div>
+          <div><span>請求日</span><b>${escapeHtml(formatOrderDate(ORDER.invoiceDate))}</b></div>
+        </div>
+        ${ORDER.note ? `<div class="field-note" style="margin-top:10px;">備考：${escapeHtml(ORDER.note)}</div>` : ""}`;
+      document.getElementById("statusSelect").addEventListener("change", (ev) => changeStatus(ev.target.value));
+    }
+    document.getElementById("orderOpenBtn").addEventListener("click", openOrderModal);
+  }
+
+  async function changeStatus(status) {
+    if (!ORDER || busy) return;
+    busy = true;
+    try {
+      const fields = { status };
+      if (status === "請求済み" && !ORDER.invoiceDate) fields.invoiceDate = todayText();
+      await updateOrder(ORDER.id, fields);
+      Object.assign(ORDER, fields);
+      renderInfo();
+      toast(`ステータスを「${status}」にしました`);
+    } catch (err) {
+      console.error("ステータスの変更に失敗しました", err);
+      toast("ステータスの変更に失敗しました。");
+    } finally {
+      busy = false;
+    }
+  }
+
+  function todayText() {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+
+  function setRadio(name, value) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach((el) => (el.checked = el.value === value));
+  }
+
+  function openOrderModal() {
+    const o = ORDER;
+    document.getElementById("orderModalTitle").textContent = o ? "納期・ステータスの編集" : "納期・ステータスの登録";
+    // 客先名は「その他」のときだけ入力してもらう(ほかは客先グループ名で決まる)
+    document.getElementById("orderCustomerField").style.display = groupKey === CASE_OTHER_GROUP ? "" : "none";
+    document.getElementById("orderCustomer").value = caseCustomerName() === CASE_OTHER_GROUP ? "" : caseCustomerName();
+    document.getElementById("orderDue").value = o ? o.dueDate || "" : "";
+    document.getElementById("orderDueUnknown").checked = !!o && !o.dueDate;
+    syncDueUnknown();
+    setRadio("orderBranch", o ? o.branch : "");
+    setRadio("orderStatus", o ? o.status : "製作中");
+    document.getElementById("orderProduct").value = o ? o.productName || "" : defaultProductName();
+    document.getElementById("orderAmount").value = o && typeof o.amount === "number" ? o.amount.toLocaleString("ja-JP") : "";
+    document.getElementById("orderQuoteNo").value = o ? o.quoteNo || "" : "";
+    document.getElementById("orderInvoiceDate").value = o ? o.invoiceDate || "" : "";
+    document.getElementById("orderNote").value = o ? o.note || "" : "";
+    document.getElementById("orderModal").classList.add("open");
+  }
+
+  function closeOrderModal() {
+    document.getElementById("orderModal").classList.remove("open");
+  }
+
+  // 一覧に出す品名の初期値：「コモンベース ほか78点」のように表の品名から作る
+  function defaultProductName() {
+    const names = ROWS.map((r) => r.productName).filter(Boolean);
+    if (!names.length) return code;
+    return names.length > 1 ? `${names[0]} ほか${names.length - 1}点` : names[0];
+  }
+
+  function syncDueUnknown() {
+    const unknown = document.getElementById("orderDueUnknown").checked;
+    const due = document.getElementById("orderDue");
+    due.disabled = unknown;
+    if (unknown) due.value = "";
+  }
+
+  async function saveOrderInfo() {
+    if (busy) return;
+    const branch = document.querySelector('input[name="orderBranch"]:checked');
+    const status = document.querySelector('input[name="orderStatus"]:checked');
+    const customer = groupKey === CASE_OTHER_GROUP
+      ? document.getElementById("orderCustomer").value.trim()
+      : caseCustomerName();
+    const fields = {
+      customer,
+      caseCode: code,
+      dueDate: document.getElementById("orderDueUnknown").checked ? "" : document.getElementById("orderDue").value,
+      branch: branch ? branch.value : "",
+      productName: document.getElementById("orderProduct").value.trim(),
+      amount: parseAmount(document.getElementById("orderAmount").value),
+      quoteNo: document.getElementById("orderQuoteNo").value.trim(),
+      invoiceDate: document.getElementById("orderInvoiceDate").value,
+      status: status ? status.value : "製作中",
+      note: document.getElementById("orderNote").value.trim(),
+    };
+    if (!fields.customer) return toast("客先名を入力してください。");
+    if (!fields.dueDate && !document.getElementById("orderDueUnknown").checked) return toast("納期を入力してください（決まっていない場合は「未定」にチェック）。");
+    if (!fields.branch) return toast("受注拠点を選んでください。");
+    if (Number.isNaN(fields.amount)) return toast("金額は数字で入力してください（例：1,250,000）。");
+    busy = true;
+    document.getElementById("orderSaveBtn").disabled = true;
+    try {
+      if (ORDER) {
+        await updateOrder(ORDER.id, fields);
+        Object.assign(ORDER, fields);
+      } else {
+        const id = await addOrder(fields);
+        ORDER = { id, ...fields };
+      }
+      closeOrderModal();
+      renderInfo();
+      toast("保存しました（受発注・請求書の管理にも反映されます）");
+    } catch (err) {
+      console.error("保存に失敗しました", err);
+      toast("保存に失敗しました：" + (err.message || err));
+    } finally {
+      busy = false;
+      document.getElementById("orderSaveBtn").disabled = false;
+    }
+  }
+
+  /* ==========================================================
+     2. 書類
+     ========================================================== */
+
+  function buildDocTypeChoices() {
+    document.getElementById("docTypeGroup").innerHTML = ORDER_UPLOAD_TYPES.map(
+      (t, i) => `<label class="chip"><input type="radio" name="docType" value="${t}" ${i === 0 ? "checked" : ""}><span>${t}</span></label>`
+    ).join("");
+  }
+
+  function caseFiles() {
+    return FILES.filter((f) => f.orderId === caseKey || (ORDER && f.orderId === ORDER.id));
+  }
+
+  function renderDocs() {
+    const files = caseFiles();
+    const importedDocs = Array.from(new Map(ROWS.filter((r) => r.docId).map((r) => [r.docId, r])).values());
+    const rowDrawings = ROWS.filter((r) => r.drawingId).length;
+    const groups = {};
+    ORDER_DOC_TYPES.forEach((t) => (groups[t] = []));
+    files.sort((a, b) => (a.createdAtText || "").localeCompare(b.createdAtText || ""))
+      .forEach((f) => (groups[f.docType] || groups["その他"]).push(f));
+
+    const used = ORDER_DOC_TYPES.filter((t) => groups[t].length > 0);
+    const html = [];
+    if (importedDocs.length) {
+      html.push(`
+        <div class="doc-group">
+          <div class="doc-group-title">取り込んだ元の書類 <span>${importedDocs.length}</span></div>
+          ${importedDocs.map((r) => `
+            <div class="doc-item">
+              <div class="doc-icon">📄</div>
+              <div class="doc-info">
+                <button type="button" class="doc-name" data-imported="${escapeHtml(r.docId)}">${escapeHtml(r.sourceFile || "注文書・見積書など")}</button>
+                <div class="doc-meta">まとめて取り込んだときの注文書・見積書など（図面以外のページ）</div>
+              </div>
+              <div class="doc-actions"><button type="button" class="btn btn-secondary btn-sm" data-imported="${escapeHtml(r.docId)}">表示</button></div>
+            </div>`).join("")}
+        </div>`);
+    }
+    used.forEach((t) => {
+      html.push(`
+        <div class="doc-group">
+          <div class="doc-group-title">${t} <span>${groups[t].length}</span></div>
+          ${groups[t].map((f) => `
+            <div class="doc-item">
+              <div class="doc-icon">${fileIcon(f.mimeType, f.fileName)}</div>
+              <div class="doc-info">
+                <button type="button" class="doc-name" data-file="${f.id}">${escapeHtml(f.fileName)}</button>
+                <div class="doc-meta">${formatFileSize(f.fileSize)}・${escapeHtml(f.createdAtText || "")} 登録</div>
+              </div>
+              <div class="doc-actions">
+                <button type="button" class="btn btn-secondary btn-sm" data-file="${f.id}">表示</button>
+                <button type="button" class="btn btn-ghost btn-sm btn-danger" data-file-del="${f.id}">削除</button>
+              </div>
+            </div>`).join("")}
+        </div>`);
+    });
+    if (rowDrawings) {
+      html.push(`<div class="field-note" style="margin-top:8px;">このほか、表の各行に図面が${rowDrawings}枚あります（行の「図面表示」から見られます）。</div>`);
+    }
+    if (!html.length) {
+      html.push(`<div class="doc-empty">まだ書類はありません。上で種類を選んで、ファイルを追加してください。</div>`);
+    }
+    document.getElementById("docsList").innerHTML = html.join("");
+  }
+
+  async function uploadDocs(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length || busy) return;
+    const docType = document.querySelector('input[name="docType"]:checked').value;
+    const status = document.getElementById("docsUploadStatus");
+    busy = true;
+    let ok = 0;
+    const failed = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const saved = await saveOrderFile(caseKey, docType, file, (done, total) => {
+          status.textContent = `${i + 1} / ${files.length} 件目「${file.name}」を保存中… ${Math.round((done / total) * 100)}%`;
+        });
+        FILES.push(saved);
+        ok++;
+        renderDocs();
+      } catch (err) {
+        console.error("書類の保存に失敗しました", err);
+        failed.push(`${file.name}（${err.message || "不明なエラー"}）`);
+      }
+    }
+    busy = false;
+    status.textContent = failed.length === 0
+      ? `✅ ${ok}件を「${docType}」として保存しました。`
+      : `${ok}件を保存しました。保存できなかったファイル：${failed.join(" / ")}`;
+  }
+
+  function viewFile(id) {
+    const f = FILES.find((x) => x.id === id);
+    if (!f) return;
+    if (fileViewKind(f.mimeType, f.fileName) === "download") {
+      // Excelなどは画面で表示できないのでダウンロードする
+      loadOrderFileBlob(id, f.mimeType).then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = f.fileName;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      });
+      return;
+    }
+    openCaseViewer({
+      title: f.fileName,
+      metaHtml: `<span>${escapeHtml(f.docType)}</span><span>${escapeHtml(f.createdAtText || "")} 登録</span>`,
+      fileName: f.fileName,
+      loadBlob: () => loadOrderFileBlob(id, f.mimeType),
+    });
+  }
+
+  async function removeFile(id) {
+    const f = FILES.find((x) => x.id === id);
+    if (!f || !confirm(`「${f.fileName}」を削除しますか？\nこの操作は元に戻せません。`)) return;
+    try {
+      await deleteOrderFile(id);
+      FILES = FILES.filter((x) => x.id !== id);
+      renderDocs();
+      toast("削除しました");
+    } catch (err) {
+      console.error("削除に失敗しました", err);
+      toast("削除に失敗しました。");
+    }
+  }
+
+  /* ==========================================================
+     3. 突き合わせ表
+     ========================================================== */
 
   function renderSummary() {
     const s = summarizeCaseRows(code, ROWS);
     const rate = marginRate(s.orderTotal, s.outsourceTotal);
+    const missing = ROWS.filter((r) => r.orderUnitPrice === null || r.orderUnitPrice === undefined ||
+      r.outsourceUnitPrice === null || r.outsourceUnitPrice === undefined).length;
     document.getElementById("summaryArea").innerHTML = `
-      <div class="case-summary-item"><span>点数</span><b>${s.count}点</b></div>
+      <div class="case-summary-item"><span>点数</span><b>${s.count}点</b>${missing ? `<small class="missing-note">単価が未入力の行 ${missing}点</small>` : ""}</div>
       <div class="case-summary-item"><span>受注金額（受注単価×数量）</span><b>${formatYen(s.orderTotal)}</b></div>
       <div class="case-summary-item"><span>外注金額（外注単価×数量）</span><b>${formatYen(s.outsourceTotal)}</b></div>
       <div class="case-summary-item"><span>粗利</span><b>${formatYen(s.orderTotal - s.outsourceTotal)}${rate === null ? "" : `（${rate.toFixed(1)}%）`}</b></div>`;
   }
 
+  const priceCell = (v) => (v === null || v === undefined || v === "") ? `<span class="missing">未入力</span>` : formatYen(v);
+
   function render() {
+    renderSummary();
     const area = document.getElementById("resultArea");
     if (ROWS.length === 0) {
       area.innerHTML = `
         <div class="card empty-state">
-          <div class="empty-icon">🔍</div>
-          この品番のデータが見つかりませんでした。
-          <div style="margin-top:14px;"><a href="${listHref}" class="text-link">品番の一覧へ戻る ›</a></div>
+          <div class="empty-icon">📝</div>
+          表の行はまだありません。<br>
+          注文書や見積書が届いたら「＋ 行を追加」で図面番号と単価を入れてください。<br>
+          点数が多いときは、書類をClaude Codeに読み取ってもらい「📥 まとめて取り込む」で入れられます。
         </div>`;
       return;
     }
@@ -193,12 +604,12 @@
                     ${r.needsCheck ? `<span class="badge badge-check" title="${escapeHtml(r.note)}">要確認</span>` : ""}
                   </td>
                   <td>${escapeHtml(r.drawingNo)}</td>
-                  <td class="num">${formatYen(r.orderUnitPrice)}</td>
-                  <td class="num">${formatYen(r.outsourceUnitPrice)}${caseCostLines(r).length
+                  <td class="num">${priceCell(r.orderUnitPrice)}</td>
+                  <td class="num">${priceCell(r.outsourceUnitPrice)}${caseCostLines(r).length
                     ? `<button type="button" class="cost-toggle" data-cost="${escapeHtml(r.id)}">内訳${openCosts.has(r.id) ? "▴" : "▾"}</button>` : ""}</td>
                   <td>${escapeHtml(outsourcerLabel(r) || "-")}</td>
                   <td>${escapeHtml(formatCaseDate(r.orderDate))}</td>
-                  <td>${r.drawingId
+                  <td>${r.drawingId || r.drawingFileId
                     ? `<button type="button" class="btn btn-secondary btn-sm" data-view="${escapeHtml(r.id)}">図面表示</button>`
                     : `<span class="text-muted">なし</span>`}</td>
                   <td><button type="button" class="btn btn-ghost btn-sm" data-edit="${escapeHtml(r.id)}">修正</button></td>
@@ -260,6 +671,10 @@
   function viewDrawing(id) {
     const r = ROWS.find((x) => x.id === id);
     if (!r) return;
+    if (!r.drawingId && r.drawingFileId) {
+      viewFile(r.drawingFileId);
+      return;
+    }
     openCaseViewer({
       title: `${r.productName}（図面番号 ${r.drawingNo}）`,
       metaHtml: `
@@ -273,24 +688,46 @@
     });
   }
 
-  /* ---------- 修正 ---------- */
+  /* ---------- 行の追加・修正 ---------- */
+
+  // 図面の選択肢：この案件の書類のうち「図面」として追加したもの
+  function fillDrawingSelect(r) {
+    const sel = document.getElementById("editDrawingFile");
+    const drawingsFiles = caseFiles().filter((f) => f.docType === "図面");
+    const opts = [];
+    if (r && r.drawingId) opts.push(`<option value="__keep__">取り込んだ図面（そのまま）</option>`);
+    opts.push(`<option value="">なし</option>`);
+    drawingsFiles.forEach((f) => opts.push(`<option value="${f.id}">${escapeHtml(f.fileName)}</option>`));
+    sel.innerHTML = opts.join("");
+    sel.value = r && r.drawingId ? "__keep__" : (r && r.drawingFileId) || "";
+    document.getElementById("editDrawingFile").title = drawingsFiles.length
+      ? "" : "図面は、上の「書類」で種類「図面」を選んで追加すると、ここで選べるようになります";
+  }
 
   function openEdit(id) {
-    const r = ROWS.find((x) => x.id === id);
-    if (!r) return;
-    editingId = id;
-    document.getElementById("editTitle").textContent = `${r.productName}（図面番号 ${r.drawingNo}）の修正`;
-    document.getElementById("editNoteArea").innerHTML = r.note
+    const r = id ? ROWS.find((x) => x.id === id) : null;
+    editingId = r ? r.id : null;
+    document.getElementById("editTitle").textContent = r
+      ? `${r.productName || r.drawingNo}（図面番号 ${r.drawingNo}）の修正`
+      : "行を追加";
+    document.getElementById("editNoteArea").innerHTML = r && r.note
       ? `<div class="case-note">📝 ${escapeHtml(r.note)}</div>` : "";
-    document.getElementById("editName").value = r.productName || "";
-    document.getElementById("editDate").value = r.orderDate || "";
-    document.getElementById("editOrderPrice").value = r.orderUnitPrice ?? "";
-    document.getElementById("editOutPrice").value = r.outsourceUnitPrice ?? "";
-    document.getElementById("editOutsourcer").value = r.outsourcer || "";
-    document.getElementById("editQty").value = r.qty ?? "";
-    document.getElementById("editNote").value = r.note || "";
-    document.getElementById("editCheck").checked = !!r.needsCheck;
-    editingCosts = caseCostLines(r).map((c) => ({ ...c }));
+    // 図面番号は行を見分ける番号なので、追加のときだけ入力できる
+    document.getElementById("editDrawingNo").value = r ? r.drawingNo : "";
+    document.getElementById("editDrawingNo").readOnly = !!r;
+    document.getElementById("editName").value = r ? r.productName || "" : "";
+    document.getElementById("editMaterial").value = r ? r.material || "" : "";
+    document.getElementById("editQty").value = r ? r.qty ?? "" : 1;
+    document.getElementById("editOrderPrice").value = r ? r.orderUnitPrice ?? "" : "";
+    document.getElementById("editDate").value = r ? r.orderDate || "" : (ROWS[0] && ROWS[0].orderDate) || "";
+    document.getElementById("editSlip").value = r ? r.orderSlipNo || "" : "";
+    document.getElementById("editOutPrice").value = r ? r.outsourceUnitPrice ?? "" : "";
+    document.getElementById("editOutsourcer").value = r ? r.outsourcer || "" : "";
+    document.getElementById("editNote").value = r ? r.note || "" : "";
+    document.getElementById("editCheck").checked = !!(r && r.needsCheck);
+    document.getElementById("editDeleteBtn").style.visibility = r ? "visible" : "hidden";
+    fillDrawingSelect(r);
+    editingCosts = r ? caseCostLines(r).map((c) => ({ ...c })) : [];
     renderCostEdit();
     document.getElementById("editModal").classList.add("open");
   }
@@ -360,14 +797,17 @@
   }
 
   async function saveEdit() {
-    if (!editingId) return;
+    if (busy) return;
     const numOrNull = (id) => {
       const v = document.getElementById(id).value.trim();
       return v === "" ? null : Number(v);
     };
+    const drawingChoice = document.getElementById("editDrawingFile").value;
     const fields = {
       productName: document.getElementById("editName").value.trim(),
+      material: document.getElementById("editMaterial").value.trim(),
       orderDate: document.getElementById("editDate").value,
+      orderSlipNo: document.getElementById("editSlip").value.trim(),
       orderUnitPrice: numOrNull("editOrderPrice"),
       outsourceUnitPrice: numOrNull("editOutPrice"),
       outsourcer: document.getElementById("editOutsourcer").value.trim(),
@@ -380,63 +820,157 @@
         .map((c) => ({ vendor: (c.vendor || "").trim(), process: (c.process || "").trim(), unitPrice: c.unitPrice ?? null,
           qty: Number(c.qty) || 0, quoteNo: c.quoteNo || "", ref: (c.ref || "").trim(), kind: c.kind || "" })),
     };
+    // 「取り込んだ図面（そのまま）」以外を選んだら、書類の図面に付け替える(「なし」なら外す)
+    if (drawingChoice !== "__keep__") {
+      fields.drawingFileId = drawingChoice;
+      fields.drawingId = "";
+    }
     if (fields.costs.length) {
       fields.outsourceUnitPrice = sumCostLines(fields.costs);
       fields.outsourcer = costVendors(fields.costs).join("、");
     }
+    fields.outsourceQty = fields.qty;
+
     const btn = document.getElementById("editSaveBtn");
+    busy = true;
     btn.disabled = true;
     try {
-      await updateCaseItem(editingId, fields);
-      Object.assign(ROWS.find((x) => x.id === editingId), fields);
+      if (editingId) {
+        await updateCaseItem(editingId, fields);
+        Object.assign(ROWS.find((x) => x.id === editingId), fields);
+        toast("修正を保存しました");
+      } else {
+        const drawingNo = document.getElementById("editDrawingNo").value.trim();
+        if (!drawingNo) throw new Error("図面番号を入力してください。");
+        const row = await addCaseItemManual({
+          ...fields,
+          customer: caseCustomerName(),
+          productCode: code,
+          drawingNo,
+          quoteNo: "",
+          quoteDate: "",
+        });
+        ROWS = sortRows([...ROWS, row]);
+        toast("行を追加しました");
+      }
       closeEdit();
-      renderSummary();
       render();
-      toast("修正を保存しました");
+      renderDocs();
     } catch (err) {
       console.error("保存に失敗しました", err);
-      toast("保存に失敗しました：" + (err.message || err));
+      toast("保存できませんでした：" + (err.message || err));
     } finally {
+      busy = false;
       btn.disabled = false;
     }
   }
 
+  async function deleteRow() {
+    if (!editingId || busy) return;
+    const r = ROWS.find((x) => x.id === editingId);
+    if (!confirm(`図面番号「${r.drawingNo}」の行を削除しますか？\n（書類や図面のファイルは消えません）`)) return;
+    busy = true;
+    try {
+      await deleteCaseItem(editingId);
+      ROWS = ROWS.filter((x) => x.id !== editingId);
+      closeEdit();
+      render();
+      renderDocs();
+      toast("行を削除しました");
+    } catch (err) {
+      console.error("削除に失敗しました", err);
+      toast("削除に失敗しました。");
+    } finally {
+      busy = false;
+    }
+  }
+
+  /* ==========================================================
+     イベント登録・初期化
+     ========================================================== */
+
   document.getElementById("editSaveBtn").addEventListener("click", saveEdit);
+  document.getElementById("editDeleteBtn").addEventListener("click", deleteRow);
   document.getElementById("editModal").addEventListener("click", (ev) => {
     if (ev.target.id === "editModal") closeEdit();
   });
+  document.getElementById("addRowBtn").addEventListener("click", () => openEdit(null));
   document.getElementById("keyword").addEventListener("input", render);
 
-  document.getElementById("docBtn").addEventListener("click", () => {
-    // 1つの品番が複数のPDFから取り込まれていることもあるので、最初に見つかったものを開く
-    const r = ROWS.find((x) => x.docId);
-    if (!r) return;
-    openCaseViewer({
-      title: "元の注文書・御見積書",
-      metaHtml: `<span>${escapeHtml(r.sourceFile || "")}</span>`,
-      fileName: `${r.sourceFile || "注文書・御見積書"}`.replace(/\.pdf$/i, "") + "_注文書・御見積書.pdf",
-      loadBlob: () => loadCaseDocBlob(r.docId),
-    });
+  document.getElementById("orderSaveBtn").addEventListener("click", saveOrderInfo);
+  document.getElementById("orderDueUnknown").addEventListener("change", syncDueUnknown);
+  document.getElementById("orderAmountFromTable").addEventListener("click", () => {
+    document.getElementById("orderAmount").value = summarizeCaseRows(code, ROWS).orderTotal.toLocaleString("ja-JP");
+  });
+  document.getElementById("orderAmount").addEventListener("blur", (ev) => {
+    const value = parseAmount(ev.target.value);
+    if (typeof value === "number" && !Number.isNaN(value)) ev.target.value = value.toLocaleString("ja-JP");
+  });
+
+  document.getElementById("docsFileInput").addEventListener("change", (ev) => {
+    uploadDocs(ev.target.files);
+    ev.target.value = "";
+  });
+  const docsDropzone = document.getElementById("docsDropzone");
+  ["dragenter", "dragover"].forEach((type) =>
+    docsDropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      docsDropzone.classList.add("dragging");
+    }));
+  ["dragleave", "drop"].forEach((type) =>
+    docsDropzone.addEventListener(type, (ev) => {
+      ev.preventDefault();
+      docsDropzone.classList.remove("dragging");
+    }));
+  docsDropzone.addEventListener("drop", (ev) => uploadDocs(ev.dataTransfer.files));
+  document.getElementById("docsList").addEventListener("click", (ev) => {
+    const view = ev.target.closest("[data-file]");
+    if (view) return viewFile(view.dataset.file);
+    const del = ev.target.closest("[data-file-del]");
+    if (del) return removeFile(del.dataset.fileDel);
+    const imported = ev.target.closest("[data-imported]");
+    if (imported) {
+      const r = ROWS.find((x) => x.docId === imported.dataset.imported);
+      openCaseViewer({
+        title: "取り込んだ元の書類",
+        metaHtml: `<span>${escapeHtml(r.sourceFile || "")}</span>`,
+        fileName: `${(r.sourceFile || "書類").replace(/\.pdf$/i, "")}_書類.pdf`,
+        loadBlob: () => loadCaseDocBlob(r.docId),
+      });
+    }
   });
 
   (async () => {
+    document.getElementById("orderBranchGroup").innerHTML = ORDER_BRANCHES.map(
+      (b) => `<label class="chip"><input type="radio" name="orderBranch" value="${b}"><span>${b}</span></label>`).join("");
+    document.getElementById("orderStatusGroup").innerHTML = ORDER_STATUSES.map(
+      (s) => `<label class="chip"><input type="radio" name="orderStatus" value="${s.value}"><span>${s.value}</span></label>`).join("");
+    buildDocTypeChoices();
     const ok = await initPage();
     if (!ok) return;
     try {
       const items = await fetchCaseItemsByGroup(groupKey);
       ROWS = sortRows(items.filter((d) => d.productCode === code));
-      document.getElementById("docBtn").hidden = !ROWS.some((r) => r.docId);
-      renderSummary();
-      render();
     } catch (err) {
       console.error("案件データの取得に失敗しました", err);
       document.getElementById("resultArea").innerHTML = `
-        <div class="card empty-state">
-          <div class="empty-icon">⚠️</div>
-          データを読み込めませんでした。<br>
-          Firestoreのセキュリティルールに <code>caseItems</code> の設定が入っているか確認してください。
-        </div>`;
+        <div class="card empty-state"><div class="empty-icon">⚠️</div>
+          表のデータを読み込めませんでした。<br>Firestoreのセキュリティルールに <code>caseItems</code> の設定が入っているか確認してください。</div>`;
     }
+    // 取引・書類は読めなくても表は出す
+    try {
+      ORDER = findCaseOrder(await fetchOrders(), groupKey, code);
+    } catch (err) {
+      console.warn("取引を取得できませんでした", err);
+    }
+    try {
+      FILES = await fetchOrderFiles();
+    } catch (err) {
+      console.warn("書類を取得できませんでした", err);
+    }
+    renderInfo();
+    renderDocs();
+    render();
   })();
 </script>
 
