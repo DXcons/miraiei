@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>品番の一覧 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011b">
+<link rel="stylesheet" href="css/style.css?v=20261011c">
 </head>
 <body>
 
@@ -41,6 +41,13 @@
         <small>（SHAFTは「シャフト」でもヒットします）</small></label>
       <input type="text" id="keyword" placeholder="例：CAM-1581 / スタンド / シャフト / 10202">
     </div>
+    <div class="field" style="margin:18px 0 0;">
+      <label class="search-label">検索する：時期で絞り込む <small>（受注した年月）</small></label>
+      <div class="date-selects" style="max-width:420px;">
+        <select id="filterYear"><option value="">すべて</option></select><span class="date-unit">年</span>
+        <select id="filterMonth"><option value="">すべて</option></select><span class="date-unit">月</span>
+      </div>
+    </div>
     <label class="check-label" style="margin-top:12px;"><input type="checkbox" id="showActive"> 進行中の案件も表示する</label>
   </div>
   </div>
@@ -53,11 +60,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011b"></script>
-<script src="js/common.js?v=20261011b"></script>
-<script src="js/pdf-store.js?v=20261011b"></script>
-<script src="js/case-store.js?v=20261011b"></script>
-<script src="js/order-store.js?v=20261011b"></script>
+<script src="js/firebase-config.js?v=20261011c"></script>
+<script src="js/common.js?v=20261011c"></script>
+<script src="js/pdf-store.js?v=20261011c"></script>
+<script src="js/case-store.js?v=20261011c"></script>
+<script src="js/order-store.js?v=20261011c"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -76,6 +83,8 @@
       } else {
         const c = summarizeCaseRows(code, []);
         c.order = o;
+        // 表の行が無い案件は、取引の受注日を受注年月日として出す
+        c.firstOrderDate = c.lastOrderDate = orderReceivedDate(o);
         byCode.set(code, c);
         cases.push(c);
       }
@@ -89,6 +98,32 @@
 
   // 進行中 = 取引があり、入金済み・受注せずになっていない案件
   const isActiveCase = (c) => !!c.order && !isOrderClosed(c.order.status);
+
+  // 案件の受注日(表の行の受注年月日 ＋ 取引の受注日)
+  function caseDates(c) {
+    const dates = c.rows.map((r) => r.orderDate).filter(Boolean);
+    if (c.order && orderReceivedDate(c.order)) dates.push(orderReceivedDate(c.order));
+    return dates;
+  }
+
+  // 時期の絞り込み：選んだ年(と月)に受注日が1つでも入っていれば一致
+  function matchPeriod(c) {
+    const y = document.getElementById("filterYear").value;
+    const m = document.getElementById("filterMonth").value;
+    if (!y && !m) return true;
+    return caseDates(c).some((d) => {
+      const [dy, dm] = d.split("-");
+      return (!y || dy === y) && (!m || Number(dm) === Number(m));
+    });
+  }
+
+  function buildPeriodOptions() {
+    const years = Array.from(new Set(CASES.flatMap(caseDates).map((d) => d.slice(0, 4)))).sort().reverse();
+    document.getElementById("filterYear").innerHTML = `<option value="">すべて</option>` +
+      years.map((y) => `<option value="${y}">${y}</option>`).join("");
+    document.getElementById("filterMonth").innerHTML = `<option value="">すべて</option>` +
+      Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+  }
   document.getElementById("keywordLabel").textContent = `検索する：${codeLabel}・品名・図面番号でしぼり込む`;
 
   // 英語の品名(SHAFT)もカタカナ(シャフト)で探せる。図面番号のハイフンの有無も問わない
@@ -118,6 +153,7 @@
     const showActive = document.getElementById("showActive").checked;
     const hits = CASES
       .filter((c) => showActive || !isActiveCase(c))
+      .filter(matchPeriod)
       .map((c) => ({ c, matched: kw ? c.rows.filter((r) => matchKeyword(r, kw)) : [] }))
       .filter(({ c, matched }) => !kw || matched.length > 0 ||
         matchesSearch([c.code, c.order && c.order.productName], kw));
@@ -185,6 +221,8 @@
 
   document.getElementById("keyword").addEventListener("input", render);
   document.getElementById("showActive").addEventListener("change", render);
+  document.getElementById("filterYear").addEventListener("change", render);
+  document.getElementById("filterMonth").addEventListener("change", render);
 
   (async () => {
     const ok = await initPage();
@@ -196,6 +234,7 @@
       } catch (err) {
         console.warn("取引を取得できませんでした", err);
       }
+      buildPeriodOptions();
       render();
     } catch (err) {
       console.error("案件データの取得に失敗しました", err);

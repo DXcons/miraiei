@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011b">
+<link rel="stylesheet" href="css/style.css?v=20261011c">
 </head>
 <body>
 
@@ -164,6 +164,10 @@
       </div>
       <div class="form-grid modal-form-grid">
         <div class="field">
+          <label for="orderReceived">受注日</label>
+          <input type="date" id="orderReceived">
+        </div>
+        <div class="field">
           <label for="orderDue">納期</label>
           <div class="due-row">
             <input type="date" id="orderDue">
@@ -216,11 +220,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011b"></script>
-<script src="js/common.js?v=20261011b"></script>
-<script src="js/pdf-store.js?v=20261011b"></script>
-<script src="js/case-store.js?v=20261011b"></script>
-<script src="js/order-store.js?v=20261011b"></script>
+<script src="js/firebase-config.js?v=20261011c"></script>
+<script src="js/common.js?v=20261011c"></script>
+<script src="js/pdf-store.js?v=20261011c"></script>
+<script src="js/case-store.js?v=20261011c"></script>
+<script src="js/order-store.js?v=20261011c"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -265,8 +269,12 @@
   // 進行中の案件なら「進行中の案件」から、それ以外は「過去の案件」からたどった形のパンくずにする
   function renderBreadcrumb() {
     const active = ORDER && !isOrderClosed(ORDER.status);
+    const ym = active ? orderYearMonth(ORDER) : null;
+    const q = (extra) => "orders.html?" + new URLSearchParams({ customer: groupKey, ...extra }).toString();
     document.getElementById("breadcrumb").innerHTML = active
-      ? `<a href="home.html">ホーム</a> ＞ <a href="orders.html">進行中の案件を管理する</a> ＞ ${escapeHtml(code)}`
+      ? `<a href="home.html">ホーム</a> ＞ <a href="orders.html">進行中の案件を管理する</a> ＞
+         <a href="${escapeHtml(q({}))}">${escapeHtml(groupKey)}</a> ＞
+         ${ym ? `<a href="${escapeHtml(q({ year: ym.year, month: ym.month }))}">${ym.year}年${ym.month}月</a> ＞ ` : ""}${escapeHtml(code)}`
       : `<a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の案件を管理する</a> ＞
          <a href="${escapeHtml(listHref)}">${escapeHtml(groupKey)}</a> ＞ ${escapeHtml(code)}`;
   }
@@ -295,6 +303,7 @@
             <select id="statusSelect" class="status-select ${st.cls}">
               ${ORDER_STATUSES.map((s) => `<option value="${s.value}" ${s.value === ORDER.status ? "selected" : ""}>${s.value}</option>`).join("")}
             </select></div>
+          <div><span>受注日</span><b>${escapeHtml(formatOrderDate(orderReceivedDate(ORDER)))}</b></div>
           <div><span>納期</span><b>${escapeHtml(formatDueDate(ORDER.dueDate))}</b></div>
           <div><span>受注拠点</span><b>${escapeHtml(ORDER.branch || "—")}</b></div>
           <div><span>金額（税抜）</span><b>${formatAmount(ORDER.amount)}</b></div>
@@ -340,6 +349,7 @@
     // 客先名は「その他」のときだけ入力してもらう(ほかは客先グループ名で決まる)
     document.getElementById("orderCustomerField").style.display = groupKey === CASE_OTHER_GROUP ? "" : "none";
     document.getElementById("orderCustomer").value = caseCustomerName() === CASE_OTHER_GROUP ? "" : caseCustomerName();
+    document.getElementById("orderReceived").value = o ? orderReceivedDate(o) : ((ROWS.find((r) => r.orderDate) || {}).orderDate || "");
     document.getElementById("orderDue").value = o ? o.dueDate || "" : "";
     document.getElementById("orderDueUnknown").checked = !!o && !o.dueDate;
     syncDueUnknown();
@@ -382,6 +392,7 @@
     const fields = {
       customer,
       caseCode: code,
+      orderDate: document.getElementById("orderReceived").value,
       dueDate: document.getElementById("orderDueUnknown").checked ? "" : document.getElementById("orderDue").value,
       branch: branch ? branch.value : "",
       productName: document.getElementById("orderProduct").value.trim(),

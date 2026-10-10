@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011b">
+<link rel="stylesheet" href="css/style.css?v=20261011c">
 </head>
 <body>
 
@@ -25,45 +25,40 @@
 </header>
 
 <main class="page page-wide">
-  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 進行中の案件を管理する</div>
-  <h1 class="page-title">進行中の案件を管理する</h1>
-  <p class="page-sub">案件ごとの納期・ステータス・請求の一覧です。品番を押すと案件のページ（書類の追加・単価の入力）が開きます。<br>
+  <div class="breadcrumb" id="breadcrumb"><a href="home.html">ホーム</a> ＞ 進行中の案件を管理する</div>
+  <div class="page-toolbar">
+    <button type="button" class="btn btn-primary btn-sm" id="addBtnTop">＋ 新しい案件を登録する</button>
+  </div>
+  <h1 class="page-title" id="pageTitle">進行中の案件を管理する</h1>
+  <p class="page-sub" id="pageSub">客先 → 受注した月の順に選ぶと、案件の一覧（納期・ステータス・請求）が出ます。品番を押すと案件のページ（書類の追加・単価の入力）が開きます。<br>
     ステータスを「入金済み」まで進めた案件は、<a class="text-link" href="search-customer.html">過去の案件</a>に移ります。</p>
 
+  <!-- 客先のカード／月・年のフォルダ -->
+  <div id="navArea"></div>
+
+  <div id="listArea" hidden>
   <div class="card">
-    <div class="form-grid form-grid-3">
-      <div class="field">
-        <label>受注拠点</label>
-        <div class="chip-group" id="filterBranch">
-          <label class="chip"><input type="radio" name="filterBranch" value="" checked><span>すべて</span></label>
-        </div>
-      </div>
-      <div class="field">
-        <label for="filterStatus">ステータス</label>
-        <select id="filterStatus"></select>
-      </div>
-      <div class="field">
-        <label for="filterCustomer">客先</label>
-        <select id="filterCustomer"><option value="">すべて</option></select>
+    <div class="field" style="margin-bottom:0;">
+      <label>受注拠点</label>
+      <div class="chip-group" id="filterBranch">
+        <label class="chip"><input type="radio" name="filterBranch" value="" checked><span>すべて</span></label>
       </div>
     </div>
 
-    <div class="result-bar" style="margin-bottom:0;">
-      <div>
-        <span class="count-label">表示中の案件：</span><span class="count-num" id="hitCount">0</span><span class="count-label">件</span>
-        <span class="count-label" style="margin-left:18px;">金額の合計（税抜）：</span><span class="amount-total" id="amountTotal">¥0</span>
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn btn-secondary" id="reloadBtn">再読み込み</button>
-        <button type="button" class="btn btn-primary" id="addBtn">＋ 新しい案件を登録する</button>
-      </div>
+    <!-- 以前の絞り込み・件数表示。画面には出さない(ステータスは常に「進行中のみ」。
+         客先・月はカードとフォルダで選ぶ)。処理の互換のため要素だけ残している -->
+    <div hidden>
+      <select id="filterStatus"></select>
+      <select id="filterCustomer"><option value="">すべて</option></select>
+      <span id="hitCount">0</span><span id="amountTotal">¥0</span>
+      <button type="button" id="reloadBtn"></button>
+      <button type="button" id="addBtn"></button>
+      <div id="statusSummary"></div>
     </div>
-
-    <!-- ステータス別の件数。押すとそのステータスだけに絞り込む -->
-    <div class="status-summary" id="statusSummary"></div>
   </div>
 
   <div id="orderArea" style="margin-top:20px;"></div>
+  </div>
 </main>
 
 <footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
@@ -80,6 +75,11 @@
     </div>
     <div class="modal-body">
       <div class="form-grid modal-form-grid">
+        <div class="field">
+          <label for="orderReceived">受注日</label>
+          <input type="date" id="orderReceived">
+          <div class="field-note">この日付の月のフォルダに入ります。</div>
+        </div>
         <div class="field">
           <label for="orderDue">納期</label>
           <div class="due-row">
@@ -234,11 +234,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011b"></script>
-<script src="js/common.js?v=20261011b"></script>
-<script src="js/pdf-store.js?v=20261011b"></script>
-<script src="js/case-store.js?v=20261011b"></script>
-<script src="js/order-store.js?v=20261011b"></script>
+<script src="js/firebase-config.js?v=20261011c"></script>
+<script src="js/common.js?v=20261011c"></script>
+<script src="js/pdf-store.js?v=20261011c"></script>
+<script src="js/case-store.js?v=20261011c"></script>
+<script src="js/order-store.js?v=20261011c"></script>
 <script>
   let orders = [];
   let orderFiles = []; // 全取引の書類(一覧用データのみ)
@@ -278,11 +278,149 @@
     if (names.includes(previous)) select.value = previous;
   }
 
-  // 拠点・客先だけで絞り込んだ取引(ステータス別件数はこれを数える)
+  /* ---------- 客先 → 月(年)のフォルダ ----------
+     URLの ?customer=CAM'S&year=2026&month=10 で、いまどこを開いているかを表す。
+       客先なし          … 客先のカード
+       客先のみ          … 今年の1〜12月のフォルダ ＋ ほかの年のフォルダ
+       客先＋年(今年以外) … その年の1〜12月のフォルダ
+       客先＋年＋月      … 案件の一覧表
+     month=none は受注日の無い案件。 */
+  const NAV = (() => {
+    const p = new URLSearchParams(location.search);
+    return { customer: p.get("customer") || "", year: p.get("year") || "", month: p.get("month") || "" };
+  })();
+  const THIS_YEAR = new Date().getFullYear();
+
+  function navUrl(nav) {
+    const q = new URLSearchParams();
+    if (nav.customer) q.set("customer", nav.customer);
+    if (nav.year) q.set("year", nav.year);
+    if (nav.month) q.set("month", nav.month);
+    const s = q.toString();
+    return "orders.html" + (s ? "?" + s : "");
+  }
+
+  function navLevel() {
+    if (!NAV.customer) return "customer";
+    if (NAV.month) return "list";
+    if (NAV.year && Number(NAV.year) !== THIS_YEAR) return "year";
+    return "months";
+  }
+
+  // 一覧の対象：選んだ客先グループ・年・月の取引
+  function inNavFolder(o) {
+    if (NAV.customer && customerGroupOf(o.customer) !== NAV.customer) return false;
+    if (NAV.month === "none") return !orderYearMonth(o);
+    const ym = orderYearMonth(o);
+    if (NAV.year && (!ym || ym.year !== Number(NAV.year))) return false;
+    if (NAV.month && (!ym || ym.month !== Number(NAV.month))) return false;
+    return true;
+  }
+
+  const activeOrders = () => orders.filter((o) => !isOrderClosed(o.status));
+  const monthLabel = (y, m) => (y === THIS_YEAR ? `${m}月` : `${y}年${m}月`);
+
+  function renderBreadcrumbAndTitle() {
+    const parts = [`<a href="home.html">ホーム</a>`];
+    const level = navLevel();
+    parts.push(level === "customer" ? "進行中の案件を管理する" : `<a href="orders.html">進行中の案件を管理する</a>`);
+    let title = "進行中の案件を管理する";
+    if (NAV.customer) {
+      parts.push(level === "months" ? escapeHtml(NAV.customer) : `<a href="${escapeHtml(navUrl({ customer: NAV.customer }))}">${escapeHtml(NAV.customer)}</a>`);
+      title = `${NAV.customer} の進行中の案件`;
+    }
+    if (NAV.year && Number(NAV.year) !== THIS_YEAR) {
+      parts.push(level === "year" ? `${escapeHtml(NAV.year)}年` : `<a href="${escapeHtml(navUrl({ customer: NAV.customer, year: NAV.year }))}">${escapeHtml(NAV.year)}年</a>`);
+    }
+    if (NAV.month) {
+      const label = NAV.month === "none" ? "受注日なし" : monthLabel(Number(NAV.year), Number(NAV.month));
+      parts.push(escapeHtml(label));
+      title = `${NAV.customer}　${NAV.month === "none" ? "受注日なし" : `${NAV.year}年${NAV.month}月`}受注の案件`;
+    }
+    document.getElementById("breadcrumb").innerHTML = parts.join(" ＞ ");
+    document.getElementById("pageTitle").textContent = title;
+  }
+
+  function folderTile({ href, icon, title, count, current }) {
+    return `
+      <a class="folder-tile ${count ? "" : "is-empty"} ${current ? "is-current" : ""}" href="${escapeHtml(href)}">
+        <span class="folder-icon">${icon}</span>
+        <span class="folder-title">${escapeHtml(title)}</span>
+        <span class="folder-count">${count ? `${count}件` : "なし"}</span>
+      </a>`;
+  }
+
+  function renderNav() {
+    renderBreadcrumbAndTitle();
+    const level = navLevel();
+    const area = document.getElementById("navArea");
+    document.getElementById("listArea").hidden = level !== "list";
+    if (level === "list") {
+      area.innerHTML = "";
+      return;
+    }
+    const active = activeOrders();
+
+    if (level === "customer") {
+      area.innerHTML = `
+        <div class="choice-grid customer-grid">
+          ${CASE_CUSTOMER_GROUPS.map((g) => {
+            const n = active.filter((o) => customerGroupOf(o.customer) === g.key).length;
+            return `
+              <a class="choice-card" href="${escapeHtml(navUrl({ customer: g.key }))}">
+                <div class="choice-icon">${g.key === CASE_OTHER_GROUP ? "📁" : "🏭"}</div>
+                <h2>${escapeHtml(g.label)}${g.sub ? `<small class="choice-sub">${escapeHtml(g.sub)}</small>` : ""}</h2>
+                <p>${n ? `進行中の案件 ${n}件` : "進行中の案件はありません"}</p>
+              </a>`;
+          }).join("")}
+        </div>`;
+      return;
+    }
+
+    const mine = active.filter((o) => customerGroupOf(o.customer) === NAV.customer);
+    const countYm = (y, m) => mine.filter((o) => {
+      const ym = orderYearMonth(o);
+      return ym && ym.year === y && (m === undefined || ym.month === m);
+    }).length;
+    const now = new Date();
+    const tiles = [];
+
+    if (level === "months") {
+      // ほかの年(主に去年以前)のフォルダ → 今年の1〜12月
+      const years = Array.from(new Set(mine.map((o) => orderYearMonth(o)).filter(Boolean).map((ym) => ym.year)))
+        .filter((y) => y !== THIS_YEAR).sort((a, b) => a - b);
+      years.forEach((y) => tiles.push(folderTile({
+        href: navUrl({ customer: NAV.customer, year: y }), icon: "🗂️", title: `${y}年`, count: countYm(y),
+      })));
+      for (let m = 1; m <= 12; m++) {
+        tiles.push(folderTile({
+          href: navUrl({ customer: NAV.customer, year: THIS_YEAR, month: m }), icon: "📁",
+          title: `${m}月`, count: countYm(THIS_YEAR, m), current: m === now.getMonth() + 1,
+        }));
+      }
+      const none = mine.filter((o) => !orderYearMonth(o)).length;
+      if (none) tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, month: "none" }), icon: "❔", title: "受注日なし", count: none }));
+    } else {
+      const y = Number(NAV.year);
+      for (let m = 1; m <= 12; m++) {
+        tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, year: y, month: m }), icon: "📁", title: `${y}年${m}月`, count: countYm(y, m) }));
+      }
+    }
+
+    area.innerHTML = `
+      <div class="card">
+        <div class="section-head">
+          <h2 class="section-title">${level === "months" ? `受注した月を選んでください（${THIS_YEAR}年は月ごと、それより前は年ごと）` : `${escapeHtml(NAV.year)}年の受注した月を選んでください`}</h2>
+          <span class="field-note">進行中の案件 ${mine.length}件</span>
+        </div>
+        <div class="folder-grid">${tiles.join("")}</div>
+      </div>`;
+  }
+
+  // 拠点・客先・月(フォルダ)で絞り込んだ取引(ステータス別件数はこれを数える)
   function ordersForBranchAndCustomer() {
     const branch = document.querySelector('input[name="filterBranch"]:checked').value;
-    const customer = document.getElementById("filterCustomer").value;
-    return orders.filter((o) => (!branch || o.branch === branch) && (!customer || o.customer === customer));
+    return orders.filter((o) => (!branch || o.branch === branch) && inNavFolder(o));
   }
 
   function filteredOrders() {
@@ -352,9 +490,9 @@
           <table class="data-table order-table">
             <thead>
               <tr>
+                <th>受注日</th>
                 <th>納期</th>
                 <th>受注拠点</th>
-                <th>客先名</th>
                 <th>品名</th>
                 <th>品番</th>
                 <th class="num">金額（税抜）</th>
@@ -371,12 +509,12 @@
                 const next = nextOrderStatus(o.status);
                 return `
                   <tr class="${orderStatusInfo(o.status).cls} ${isOrderClosed(o.status) ? "row-closed" : ""}">
+                    <td>${escapeHtml(formatOrderDate(orderReceivedDate(o)))}</td>
                     <td class="${late ? "due-late" : ""}">
                       ${escapeHtml(formatDueDate(o.dueDate))}${late ? `<span class="late-mark">納期超過</span>` : ""}
                     </td>
                     <td>${escapeHtml(o.branch)}</td>
-                    <td class="order-customer">${escapeHtml(o.customer)}</td>
-                    <td class="order-product">${escapeHtml(o.productName || "")}</td>
+                    <td class="order-product">${NAV.customer === CASE_OTHER_GROUP ? `<b>${escapeHtml(o.customer)}</b><br>` : ""}${escapeHtml(o.productName || "")}</td>
                     <td>${o.caseCode
                       ? `<a class="text-link" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}" title="案件のページ（書類・突き合わせ表）を開く">${escapeHtml(o.caseCode)} ›</a>`
                       : `<span class="text-muted">—</span>`}</td>
@@ -394,7 +532,7 @@
                         ? `<button type="button" class="btn btn-secondary btn-sm" data-next="${o.id}">次へ：${escapeHtml(next)} ▶</button>`
                         : ""}
                       ${o.caseCode
-                        ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}">📂 案件を開く（書類 ${docCount(o)}）</a>`
+                        ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}" title="書類 ${docCount(o)}件">📂 案件を開く</a>`
                         : `<button type="button" class="btn btn-ghost btn-sm" data-docs="${o.id}">📎 書類（${docCount(o)}）</button>`}
                       <button type="button" class="btn btn-ghost btn-sm" data-edit="${o.id}">編集</button>
                     </td>
@@ -426,6 +564,7 @@
       orderFiles = [];
     }
     refreshCustomerFilter();
+    renderNav();
     renderOrders();
   }
 
@@ -587,7 +726,9 @@
     syncDueUnknown();
     setRadio("orderBranch", order ? order.branch : "");
     setRadio("orderStatus", order ? order.status : ORDER_STATUSES[0].value);
-    renderCustomerSelect(order ? order.customer : "");
+    // 新しく登録するときは、いま開いている客先を最初から選んでおく
+    renderCustomerSelect(order ? order.customer : (NAV.customer && NAV.customer !== CASE_OTHER_GROUP ? NAV.customer : ""));
+    document.getElementById("orderReceived").value = order ? order.orderDate || orderReceivedDate(order) : todayText();
     document.getElementById("orderProduct").value = order ? order.productName || "" : "";
     document.getElementById("orderCaseCode").value = order ? order.caseCode || "" : "";
     document.getElementById("orderAmount").value =
@@ -612,6 +753,7 @@
       customer: readCustomer(),
       productName: document.getElementById("orderProduct").value.trim(),
       caseCode: document.getElementById("orderCaseCode").value.trim(),
+      orderDate: document.getElementById("orderReceived").value,
       amount: parseAmount(document.getElementById("orderAmount").value),
       quoteNo: document.getElementById("orderQuoteNo").value.trim(),
       invoiceDate: document.getElementById("orderInvoiceDate").value,
@@ -1051,6 +1193,7 @@
     renderOrders();
   });
   document.getElementById("addBtn").addEventListener("click", () => openOrderModal(null));
+  document.getElementById("addBtnTop").addEventListener("click", () => openOrderModal(null));
 
   document.getElementById("orderModalClose").addEventListener("click", closeOrderModal);
   document.getElementById("orderCancelBtn").addEventListener("click", closeOrderModal);
