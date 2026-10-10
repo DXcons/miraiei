@@ -18,14 +18,23 @@ const CASE_IMPORT_FORMAT = "miraiei-case-import";
 
 /* ---------- 客先のグループ ----------
    「過去の図面をさがす」で最初に選ぶ4つ。aliasesは表記ゆれの吸収用。
-   どれにも当てはまらない客先は「その他」に入る。 */
+   どれにも当てはまらない客先は「その他」に入る。
+   codeLabel は表の「品番」列の呼び方(DIDは注文書の「注文番号」が品番にあたる)。 */
 const CASE_CUSTOMER_GROUPS = [
-  { key: "CAM'S", label: "CAM'S", aliases: ["CAM'S", "CAMS", "キャムズ"] },
-  { key: "神栄", label: "神栄", aliases: ["神栄"] },
-  { key: "DID", label: "DID", aliases: ["DID"] },
-  { key: "その他", label: "その他", aliases: [] },
+  { key: "CAM'S", label: "CAM'S", sub: "", aliases: ["CAM'S", "CAMS", "キャムズ"], codeLabel: "品番" },
+  { key: "神栄", label: "神栄", sub: "", aliases: ["神栄"], codeLabel: "品番" },
+  { key: "DID", label: "DID", sub: "大同テクノ", aliases: ["DID", "大同テクノ"], codeLabel: "注文番号" },
+  { key: "その他", label: "その他", sub: "", aliases: [], codeLabel: "品番" },
 ];
 const CASE_OTHER_GROUP = "その他";
+
+function caseGroupInfo(groupKey) {
+  return CASE_CUSTOMER_GROUPS.find((g) => g.key === groupKey) || CASE_CUSTOMER_GROUPS[CASE_CUSTOMER_GROUPS.length - 1];
+}
+
+function caseCodeLabel(groupKey) {
+  return caseGroupInfo(groupKey).codeLabel;
+}
 
 // 全角英数・アポストロフィの違い・空白・「株式会社」を無視して比べる
 function normalizeCustomerName(name) {
@@ -54,6 +63,65 @@ function formatYen(value) {
 function formatCaseDate(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
   return m ? `${m[1]}/${Number(m[2])}/${Number(m[3])}` : value || "-";
+}
+
+/* ---------- 外注の内訳 ----------
+   1つの部品に外注先が複数ある(材料・熱処理・加工など)場合は costs に1工程1行で持つ。
+   外注単価は costs の単価(1個あたり)の合計。CAM'Sのように1社だけなら costs は空。 */
+function caseCostLines(item) {
+  return Array.isArray(item.costs) && item.costs.length ? item.costs : [];
+}
+
+function sumCostLines(costs) {
+  return costs.reduce((t, c) => t + (Number(c.unitPrice) || 0), 0);
+}
+
+// 表に出す外注先。複数なら「金太 ほか3社」
+function outsourcerLabel(item) {
+  const vendors = Array.from(new Set(caseCostLines(item).map((c) => c.vendor).filter(Boolean)));
+  if (vendors.length > 1) return `${vendors[0]} ほか${vendors.length - 1}社`;
+  return vendors[0] || item.outsourcer || "";
+}
+
+/* ---------- 検索(英語表記とカタカナの両方でヒットさせる) ----------
+   図面の品名は「SHAFT」のような英語のこともあるので、よく使う部品名は
+   カタカナに置き換えたものでも照合する。足りない単語はここに追加する。 */
+const PART_NAME_EN_TO_KANA = {
+  SHAFT: "シャフト", COLLAR: "カラー", PLATE: "プレート", BRACKET: "ブラケット", PIN: "ピン",
+  GEAR: "ギア", BUSH: "ブッシュ", BUSHING: "ブッシュ", SPACER: "スペーサー", COVER: "カバー",
+  BASE: "ベース", BLOCK: "ブロック", HOLDER: "ホルダ", FLANGE: "フランジ", KEY: "キー",
+  ROLLER: "ローラー", ROLL: "ロール", PULLEY: "プーリー", NUT: "ナット", BOLT: "ボルト",
+  WASHER: "ワッシャ", SLEEVE: "スリーブ", BEARING: "ベアリング", STAY: "ステー", GUIDE: "ガイド",
+  RAIL: "レール", STOPPER: "ストッパー", LEVER: "レバー", ARM: "アーム", CASE: "ケース",
+  HOUSING: "ハウジング", STAND: "スタンド", FRAME: "フレーム", SUPPORT: "サポート", JOINT: "ジョイント",
+  CAM: "カム", SPROCKET: "スプロケット", CHAIN: "チェーン", SPRING: "スプリング", RING: "リング",
+  SCREW: "スクリュー", CLAMP: "クランプ", SLIDER: "スライダ", HUB: "ハブ", CAP: "キャップ",
+  DISK: "ディスク", DISC: "ディスク", WHEEL: "ホイール", AXLE: "アクスル", PISTON: "ピストン",
+  ROD: "ロッド", CYLINDER: "シリンダ", MOTOR: "モーター", TABLE: "テーブル", BAR: "バー",
+  CUTTER: "カッター", BLADE: "ブレード", NOZZLE: "ノズル", SHIM: "シム", LINER: "ライナー",
+};
+
+// 半角カナ・全角英数・ひらがな・長音や記号の違いを吸収して比べられる形にする
+function searchNormalize(s) {
+  return String(s || "")
+    .normalize("NFKC")
+    .toUpperCase()
+    .replace(/[ぁ-ゖ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0x60))
+    .replace(/[\s\-ー‐－・_.,'’]/g, "");
+}
+
+// 1つの文字列から、照合に使う形を(英語のまま・カタカナに置き換えたもの)の両方作る
+function searchForms(s) {
+  const raw = String(s || "").normalize("NFKC").toUpperCase();
+  const kana = raw.replace(/[A-Z]+/g, (w) => PART_NAME_EN_TO_KANA[w] || w);
+  return Array.from(new Set([searchNormalize(raw), searchNormalize(kana)]));
+}
+
+// fields(品名・図面番号など)のどれかが、query を含んでいればtrue
+function matchesSearch(fields, query) {
+  const qs = searchForms(query).filter(Boolean);
+  if (!qs.length) return true;
+  return fields.some((f) => searchForms(f).some((form) => qs.some((q) => form.includes(q))));
 }
 
 // 粗利率(%)。受注単価が無いときはnull
@@ -123,7 +191,8 @@ function summarizeCaseRows(code, rows) {
     outsourceTotal,
     firstOrderDate: dates[0] || "",
     lastOrderDate: dates[dates.length - 1] || "",
-    outsourcers: Array.from(new Set(rows.map((d) => d.outsourcer).filter(Boolean))),
+    outsourcers: Array.from(new Set(rows.flatMap((d) =>
+      caseCostLines(d).length ? caseCostLines(d).map((c) => c.vendor) : [d.outsourcer]).filter(Boolean))),
     needsCheckCount: rows.filter((d) => d.needsCheck).length,
   };
 }
@@ -211,8 +280,9 @@ async function saveCaseImport(bundle, items, onProgress) {
     step("注文書・御見積書");
   }
 
-  for (const it of items) {
+  for (let it of items) {
     // 図面(1枚ずつのPDF)。過去の図面の検索画面にも出るよう pdfDrawings に入れる
+    it = { ...it }; // 画面側の明細を書き換えないよう写しを使う
     const drawingId = caseDrawingId(customer, it);
     if (it.drawing && it.drawing.base64) {
       const dRef = db.collection(PDF_COLLECTION).doc(drawingId);
@@ -242,8 +312,23 @@ async function saveCaseImport(bundle, items, onProgress) {
       });
     }
 
+    // 外注の内訳がある場合は、外注単価=内訳の合計、外注先=内訳の全社 にそろえる
+    const costs = caseCostLines(it).map((c) => ({
+      vendor: c.vendor || "",
+      process: c.process || "",
+      unitPrice: c.unitPrice === "" || c.unitPrice === null || c.unitPrice === undefined ? null : Number(c.unitPrice),
+      qty: Number(c.qty) || 0,
+      quoteNo: c.quoteNo || "",
+      ref: c.ref || "",
+    }));
+    if (costs.length) {
+      it.outsourceUnitPrice = sumCostLines(costs);
+      it.outsourcer = Array.from(new Set(costs.map((c) => c.vendor).filter(Boolean))).join("、");
+    }
+
     await db.collection(CASE_ITEM_COLLECTION).doc(caseItemId(customer, it)).set({
       customer,
+      costs,
       productCode: it.productCode,
       productName: it.productName || "",
       drawingNo: it.drawingNo,
