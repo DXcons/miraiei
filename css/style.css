@@ -2005,6 +2005,15 @@ footer.mock-footer {
   text-align: right;
 }
 
+/* 外注先の名前は途中で折り返さない */
+.cost-table:not(.cost-edit-table) td:nth-child(2) {
+  white-space: nowrap;
+}
+
+.cost-table tr.cost-ref td {
+  color: #98a1ad;
+}
+
 .cost-edit-table input {
   font: inherit;
   font-size: 15px;
