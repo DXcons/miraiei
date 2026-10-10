@@ -1957,6 +1957,68 @@ footer.mock-footer {
   font-size: 24px;
 }
 
+.choice-sub {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+/* 外注の内訳(材料・熱処理・加工など、外注先が複数ある部品) */
+.cost-toggle {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0 0 6px;
+}
+
+.case-table tr.cost-row td {
+  background: #f7f9fc;
+  white-space: normal;
+  padding-top: 4px;
+}
+
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15.5px;
+}
+
+.cost-table th,
+.cost-table td {
+  padding: 5px 10px;
+  border-bottom: 1px dashed var(--border);
+  text-align: left;
+}
+
+.cost-table th {
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.cost-table .num {
+  text-align: right;
+}
+
+.cost-edit-table input {
+  font: inherit;
+  font-size: 15px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 100%;
+}
+
+.cost-edit-table input[type="number"] {
+  width: 100px;
+  text-align: right;
+}
+
 .case-table td {
   vertical-align: middle;
 }
