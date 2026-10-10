@@ -2146,6 +2146,23 @@ footer.mock-footer {
   gap: 14px;
 }
 
+/* 当月・前月・前々月の3つ(＋それより前)は大きめに並べる */
+.folder-grid.folder-grid-recent {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.folder-grid-recent .folder-tile {
+  padding: 26px 12px 20px;
+}
+
+.folder-grid-recent .folder-icon {
+  font-size: 44px;
+}
+
+.folder-grid-recent .folder-title {
+  font-size: 21px;
+}
+
 .folder-tile {
   display: flex;
   flex-direction: column;
@@ -2198,6 +2215,22 @@ footer.mock-footer {
 
 .folder-tile.is-current {
   border: 2px solid var(--accent);
+}
+
+/* ホームの一番上の容量メーター */
+.home-storage {
+  max-width: 980px;
+  margin: 0 auto 22px;
+}
+
+.home-storage .storage-meter {
+  margin: 0;
+}
+
+.storage-meter-head b small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-light);
 }
 
 /* ホーム：進行中／過去の2枚 */
