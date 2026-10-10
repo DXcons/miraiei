@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>品番の一覧 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261010b">
+<link rel="stylesheet" href="css/style.css?v=20261010c">
 </head>
 <body>
 
@@ -36,7 +36,8 @@
 
   <div class="card">
     <div class="field" style="margin-bottom:0;">
-      <label for="keyword" id="keywordLabel">品番・品名・図面番号でしぼり込む</label>
+      <label for="keyword" class="search-label"><span id="keywordLabel">検索する：品番・品名・図面番号でしぼり込む</span>
+        <small>（SHAFTは「シャフト」でもヒットします）</small></label>
       <input type="text" id="keyword" placeholder="例：CAM-1581 / スタンド / シャフト / 10202">
     </div>
   </div>
@@ -49,10 +50,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261010b"></script>
-<script src="js/common.js?v=20261010b"></script>
-<script src="js/pdf-store.js?v=20261010b"></script>
-<script src="js/case-store.js?v=20261010b"></script>
+<script src="js/firebase-config.js?v=20261010c"></script>
+<script src="js/common.js?v=20261010c"></script>
+<script src="js/pdf-store.js?v=20261010c"></script>
+<script src="js/case-store.js?v=20261010c"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -63,7 +64,7 @@
 
   const codeLabel = caseCodeLabel(groupKey);
   document.getElementById("pageTitle").textContent = `${groupKey} の${codeLabel}の一覧`;
-  document.getElementById("keywordLabel").textContent = `${codeLabel}・品名・図面番号でしぼり込む（SHAFTは「シャフト」でもヒットします）`;
+  document.getElementById("keywordLabel").textContent = `検索する：${codeLabel}・品名・図面番号でしぼり込む`;
 
   // 英語の品名(SHAFT)もカタカナ(シャフト)で探せる。図面番号のハイフンの有無も問わない
   function matchKeyword(row, kw) {
