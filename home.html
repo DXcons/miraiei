@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ホーム | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011a">
+<link rel="stylesheet" href="css/style.css?v=20261011b">
 </head>
 <body>
 
@@ -28,26 +28,33 @@
   <h1 class="page-title">何をしますか？</h1>
   <p class="page-sub">行いたい作業を選択してください。</p>
 
-  <div class="choice-grid cols-3">
-    <div class="choice-card" onclick="location.href='case-new.html'">
-      <div class="choice-icon">🗂️</div>
-      <h2>案件を登録する・<br>書類を追加する</h2>
-      <p>客先と品番を選んで、注文書・見積書・図面の追加や、単価の入力をします。進行中の案件も、納品済みの案件もここから。</p>
+  <div class="choice-grid home-grid">
+    <div class="choice-card" onclick="location.href='orders.html'">
+      <div class="choice-icon">🚧</div>
+      <h2>進行中の案件を管理する</h2>
+      <p>いま動いている案件の一覧です。<br>
+        新しい案件の登録、納期・ステータス・請求の管理、<br>
+        届いた書類（注文書・見積書・図面）の追加と単価の入力をします。</p>
+      <ul class="choice-points">
+        <li>新しい注文が来たら、ここで登録</li>
+        <li>入金まで終わると「過去の案件」へ移ります</li>
+      </ul>
     </div>
     <div class="choice-card" onclick="location.href='search-customer.html'">
-      <div class="choice-icon">🔍</div>
-      <h2>案件・図面をさがす</h2>
-      <p>客先・品番から、受注単価と外注単価を突き合わせた表と図面を見ます。</p>
-    </div>
-    <div class="choice-card" onclick="location.href='orders.html'">
-      <div class="choice-icon">📋</div>
-      <h2>受発注・請求書の管理</h2>
-      <p>案件ごとの納期・ステータス・請求を一覧で管理します。</p>
+      <div class="choice-icon">🗄️</div>
+      <h2>過去の案件を管理する</h2>
+      <p>終わった案件の一覧です。<br>
+        客先・品番・品名から、受注単価と外注単価を突き合わせた表と図面をさがせます。</p>
+      <ul class="choice-points">
+        <li>見積もりのときに、似た部品の過去の単価を調べる</li>
+        <li>紙でそろっている昔の案件を、まとめて登録する</li>
+      </ul>
     </div>
   </div>
 
   <p class="home-sub-link">
     <a href="pdf-new.html" class="text-link">案件に関係なく、図面のPDFだけを保存する ›</a>
+    　<a href="pdf-list.html" class="text-link">保存した図面のPDFをさがす ›</a>
   </p>
 </main>
 

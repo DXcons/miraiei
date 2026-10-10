@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>受発注・請求書の管理 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011a">
+<title>進行中の案件を管理する | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css?v=20261011b">
 </head>
 <body>
 
@@ -25,9 +25,10 @@
 </header>
 
 <main class="page page-wide">
-  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 受発注・請求書の管理</div>
-  <h1 class="page-title">受発注・請求書の管理</h1>
-  <p class="page-sub">取引ごとの納期・客先・ステータスの一覧です。ステータスは「次へ」ボタン、またはステータスをクリックして切り替えます。</p>
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 進行中の案件を管理する</div>
+  <h1 class="page-title">進行中の案件を管理する</h1>
+  <p class="page-sub">案件ごとの納期・ステータス・請求の一覧です。品番を押すと案件のページ（書類の追加・単価の入力）が開きます。<br>
+    ステータスを「入金済み」まで進めた案件は、<a class="text-link" href="search-customer.html">過去の案件</a>に移ります。</p>
 
   <div class="card">
     <div class="form-grid form-grid-3">
@@ -49,12 +50,12 @@
 
     <div class="result-bar" style="margin-bottom:0;">
       <div>
-        <span class="count-label">表示中の取引：</span><span class="count-num" id="hitCount">0</span><span class="count-label">件</span>
+        <span class="count-label">表示中の案件：</span><span class="count-num" id="hitCount">0</span><span class="count-label">件</span>
         <span class="count-label" style="margin-left:18px;">金額の合計（税抜）：</span><span class="amount-total" id="amountTotal">¥0</span>
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" id="reloadBtn">再読み込み</button>
-        <button type="button" class="btn btn-primary" id="addBtn">＋ 取引を追加</button>
+        <button type="button" class="btn btn-primary" id="addBtn">＋ 新しい案件を登録する</button>
       </div>
     </div>
 
@@ -104,9 +105,9 @@
           <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
         </div>
         <div class="field">
-          <label for="orderCaseCode">品番（DIDは注文番号）</label>
+          <label for="orderCaseCode">品番（DIDは注文番号） <span class="req">必須</span></label>
           <input type="text" id="orderCaseCode" placeholder="例：CAM-1581" autocomplete="off">
-          <div class="field-note">入れると、案件のページ（書類・突き合わせ表）とつながります。</div>
+          <div class="field-note">案件のページ（書類の追加・単価の入力）とつなぐための番号です。</div>
         </div>
       </div>
 
@@ -137,7 +138,7 @@
     </div>
     <div class="modal-foot">
       <span>
-        <button type="button" class="btn btn-ghost btn-danger" id="orderDeleteBtn">この取引を削除</button>
+        <button type="button" class="btn btn-ghost btn-danger" id="orderDeleteBtn">この案件を削除</button>
       </span>
       <div class="form-actions">
         <button type="button" class="btn btn-ghost" id="orderCancelBtn">キャンセル</button>
@@ -233,11 +234,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011a"></script>
-<script src="js/common.js?v=20261011a"></script>
-<script src="js/pdf-store.js?v=20261011a"></script>
-<script src="js/case-store.js?v=20261011a"></script>
-<script src="js/order-store.js?v=20261011a"></script>
+<script src="js/firebase-config.js?v=20261011b"></script>
+<script src="js/common.js?v=20261011b"></script>
+<script src="js/pdf-store.js?v=20261011b"></script>
+<script src="js/case-store.js?v=20261011b"></script>
+<script src="js/order-store.js?v=20261011b"></script>
 <script>
   let orders = [];
   let orderFiles = []; // 全取引の書類(一覧用データのみ)
@@ -338,8 +339,8 @@
         <div class="card empty-state">
           <div class="empty-icon">📋</div>
           ${orders.length === 0
-            ? "まだ取引が登録されていません。「＋ 取引を追加」から登録してください。"
-            : "条件に合う取引はありません。"}
+            ? "まだ案件が登録されていません。「＋ 新しい案件を登録する」から登録してください。"
+            : "条件に合う案件はありません。"}
         </div>`;
       return;
     }
@@ -392,7 +393,9 @@
                       ${next
                         ? `<button type="button" class="btn btn-secondary btn-sm" data-next="${o.id}">次へ：${escapeHtml(next)} ▶</button>`
                         : ""}
-                      <button type="button" class="btn btn-ghost btn-sm" data-docs="${o.id}">📎 書類（${docCount(o)}）</button>
+                      ${o.caseCode
+                        ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}">📂 案件を開く（書類 ${docCount(o)}）</a>`
+                        : `<button type="button" class="btn btn-ghost btn-sm" data-docs="${o.id}">📎 書類（${docCount(o)}）</button>`}
                       <button type="button" class="btn btn-ghost btn-sm" data-edit="${o.id}">編集</button>
                     </td>
                   </tr>`;
@@ -576,7 +579,7 @@
     const order = id ? orders.find((o) => o.id === id) : null;
     editingId = order ? order.id : null;
 
-    document.getElementById("orderModalTitle").textContent = order ? "取引を編集" : "取引を追加";
+    document.getElementById("orderModalTitle").textContent = order ? "案件を編集" : "新しい案件を登録する";
     document.getElementById("orderDeleteBtn").style.visibility = order ? "visible" : "hidden";
 
     document.getElementById("orderDue").value = order ? order.dueDate || "" : "";
@@ -623,6 +626,8 @@
     }
     if (!fields.branch) return "受注拠点を選んでください。";
     if (!fields.customer) return "客先名を選択、または入力してください。";
+    // 新しく登録する案件は、案件のページとつなぐため品番を必須にする(以前の取引は空でも保存できる)
+    if (!editingId && !fields.caseCode) return "品番（DIDは注文番号）を入力してください。";
     if (Number.isNaN(fields.amount)) return "金額は数字で入力してください（例：1,250,000）。";
     return null;
   }
@@ -640,10 +645,19 @@
     try {
       if (editingId) {
         await updateOrder(editingId, fields);
-        toast("取引を更新しました");
+        toast("案件を更新しました");
       } else {
-        await addOrder(fields);
-        toast("取引を追加しました");
+        // 同じ客先・品番の案件がすでにあれば、二重に作らずその案件を開く
+        const same = findCaseOrder(orders, customerGroupOf(fields.customer), fields.caseCode);
+        if (same) {
+          toast("この品番の案件はすでにあります。案件のページを開きます。");
+        } else {
+          await addOrder(fields);
+          toast("案件を登録しました。続けて書類や単価を入れてください。");
+        }
+        // 登録したら案件のページへ(書類の追加・単価の入力に進む)
+        location.href = caseDetailUrl(customerGroupOf(fields.customer), fields.caseCode);
+        return;
       }
       closeOrderModal();
       await reload();
@@ -1064,7 +1078,10 @@
     buildDocTypeChoices();
     const ok = await initPage();
     if (!ok) return;
-    customerList = (await loadCustomerList()).list;
+    // 客先の選択肢：案件の客先グループ(CAM'S・伸栄・DID)を先頭に、登録済みの客先一覧を続ける
+    const groups = CASE_CUSTOMER_GROUPS.filter((g) => g.key !== CASE_OTHER_GROUP).map((g) => g.key);
+    const saved = (await loadCustomerList()).list.filter((n) => !groups.includes(customerGroupOf(n)));
+    customerList = [...groups, ...saved];
     await reload();
   })();
 </script>

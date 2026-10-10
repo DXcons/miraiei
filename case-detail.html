@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011a">
+<link rel="stylesheet" href="css/style.css?v=20261011b">
 </head>
 <body>
 
@@ -25,8 +25,8 @@
 </header>
 
 <main class="page page-wide case-page">
-  <div class="breadcrumb">
-    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">案件・図面をさがす</a> ＞
+  <div class="breadcrumb" id="breadcrumb">
+    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の案件を管理する</a> ＞
     <a id="crumbCustomer" href="#"></a> ＞ <span id="crumbCode"></span>
   </div>
   <h1 class="page-title" id="pageTitle">案件</h1>
@@ -216,11 +216,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011a"></script>
-<script src="js/common.js?v=20261011a"></script>
-<script src="js/pdf-store.js?v=20261011a"></script>
-<script src="js/case-store.js?v=20261011a"></script>
-<script src="js/order-store.js?v=20261011a"></script>
+<script src="js/firebase-config.js?v=20261011b"></script>
+<script src="js/common.js?v=20261011b"></script>
+<script src="js/pdf-store.js?v=20261011b"></script>
+<script src="js/case-store.js?v=20261011b"></script>
+<script src="js/order-store.js?v=20261011b"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -262,7 +262,17 @@
      1. 案件の情報
      ========================================================== */
 
+  // 進行中の案件なら「進行中の案件」から、それ以外は「過去の案件」からたどった形のパンくずにする
+  function renderBreadcrumb() {
+    const active = ORDER && !isOrderClosed(ORDER.status);
+    document.getElementById("breadcrumb").innerHTML = active
+      ? `<a href="home.html">ホーム</a> ＞ <a href="orders.html">進行中の案件を管理する</a> ＞ ${escapeHtml(code)}`
+      : `<a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の案件を管理する</a> ＞
+         <a href="${escapeHtml(listHref)}">${escapeHtml(groupKey)}</a> ＞ ${escapeHtml(code)}`;
+  }
+
   function renderInfo() {
+    renderBreadcrumb();
     const area = document.getElementById("infoArea");
     if (!ORDER) {
       area.innerHTML = `
@@ -270,8 +280,8 @@
           <h2 class="section-title">📋 納期・ステータス</h2>
         </div>
         <div class="info-empty">
-          まだ登録されていません。登録すると「受発注・請求書の管理」の一覧にも出ます。
-          <button type="button" class="btn btn-primary btn-sm" id="orderOpenBtn">納期・ステータスを登録する</button>
+          登録されていません（過去の案件は登録しなくても構いません）。
+          <button type="button" class="btn btn-ghost btn-sm" id="orderOpenBtn">納期・ステータスを登録する</button>
         </div>`;
     } else {
       const st = orderStatusInfo(ORDER.status);
@@ -334,7 +344,8 @@
     document.getElementById("orderDueUnknown").checked = !!o && !o.dueDate;
     syncDueUnknown();
     setRadio("orderBranch", o ? o.branch : "");
-    setRadio("orderStatus", o ? o.status : "製作中");
+    // 進行中の案件は「進行中の案件を管理する」で登録されるので、ここで新しく登録するのは過去の案件
+    setRadio("orderStatus", o ? o.status : "入金済み");
     document.getElementById("orderProduct").value = o ? o.productName || "" : defaultProductName();
     document.getElementById("orderAmount").value = o && typeof o.amount === "number" ? o.amount.toLocaleString("ja-JP") : "";
     document.getElementById("orderQuoteNo").value = o ? o.quoteNo || "" : "";
@@ -377,7 +388,7 @@
       amount: parseAmount(document.getElementById("orderAmount").value),
       quoteNo: document.getElementById("orderQuoteNo").value.trim(),
       invoiceDate: document.getElementById("orderInvoiceDate").value,
-      status: status ? status.value : "製作中",
+      status: status ? status.value : "入金済み",
       note: document.getElementById("orderNote").value.trim(),
     };
     if (!fields.customer) return toast("客先名を入力してください。");
@@ -396,7 +407,7 @@
       }
       closeOrderModal();
       renderInfo();
-      toast("保存しました（受発注・請求書の管理にも反映されます）");
+      toast(isOrderClosed(ORDER.status) ? "保存しました" : "保存しました（進行中の案件の一覧に出ます）");
     } catch (err) {
       console.error("保存に失敗しました", err);
       toast("保存に失敗しました：" + (err.message || err));

@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>過去の図面をさがす | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011a">
+<title>過去の案件を管理する | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css?v=20261011b">
 </head>
 <body>
 
@@ -25,9 +25,14 @@
 </header>
 
 <main class="page">
-  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 案件・図面をさがす</div>
-  <h1 class="page-title">どの客先の案件・図面をさがしますか？</h1>
-  <p class="page-sub">客先を選ぶと、品番（DIDは注文番号）の一覧が表示されます。進行中の案件も含みます。</p>
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 過去の案件を管理する</div>
+  <div class="page-toolbar">
+    <a href="case-new.html" class="btn btn-ghost btn-sm">＋ 過去の案件を登録する</a>
+    <a href="case-import.html" class="btn btn-ghost btn-sm">📥 まとめて取り込む</a>
+  </div>
+  <h1 class="page-title">過去の案件を管理する</h1>
+  <p class="page-sub">客先を選ぶと、終わった案件の品番（DIDは注文番号）の一覧が表示されます。<br>
+    いま動いている案件は<a class="text-link" href="orders.html">進行中の案件</a>にあります。</p>
 
   <!-- CASE_CUSTOMER_GROUPS(js/case-store.js)から生成 -->
   <div class="choice-grid customer-grid" id="customerGrid"></div>
@@ -42,16 +47,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011a"></script>
-<script src="js/common.js?v=20261011a"></script>
-<script src="js/pdf-store.js?v=20261011a"></script>
-<script src="js/case-store.js?v=20261011a"></script>
-<script src="js/order-store.js?v=20261011a"></script>
+<script src="js/firebase-config.js?v=20261011b"></script>
+<script src="js/common.js?v=20261011b"></script>
+<script src="js/pdf-store.js?v=20261011b"></script>
+<script src="js/case-store.js?v=20261011b"></script>
+<script src="js/order-store.js?v=20261011b"></script>
 <script>
   function renderCards(counts) {
     document.getElementById("customerGrid").innerHTML = CASE_CUSTOMER_GROUPS.map((g) => {
       const n = counts ? counts[g.key] || 0 : null;
-      const sub = n === null ? "読み込み中…" : n > 0 ? `${n}件の${g.codeLabel}` : "案件はまだありません";
+      const sub = n === null ? "読み込み中…" : n > 0 ? `過去の案件 ${n}件` : "過去の案件はまだありません";
       return `
         <a class="choice-card" href="case-list.html?customer=${encodeURIComponent(g.key)}">
           <div class="choice-icon">${g.key === CASE_OTHER_GROUP ? "📁" : "🏭"}</div>
@@ -72,11 +77,13 @@
         const g = customerGroupOf(d.customer);
         (codes[g] = codes[g] || new Set()).add(d.productCode);
       });
-      // 表の行がまだ無い進行中の案件(品番を登録した取引)も数える
+      // 終わった取引の品番は足し、進行中の案件は数えない
       try {
         (await fetchOrders()).filter((o) => o.caseCode).forEach((o) => {
           const g = customerGroupOf(o.customer);
-          (codes[g] = codes[g] || new Set()).add(String(o.caseCode).trim());
+          const set = (codes[g] = codes[g] || new Set());
+          if (isOrderClosed(o.status)) set.add(String(o.caseCode).trim());
+          else set.delete(String(o.caseCode).trim());
         });
       } catch (err) {
         console.warn("取引を取得できませんでした", err);

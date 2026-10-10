@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>品番の一覧 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011a">
+<link rel="stylesheet" href="css/style.css?v=20261011b">
 </head>
 <body>
 
@@ -26,11 +26,11 @@
 
 <main class="page page-wide case-page">
   <div class="breadcrumb">
-    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">案件・図面をさがす</a> ＞ <span id="crumbCustomer"></span>
+    <a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の案件を管理する</a> ＞ <span id="crumbCustomer"></span>
   </div>
   <div class="page-toolbar">
-    <a href="case-new.html" class="btn btn-ghost btn-sm">＋ 新しい案件を登録する</a>
-    <a href="case-import.html" id="importLink" class="btn btn-ghost btn-sm">📥 データを取り込む</a>
+    <a href="case-new.html" class="btn btn-ghost btn-sm">＋ 過去の案件を登録する</a>
+    <a href="case-import.html" id="importLink" class="btn btn-ghost btn-sm">📥 まとめて取り込む</a>
   </div>
   <h1 class="page-title" id="pageTitle">品番の一覧</h1>
   <p class="page-sub">行を選ぶと案件のページが開きます（書類・納期・ステータスと、受注単価と外注単価の突き合わせ表）。</p>
@@ -41,6 +41,8 @@
         <small>（SHAFTは「シャフト」でもヒットします）</small></label>
       <input type="text" id="keyword" placeholder="例：CAM-1581 / スタンド / シャフト / 10202">
     </div>
+    <label class="check-label" style="margin-top:12px;"><input type="checkbox" id="showActive"> 進行中の案件も表示する</label>
+  </div>
   </div>
 
   <div id="resultArea"><div class="card empty-state">読み込み中…</div></div>
@@ -51,11 +53,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011a"></script>
-<script src="js/common.js?v=20261011a"></script>
-<script src="js/pdf-store.js?v=20261011a"></script>
-<script src="js/case-store.js?v=20261011a"></script>
-<script src="js/order-store.js?v=20261011a"></script>
+<script src="js/firebase-config.js?v=20261011b"></script>
+<script src="js/common.js?v=20261011b"></script>
+<script src="js/pdf-store.js?v=20261011b"></script>
+<script src="js/case-store.js?v=20261011b"></script>
+<script src="js/order-store.js?v=20261011b"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -83,7 +85,10 @@
   document.title = `${groupKey} の一覧 | 未来栄 図面管理システム`;
 
   const codeLabel = caseCodeLabel(groupKey);
-  document.getElementById("pageTitle").textContent = `${groupKey} の${codeLabel}の一覧`;
+  document.getElementById("pageTitle").textContent = `${groupKey} の過去の案件（${codeLabel}の一覧）`;
+
+  // 進行中 = 取引があり、入金済み・受注せずになっていない案件
+  const isActiveCase = (c) => !!c.order && !isOrderClosed(c.order.status);
   document.getElementById("keywordLabel").textContent = `検索する：${codeLabel}・品名・図面番号でしぼり込む`;
 
   // 英語の品名(SHAFT)もカタカナ(シャフト)で探せる。図面番号のハイフンの有無も問わない
@@ -104,19 +109,23 @@
         <div class="card empty-state">
           <div class="empty-icon">🗂️</div>
           ${escapeHtml(groupKey)} の案件はまだありません。
-          <div style="margin-top:14px;"><a href="case-new.html" class="text-link">新しい案件を登録する ›</a></div>
+          <div style="margin-top:14px;"><a href="case-new.html" class="text-link">過去の案件を登録する ›</a></div>
           <div style="margin-top:8px;"><a href="${pdfLink}" class="text-link">保存したPDF図面から探す ›</a></div>
         </div>`;
       return;
     }
 
+    const showActive = document.getElementById("showActive").checked;
     const hits = CASES
+      .filter((c) => showActive || !isActiveCase(c))
       .map((c) => ({ c, matched: kw ? c.rows.filter((r) => matchKeyword(r, kw)) : [] }))
       .filter(({ c, matched }) => !kw || matched.length > 0 ||
         matchesSearch([c.code, c.order && c.order.productName], kw));
 
     if (hits.length === 0) {
-      area.innerHTML = `<div class="card empty-state"><div class="empty-icon">🔍</div>該当する${escapeHtml(codeLabel)}がありません。</div>`;
+      const hidden = CASES.filter(isActiveCase).length;
+      area.innerHTML = `<div class="card empty-state"><div class="empty-icon">🔍</div>該当する過去の案件がありません。
+        ${hidden && !showActive ? `<br>（進行中の案件が${hidden}件あります。上の「進行中の案件も表示する」で表示できます）` : ""}</div>`;
       return;
     }
 
@@ -175,6 +184,7 @@
   }
 
   document.getElementById("keyword").addEventListener("input", render);
+  document.getElementById("showActive").addEventListener("change", render);
 
   (async () => {
     const ok = await initPage();
