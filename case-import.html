@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>注文書・御見積書データの取り込み | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20261010b">
 </head>
 <body>
 
@@ -32,8 +32,8 @@
   <p class="page-sub">メールで届いたPDF、またはClaude Codeで作った取り込み用ファイルを選び、内容を確認してから保存します。</p>
 
   <div class="card">
-    <div class="field" style="max-width:360px;">
-      <label for="customerSelect">客先 <span class="field-note">（PDFを読み取るときに使います）</span></label>
+    <div class="field" style="max-width:640px;">
+      <label for="customerSelect">客先 <span class="field-note">（PDFを読み取るときに使います。取り込み用ファイル(.json)なら選ばなくても大丈夫です）</span></label>
       <select id="customerSelect"></select>
     </div>
     <div class="dropzone" id="dropzone">
@@ -60,13 +60,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js"></script>
-<script src="js/common.js"></script>
-<script src="js/pdf-store.js"></script>
-<script src="js/case-store.js"></script>
+<script src="js/firebase-config.js?v=20261010b"></script>
+<script src="js/common.js?v=20261010b"></script>
+<script src="js/pdf-store.js?v=20261010b"></script>
+<script src="js/case-store.js?v=20261010b"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="js/pdf-text-import.js"></script>
+<script src="js/pdf-text-import.js?v=20261010b"></script>
 <script>
   let BUNDLE = null;
   let ITEMS = [];      // 画面で直した値を反映した明細
@@ -80,12 +80,23 @@
     const sel = document.getElementById("customerSelect");
     sel.innerHTML = CASE_CUSTOMER_GROUPS
       .filter((g) => g.key !== CASE_OTHER_GROUP)
-      .map((g) => `<option value="${escapeHtml(g.key)}" ${pdfImportSupported(g.key) ? "" : "disabled"}>
-        ${escapeHtml(g.label)}${pdfImportSupported(g.key) ? "" : "（書式未対応）"}</option>`).join("");
+      .map((g) => `<option value="${escapeHtml(g.key)}">
+        ${escapeHtml(g.label)}${g.sub ? `（${escapeHtml(g.sub)}）` : ""}${pdfImportSupported(g.key) ? "" : " ※PDF読み取りは準備中"}</option>`).join("");
+  }
+
+  // 結果はボタンより下に出るので、ボタンの近くにも一言出して、結果の位置までスクロールする
+  function showReadStatus(message, isError) {
+    const status = document.getElementById("readStatus");
+    status.textContent = message;
+    status.classList.toggle("read-error", !!isError);
+  }
+
+  function scrollToPreview() {
+    document.getElementById("previewArea").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function showReadError(message) {
-    document.getElementById("readStatus").textContent = "";
+    showReadStatus("⚠️ 読み込めませんでした：" + message, true);
     document.getElementById("previewArea").innerHTML = `
       <div class="card empty-state"><div class="empty-icon">⚠️</div>
       ファイルを読み込めませんでした。<br>${escapeHtml(message)}</div>`;
@@ -100,21 +111,29 @@
     const status = document.getElementById("readStatus");
     BUNDLE = null;
     render();
+    showReadStatus(`${files.map((f) => f.name).join("、")} を読み込んでいます…`);
     try {
       if (json) {
         setBundle(validateCaseBundle(JSON.parse(await json.text())));
       } else if (pdfs.length) {
         const customer = document.getElementById("customerSelect").value;
+        if (!pdfImportSupported(customer)) {
+          throw new Error(`${customer} の書類はまだPDFから直接読み取れません。` +
+            "Claude Codeで作った「○○_取り込み用.json」を選んでください（例：1002_DID_取り込み用.json）。");
+        }
         const bundle = await buildCaseBundleFromPdfs(pdfs, customer, (m) => (status.textContent = m));
         setBundle(validateCaseBundle(bundle));
       } else {
         throw new Error("PDFか、取り込み用ファイル（.json）を選んでください。");
       }
-      status.textContent = "";
+      showReadStatus(`✅ 読み込みました（${BUNDLE.customer}・${BUNDLE.items.length}点）。下の表で内容を確認して「保存する」を押してください。`);
     } catch (err) {
       console.error("読み込みに失敗しました", err);
       showReadError(err.message || String(err));
     }
+    // 同じファイルを選び直しても反応するよう、選択をリセットしておく
+    document.getElementById("fileInput").value = "";
+    scrollToPreview();
   }
 
   // 互換用(1ファイルだけ渡す呼び出し)
