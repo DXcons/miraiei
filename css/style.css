@@ -2302,7 +2302,7 @@ footer.mock-footer {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 14px;
 }
 
@@ -2400,4 +2400,354 @@ footer.mock-footer {
 .import-totals .ng {
   color: #b3261e;
   font-weight: 700;
+}
+
+/* ==========================================================
+   注文書・材料注文書・納品書(作成画面と印刷)
+   ========================================================== */
+
+.doc-make-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.modal-box.modal-box-po {
+  max-width: 1240px;
+  width: 96vw;
+}
+
+.modal-box-po .modal-body {
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.po-form {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 16px;
+}
+
+@media (max-width: 900px) {
+  .po-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.po-form .field input,
+.po-form .field select {
+  width: 100%;
+}
+
+.po-lines {
+  border-collapse: collapse;
+  font-size: 15px;
+  width: 100%;
+}
+
+.po-lines th,
+.po-lines td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 4px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.po-lines th {
+  background: #f7f9fb;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.po-lines input,
+.po-lines select {
+  font: inherit;
+  font-size: 15px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.po-lines input[type="number"] {
+  text-align: right;
+}
+
+.po-lines .w-name { width: 190px; }
+.po-lines .w-spec { width: 150px; }
+.po-lines .w-s { width: 72px; }
+.po-lines .w-n { width: 60px; }
+.po-lines .w-xs { width: 40px; }
+.po-lines .w-p { width: 90px; }
+
+.po-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.po-line-actions select {
+  font: inherit;
+  font-size: 15px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-width: 340px;
+}
+
+.po-total {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+/* ---------- 印刷する書類(Excelの書式に合わせる) ---------- */
+#printArea {
+  display: none;
+}
+
+.doc-sheet {
+  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  color: #000;
+  background: #fff;
+  font-size: 11px;
+}
+
+.doc-landscape { width: 277mm; }
+.doc-portrait { width: 190mm; }
+
+.doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.doc-title {
+  font-size: 20px;
+  letter-spacing: 0.3em;
+  margin: 0 0 10px 50px;
+}
+
+.doc-to {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.doc-to-name {
+  display: inline-block;
+  min-width: 62mm;
+  border-bottom: 1px solid #000;
+  text-align: center;
+  padding-bottom: 2px;
+}
+
+.doc-small {
+  font-size: 10px;
+  margin: 4px 0;
+}
+
+.doc-no {
+  display: inline-block;
+  min-width: 45mm;
+  border-bottom: 1px solid #000;
+  margin: 6px 0 2px 12px;
+  font-size: 12px;
+}
+
+.doc-no span {
+  color: #1f5fa8;
+  margin-right: 14px;
+  font-size: 10px;
+}
+
+.doc-head-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.doc-date {
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.doc-company {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.doc-logo {
+  height: 12mm;
+  grid-column: 1 / span 2;
+}
+
+.doc-addr {
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.doc-addr .doc-tel {
+  padding-left: 1.2em;
+}
+
+.doc-addr div {
+  white-space: nowrap;
+}
+
+.doc-portrait .doc-addr {
+  font-size: 9px;
+}
+
+.doc-sheet th,
+.doc-sheet td {
+  color: #000;
+}
+
+.doc-seal {
+  width: 15mm;
+  height: 15mm;
+  border: 1px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-seal img {
+  width: 13mm;
+  height: 13mm;
+  object-fit: contain;
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.doc-table th,
+.doc-table td {
+  border: 1px solid #000;
+  height: 7mm;
+  padding: 0 3px;
+  font-size: 10.5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.doc-table th {
+  background: #a6a6a6;
+  font-weight: 600;
+  text-align: center;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.doc-table .c { text-align: center; }
+.doc-table .r { text-align: right; }
+
+.doc-total {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  margin: 6px 30px 6px 0;
+  font-size: 11px;
+}
+
+.doc-total span:first-child,
+.doc-total b {
+  text-decoration: underline;
+  font-weight: 400;
+}
+
+.doc-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #000;
+}
+
+.doc-box {
+  padding: 0 10px 6px;
+  font-size: 10.5px;
+  line-height: 1.8;
+}
+
+.doc-box + .doc-box {
+  border-left: 1px solid #000;
+}
+
+.doc-box-title {
+  display: inline-block;
+  background: #a6a6a6;
+  padding: 0 14px;
+  margin: 0 0 2px -10px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.doc-meta {
+  border-collapse: collapse;
+  font-size: 10px;
+  margin-bottom: 10px;
+}
+
+.doc-meta th {
+  font-weight: 400;
+  padding: 1px 12px 1px 0;
+  text-align: left;
+}
+
+.doc-meta td {
+  border-bottom: 1px solid #000;
+  min-width: 26mm;
+  text-align: right;
+}
+
+.doc-sum {
+  border-collapse: collapse;
+  margin: 10px 0 0 auto;
+  font-size: 12px;
+}
+
+.doc-sum th,
+.doc-sum td {
+  border: 1px solid #000;
+  height: 8mm;
+  padding: 0 8px;
+}
+
+.doc-sum th {
+  background: #a6a6a6;
+  font-weight: 400;
+  width: 26mm;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.doc-sum td {
+  width: 36mm;
+  text-align: right;
+}
+
+/* 印刷するときは書類だけを出す */
+@media print {
+  body.printing > *:not(#printArea) {
+    display: none !important;
+  }
+
+  body.printing {
+    background: #fff;
+  }
+
+  body.printing #printArea {
+    display: block;
+  }
 }
