@@ -2129,6 +2129,15 @@ footer.mock-footer {
   background: #fff4ee;
 }
 
+#readStatus {
+  font-weight: 700;
+  color: var(--success);
+}
+
+#readStatus.read-error {
+  color: #b3261e;
+}
+
 .import-totals {
   display: flex;
   flex-wrap: wrap;
