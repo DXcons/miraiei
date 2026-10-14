@@ -320,6 +320,49 @@ function deliveryNoteHtml(dn) {
     </div>`;
 }
 
+// 請求書(A4縦)。毎月・客先ごとに1枚で、その月に出荷した案件をまとめて載せる。
+// inv: { customerName, issueDate, invoiceNo, periodLabel, remarks, lines:[{date,name,qty,unit,unitPrice,note}] }
+function invoiceHtml(inv) {
+  const MIN_ROWS = 14;
+  const lines = inv.lines.slice();
+  while (lines.length < MIN_ROWS) lines.push(null);
+  const subtotal = inv.lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
+  const tax = Math.floor(subtotal * 0.1);
+  return `
+    <div class="doc-sheet doc-portrait">
+      <div class="doc-head">
+        <div class="doc-head-left">
+          <div class="doc-title">請　求　書</div>
+          <div class="doc-to"><span class="doc-to-name">${escapeHtml(inv.customerName || "")}</span><span>御中</span></div>
+          <div class="doc-small" style="margin-top:14px;">下記の通り、ご請求申し上げます。${inv.periodLabel ? `<br>（${escapeHtml(inv.periodLabel)}）` : ""}</div>
+          <div class="doc-total-box"><span>ご請求金額（税込）</span><b>¥${yen(subtotal + tax)}</b></div>
+        </div>
+        <div class="doc-head-right">
+          <table class="doc-meta">
+            <tr><th>請求日</th><td>${escapeHtml(slashDate(inv.issueDate))}</td></tr>
+            <tr><th>請求書№</th><td>${escapeHtml(inv.invoiceNo || "")}</td></tr>
+          </table>
+          ${companyBlockHtml()}
+        </div>
+      </div>
+      <table class="doc-table">
+        <colgroup><col style="width:4%"><col style="width:11%"><col style="width:36%"><col style="width:6%"><col style="width:4%"><col style="width:10%"><col style="width:11%"><col style="width:18%"></colgroup>
+        <thead><tr><th>№</th><th>出荷日</th><th>名称</th><th colspan="2">数量</th><th>単価</th><th>金額</th><th>備考欄</th></tr></thead>
+        <tbody>${lines.map((l, i) => l
+          ? `<tr><td class="c">${i + 1}</td><td class="c">${escapeHtml(slashDate(l.date))}</td><td>${escapeHtml(l.name)}</td>
+               <td class="r">${escapeHtml(l.qty)}</td><td class="c">${escapeHtml(l.unit || "個")}</td><td class="r">${yen(l.unitPrice)}</td>
+               <td class="r">${yen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td><td>${escapeHtml(l.note || "")}</td></tr>`
+          : `<tr>${"<td></td>".repeat(8)}</tr>`).join("")}</tbody>
+      </table>
+      <table class="doc-sum">
+        <tr><th>合計</th><td>¥${yen(subtotal)}</td></tr>
+        <tr><th>消費税 (10%)</th><td>¥${yen(tax)}</td></tr>
+        <tr><th>ご請求金額</th><td>¥${yen(subtotal + tax)}</td></tr>
+      </table>
+      ${inv.remarks ? `<div class="doc-box" style="margin-top:12px;"><div class="doc-box-title">備考・お振込先</div><div class="doc-remarks">${escapeHtml(inv.remarks)}</div></div>` : ""}
+    </div>`;
+}
+
 /* ---------- 印刷 ----------
    画面に「印刷用の書類」を重ねて表示し、ブラウザの印刷を呼ぶ。
    印刷の画面で「送信先：PDFに保存」を選べばPDFになる。 */
