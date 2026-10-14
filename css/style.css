@@ -1584,8 +1584,13 @@ footer.mock-footer {
   min-width: 190px;
 }
 
-.next-due-input {
-  width: 100%;
+.next-due-input,
+.state-select,
+.state-text {
+  display: block;
+  width: 190px;
+  max-width: 100%;
+  box-sizing: border-box;
   font: inherit;
   padding: 6px 8px;
   border: 1px solid var(--border, #cfd6df);
@@ -1593,9 +1598,60 @@ footer.mock-footer {
   background: #fff;
 }
 
-.next-due-none {
+.state-cell {
+  min-width: 200px;
+}
+
+.state-text {
   margin-top: 6px;
-  font-size: 15px;
+}
+
+.state-text[hidden] {
+  display: none;
+}
+
+/* 「二次依頼なし」は日付欄の下に置く(横に並べると隣の列に重なる) */
+.next-due-none {
+  display: flex !important;
+  margin-top: 6px !important;
+  font-size: 15px !important;
+}
+
+/* 出荷済み：客先×月ごとのかたまり */
+.ship-group {
+  margin-top: 24px;
+}
+
+.ship-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ship-group-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy);
+  margin-right: 10px;
+}
+
+.ship-filter {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+}
+
+.doc-total-box {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 6px 14px;
+  border-bottom: 2px solid #000;
+}
+
+.doc-total-box b {
+  font-size: 22px;
 }
 
 .due-late {
