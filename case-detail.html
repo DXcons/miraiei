@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261014b">
+<link rel="stylesheet" href="css/style.css?v=20261014g">
 </head>
 <body>
 
@@ -357,6 +357,13 @@
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
   const code = (params.get("code") || "").trim();
   const caseKey = caseKeyOf(groupKey, code);
+  // 進行中の一覧の「書類を作成する」から開いたとき(mode=make)は、書類づくりに要る部分だけを出す
+  // (納期・ステータス、点数・金額の集計、検索欄、表が空のときの案内は隠す)
+  const MAKE_MODE = params.get("mode") === "make";
+  if (MAKE_MODE) {
+    document.body.classList.add("make-mode");
+    document.querySelector(".page-sub").textContent = "外注先への注文書・材料注文書・納品書をつくります。届いた書類の追加もここでできます。";
+  }
   let codeLabel = "品番"; // 客先ごとの呼び方。ログイン後に客先一覧を読み込んでから決まる
   let ROWS = [];
   let ORDER = null;      // この案件の取引(受発注・請求書の管理)。未登録ならnull
@@ -1038,6 +1045,10 @@
   function render() {
     renderSummary();
     const area = document.getElementById("resultArea");
+    if (ROWS.length === 0 && MAKE_MODE) {
+      area.innerHTML = "";
+      return;
+    }
     if (ROWS.length === 0) {
       area.innerHTML = `
         <div class="card empty-state">

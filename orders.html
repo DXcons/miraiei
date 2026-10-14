@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261014e">
+<link rel="stylesheet" href="css/style.css?v=20261014g">
 </head>
 <body>
 
@@ -598,7 +598,7 @@
             : `<button type="button" class="btn btn-ghost btn-sm" data-unship="${o.id}">↩ 出荷待ちに戻す</button>`}
           <button type="button" class="btn btn-secondary btn-sm" data-docs="${o.id}">📂 書類を確認する（${docCount(o)}）</button>
           ${caseUrl
-            ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(caseUrl)}#docMakeArea" title="外注先への注文書・材料注文書・納品書">📝 書類を作成する</a>`
+            ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(caseUrl)}&mode=make#docMakeArea" title="外注先への注文書・材料注文書・納品書">📝 書類を作成する</a>`
             : ""}
           <button type="button" class="btn btn-ghost btn-sm" data-edit="${o.id}">編集</button>
         </td>
