@@ -47,6 +47,23 @@ function isBeforeDelivery(value) {
   return ["商談中", "見積もり中", "製作中"].includes(value);
 }
 
+// 「出荷待ち」= 納品前(商談中・見積もり中・製作中)、「出荷済み」= 納品済み・請求済み(入金前)
+function isShipPending(value) {
+  return isBeforeDelivery(value);
+}
+
+function isShipped(value) {
+  return value === "納品済み" || value === "請求済み";
+}
+
+/* ---------- 次の納期 ----------
+   dueDate は客先に収める「最終の納期」。nextDueDate は、他社への二次依頼の納期など
+   途中のステップの納期で、社長らが手で入れる。二次依頼がない案件は nextDueNone を立てる。
+   出荷待ちの表では、どちらも入っていない案件(=入力待ち)を赤で目立たせて上に並べる。 */
+function needsNextDue(order) {
+  return !order.nextDueDate && !order.nextDueNone;
+}
+
 // "2026-12-12" → "2026/12/12"、空なら「未定」
 function formatDueDate(value) {
   return value ? value.replace(/-/g, "/") : "未定";
