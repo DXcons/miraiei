@@ -41,7 +41,7 @@
   <!-- 2. 書類 -->
   <div class="card">
     <div class="section-head">
-      <h2 class="section-title">📎 書類</h2>
+      <h2 class="section-title">📎 書類をアップロードする</h2>
       <span class="field-note">届いた書類から順に追加していけます。</span>
     </div>
     <div class="docs-upload">
@@ -350,7 +350,7 @@
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261014a"></script>
-<script src="js/order-store.js?v=20261014b"></script>
+<script src="js/order-store.js?v=20261014c"></script>
 <script src="js/doc-store.js?v=20261014a"></script>
 <script>
   const params = new URLSearchParams(location.search);
@@ -907,7 +907,7 @@
     const groups = {};
     ORDER_DOC_TYPES.forEach((t) => (groups[t] = []));
     files.sort((a, b) => (a.createdAtText || "").localeCompare(b.createdAtText || ""))
-      .forEach((f) => (groups[f.docType] || groups["その他"]).push(f));
+      .forEach((f) => groups[orderDocType(f)].push(f));
 
     const used = ORDER_DOC_TYPES.filter((t) => groups[t].length > 0);
     const html = [];
