@@ -1617,6 +1617,34 @@ footer.mock-footer {
   font-size: 15px !important;
 }
 
+/* 編集画面：必須項目を上に1列で並べ、参考情報は「＋ その他の項目」に隠す */
+#orderModal .field input[type="text"],
+#orderModal .field input[type="date"],
+#orderModal .field select,
+#orderModal .field textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#orderModal .due-row input[type="date"] {
+  width: auto;
+}
+
+.order-extra {
+  margin-top: 14px;
+  padding: 14px 16px 2px;
+  background: var(--bg, #f4f6fa);
+  border-radius: 10px;
+}
+
+.order-extra[hidden] {
+  display: none;
+}
+
+#orderExtraToggle {
+  margin-top: 4px;
+}
+
 /* 出荷済み：客先×月ごとのかたまり */
 .ship-group {
   margin-top: 24px;
