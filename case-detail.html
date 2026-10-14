@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261014a">
+<link rel="stylesheet" href="css/style.css?v=20261014b">
 </head>
 <body>
 
@@ -350,7 +350,7 @@
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261014a"></script>
-<script src="js/order-store.js?v=20261014a"></script>
+<script src="js/order-store.js?v=20261014b"></script>
 <script src="js/doc-store.js?v=20261014a"></script>
 <script>
   const params = new URLSearchParams(location.search);
@@ -396,10 +396,10 @@
   // 進行中の案件なら「進行中の案件」から、それ以外は「過去の案件」からたどった形のパンくずにする
   function renderBreadcrumb() {
     const active = ORDER && !isOrderClosed(ORDER.status);
-    const toCustomer = "orders.html?" + new URLSearchParams({ customer: groupKey }).toString();
+    const view = ORDER && isShipped(ORDER.status) ? "shipped" : "pending";
     document.getElementById("breadcrumb").innerHTML = active
       ? `<a href="home.html">ホーム</a> ＞ <a href="orders.html">進行中の案件を管理する</a> ＞
-         <a href="${escapeHtml(toCustomer)}">${escapeHtml(groupKey)}</a> ＞ ${escapeHtml(code)}`
+         <a href="orders.html?view=${view}">${view === "shipped" ? "出荷済み" : "出荷待ち"}</a> ＞ ${escapeHtml(code)}`
       : `<a href="home.html">ホーム</a> ＞ <a href="search-customer.html">過去の案件を管理する</a> ＞
          <a href="${escapeHtml(listHref)}">${escapeHtml(groupKey)}</a> ＞ ${escapeHtml(code)}`;
   }

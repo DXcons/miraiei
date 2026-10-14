@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261014a">
+<link rel="stylesheet" href="css/style.css?v=20261014b">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
     <button type="button" class="btn btn-primary btn-sm" id="addBtnTop">＋ 新しい案件を登録する</button>
   </div>
   <h1 class="page-title" id="pageTitle">進行中の案件を管理する</h1>
-  <p class="page-sub" id="pageSub">客先 → 受注した月の順に選ぶと、案件の一覧（納期・ステータス・請求）が出ます。品番を押すと案件のページ（書類の追加・単価の入力）が開きます。<br>
+  <p class="page-sub" id="pageSub">「出荷待ち」か「出荷済み」を選ぶと、客先を問わず案件が1つの表に並びます。品番を押すと案件のページ（書類の追加・単価の入力）が開きます。<br>
     ステータスを「入金済み」まで進めた案件は、<a class="text-link" href="search-customer.html">過去の案件</a>に移ります。</p>
 
   <!-- 客先のカード／月・年のフォルダ -->
@@ -86,7 +86,7 @@
           <div class="field-note">注文書・納品書に印字する番号です。</div>
         </div>
         <div class="field">
-          <label for="orderDue">納期</label>
+          <label for="orderDue">最終の納期</label>
           <div class="due-row">
             <input type="date" id="orderDue">
             <label class="check-label"><input type="checkbox" id="orderDueUnknown"> 未定</label>
@@ -243,7 +243,7 @@
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261014a"></script>
-<script src="js/order-store.js?v=20261014a"></script>
+<script src="js/order-store.js?v=20261014b"></script>
 <script>
   let orders = [];
   let orderFiles = []; // 全取引の書類(一覧用データのみ)
@@ -283,169 +283,91 @@
     if (names.includes(previous)) select.value = previous;
   }
 
-  /* ---------- 客先 → 月のフォルダ ----------
-     URLの ?customer=CAM'S&month=2026-10 で、いまどこを開いているかを表す。
-       客先なし     … 客先のカード
-       客先のみ     … 当月・前月・前々月のフォルダ(＋それより前／受注日なし)
-       客先＋month  … 案件の一覧表
-     month は "2026-10"(その月)、"older"(前々月より前)、"none"(受注日なし)。
-     受注日が当月より先(未来)の案件は当月のフォルダに入れる。 */
+  /* ---------- 出荷待ち／出荷済み ----------
+     URLの ?view=pending(出荷待ち) / ?view=shipped(出荷済み) で、いま開いている表を表す。
+       view なし … 2枚のカード
+       view あり … 客先を問わない案件の一覧表
+     出荷待ち = 納品前(商談中・見積もり中・製作中)、出荷済み = 納品済み・請求済み。
+     入金済み・受注せずは「過去の案件」に移る。 */
+  const VIEWS = {
+    pending: { label: "出荷待ち", icon: "🚧", test: (o) => isShipPending(o.status),
+               note: "納品前の案件です。「次の納期」が空欄の案件は赤く塗って上に並べます。" },
+    shipped: { label: "出荷済み", icon: "🚚", test: (o) => isShipped(o.status),
+               note: "納品済み・請求済みで、入金待ちの案件です。" },
+  };
+
   const NAV = (() => {
-    const p = new URLSearchParams(location.search);
-    return { customer: p.get("customer") || "", month: p.get("month") || "" };
+    const v = new URLSearchParams(location.search).get("view") || "";
+    return { view: VIEWS[v] ? v : "" };
   })();
 
-  // 当月・前月・前々月の "YYYY-MM"(年をまたいでもよいように日付で計算する)
-  const RECENT_MONTHS = [0, 1, 2].map((back) => {
-    const d = new Date();
-    d.setDate(1);
-    d.setMonth(d.getMonth() - back);
-    return { key: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`, year: d.getFullYear(), month: d.getMonth() + 1,
-             label: ["当月", "前月", "前々月"][back] };
-  });
-  const CURRENT_KEY = RECENT_MONTHS[0].key;
-  const OLDEST_KEY = RECENT_MONTHS[2].key;
-
-  // 取引がどのフォルダに入るか："YYYY-MM" / "older" / "none"
-  function folderKeyOf(o) {
-    const ym = orderYearMonth(o);
-    if (!ym) return "none";
-    const key = `${ym.year}-${pad2(ym.month)}`;
-    if (key > CURRENT_KEY) return CURRENT_KEY;
-    if (key < OLDEST_KEY) return "older";
-    return key;
-  }
-
-  function navUrl(nav) {
-    const q = new URLSearchParams();
-    if (nav.customer) q.set("customer", nav.customer);
-    if (nav.month) q.set("month", nav.month);
-    const s = q.toString();
-    return "orders.html" + (s ? "?" + s : "");
-  }
-
-  function navLevel() {
-    if (!NAV.customer) return "customer";
-    if (NAV.month) return "list";
-    return "months";
-  }
-
-  // 一覧の対象：選んだ客先グループ・フォルダの取引
-  function inNavFolder(o) {
-    if (NAV.customer && customerGroupOf(o.customer) !== NAV.customer) return false;
-    if (NAV.month && folderKeyOf(o) !== NAV.month) return false;
-    return true;
+  function viewUrl(view) {
+    return "orders.html" + (view ? "?view=" + view : "");
   }
 
   const activeOrders = () => orders.filter((o) => !isOrderClosed(o.status));
 
-  function folderLabel(key) {
-    if (key === "older") return "それより前";
-    if (key === "none") return "受注日なし";
-    const r = RECENT_MONTHS.find((x) => x.key === key);
-    if (r) return `${r.year !== RECENT_MONTHS[0].year ? r.year + "年" : ""}${r.month}月（${r.label}）`;
-    const [y, m] = key.split("-");
-    return `${y}年${Number(m)}月`;
-  }
-
   function renderBreadcrumbAndTitle() {
     const parts = [`<a href="home.html">ホーム</a>`];
-    const level = navLevel();
-    parts.push(level === "customer" ? "進行中の案件を管理する" : `<a href="orders.html">進行中の案件を管理する</a>`);
     let title = "進行中の案件を管理する";
-    if (NAV.customer) {
-      parts.push(level === "months" ? escapeHtml(NAV.customer) : `<a href="${escapeHtml(navUrl({ customer: NAV.customer }))}">${escapeHtml(NAV.customer)}</a>`);
-      title = `${NAV.customer} の進行中の案件`;
-    }
-    if (NAV.month) {
-      parts.push(escapeHtml(folderLabel(NAV.month)));
-      const r = RECENT_MONTHS.find((x) => x.key === NAV.month);
-      title = `${NAV.customer}　` + (r ? `${r.year}年${r.month}月受注の案件`
-        : NAV.month === "older" ? `${RECENT_MONTHS[2].year}年${RECENT_MONTHS[2].month}月より前に受注した案件`
-        : "受注日が入っていない案件");
+    if (NAV.view) {
+      parts.push(`<a href="orders.html">進行中の案件を管理する</a>`);
+      parts.push(VIEWS[NAV.view].label);
+      title = VIEWS[NAV.view].label;
+    } else {
+      parts.push("進行中の案件を管理する");
     }
     document.getElementById("breadcrumb").innerHTML = parts.join(" ＞ ");
     document.getElementById("pageTitle").textContent = title;
   }
 
-  function folderTile({ href, icon, title, count, current }) {
-    return `
-      <a class="folder-tile ${count ? "" : "is-empty"} ${current ? "is-current" : ""}" href="${escapeHtml(href)}">
-        <span class="folder-icon">${icon}</span>
-        <span class="folder-title">${escapeHtml(title)}</span>
-        <span class="folder-count">${count ? `${count}件` : "なし"}</span>
-      </a>`;
-  }
-
   function renderNav() {
     renderBreadcrumbAndTitle();
-    const level = navLevel();
     const area = document.getElementById("navArea");
-    document.getElementById("listArea").hidden = level !== "list";
-    if (level === "list") {
+    document.getElementById("listArea").hidden = !NAV.view;
+    if (NAV.view) {
       area.innerHTML = "";
       return;
     }
     const active = activeOrders();
-
-    if (level === "customer") {
-      area.innerHTML = `
-        <div class="choice-grid customer-grid">
-          ${CASE_CUSTOMER_GROUPS.map((g) => {
-            const n = active.filter((o) => customerGroupOf(o.customer) === g.key).length;
-            return `
-              <a class="choice-card" href="${escapeHtml(navUrl({ customer: g.key }))}">
-                <div class="choice-icon">${g.key === CASE_OTHER_GROUP ? "📁" : "🏭"}</div>
-                <h2>${escapeHtml(g.label)}${g.sub ? `<small class="choice-sub">${escapeHtml(g.sub)}</small>` : ""}</h2>
-                <p>${n ? `進行中の案件 ${n}件` : "進行中の案件はありません"}</p>
-              </a>`;
-          }).join("")}
-        </div>`;
-      return;
-    }
-
-    const mine = active.filter((o) => customerGroupOf(o.customer) === NAV.customer);
-    const count = (key) => mine.filter((o) => folderKeyOf(o) === key).length;
-    const tiles = RECENT_MONTHS.map((r, i) => folderTile({
-      href: navUrl({ customer: NAV.customer, month: r.key }), icon: "📁",
-      title: folderLabel(r.key), count: count(r.key), current: i === 0,
-    }));
-    // 前々月より前・受注日なしは、案件があるときだけ出す
-    if (count("older")) tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, month: "older" }), icon: "🗂️", title: "それより前", count: count("older") }));
-    if (count("none")) tiles.push(folderTile({ href: navUrl({ customer: NAV.customer, month: "none" }), icon: "❔", title: "受注日なし", count: count("none") }));
-
     area.innerHTML = `
-      <div class="card">
-        <div class="section-head">
-          <h2 class="section-title">受注した月を選んでください</h2>
-          <span class="field-note">進行中の案件 ${mine.length}件</span>
-        </div>
-        <div class="folder-grid folder-grid-recent">${tiles.join("")}</div>
+      <div class="choice-grid customer-grid">
+        ${Object.entries(VIEWS).map(([key, v]) => {
+          const list = active.filter(v.test);
+          const unset = key === "pending" ? list.filter(needsNextDue).length : 0;
+          return `
+            <a class="choice-card" href="${escapeHtml(viewUrl(key))}">
+              <div class="choice-icon">${v.icon}</div>
+              <h2>${escapeHtml(v.label)}</h2>
+              <p>${list.length ? `${list.length}件` : "案件はありません"}${unset ? `<br><span class="due-late">次の納期が未記入：${unset}件</span>` : ""}</p>
+              <p class="field-note">${escapeHtml(v.note)}</p>
+            </a>`;
+        }).join("")}
       </div>`;
   }
 
-  // 拠点・客先・月(フォルダ)で絞り込んだ取引(ステータス別件数はこれを数える)
+  // 拠点・表(出荷待ち／出荷済み)で絞り込んだ取引
   function ordersForBranchAndCustomer() {
     const branch = document.querySelector('input[name="filterBranch"]:checked').value;
-    return orders.filter((o) => (!branch || o.branch === branch) && inNavFolder(o));
+    return orders.filter((o) => (!branch || o.branch === branch) && NAV.view && VIEWS[NAV.view].test(o));
   }
 
   function filteredOrders() {
-    const status = document.getElementById("filterStatus").value;
-    return ordersForBranchAndCustomer().filter((o) => {
-      if (status === FILTER_OPEN) return !isOrderClosed(o.status);
-      if (status && o.status !== status) return false;
-      return true;
-    });
+    return ordersForBranchAndCustomer().filter((o) => !isOrderClosed(o.status));
   }
 
-  // 納期の近い順。納期未定は最後。
+  const dueKey = (o) => o.dueDate || "9999-99-99"; // 納期未定は最後
+
+  // 出荷待ち：「次の納期」が空欄の案件を先頭に、それぞれ最終の納期が近い順。
+  // 出荷済み：最近の納期が上。
   function sortOrders(list) {
     return list.slice().sort((a, b) => {
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return a.dueDate.localeCompare(b.dueDate);
+      if (NAV.view === "pending") {
+        const na = needsNextDue(a), nb = needsNextDue(b);
+        if (na !== nb) return na ? -1 : 1;
+        return dueKey(a).localeCompare(dueKey(b));
+      }
+      return dueKey(b).localeCompare(dueKey(a));
     });
   }
 
@@ -498,13 +420,12 @@
             <thead>
               <tr>
                 <th>受注日</th>
-                <th>納期</th>
+                <th>最終の納期</th>
+                <th>次の納期</th>
+                <th>客先</th>
                 <th>受注拠点</th>
                 <th>品名</th>
                 <th>品番</th>
-                <th class="num">金額（税抜）</th>
-                <th>見積番号</th>
-                <th>ステータス</th>
                 <th>請求日</th>
                 <th>備考</th>
                 <th></th>
@@ -514,30 +435,30 @@
               ${list.map((o) => {
                 const late = o.dueDate && o.dueDate < today && isBeforeDelivery(o.status);
                 const next = nextOrderStatus(o.status);
+                const needNext = NAV.view === "pending" && needsNextDue(o);
                 return `
-                  <tr class="${orderStatusInfo(o.status).cls} ${isOrderClosed(o.status) ? "row-closed" : ""}">
+                  <tr class="${orderStatusInfo(o.status).cls} ${isOrderClosed(o.status) ? "row-closed" : ""} ${needNext ? "row-need-next" : ""}">
                     <td>${escapeHtml(formatOrderDate(orderReceivedDate(o)))}</td>
                     <td class="${late ? "due-late" : ""}">
                       ${escapeHtml(formatDueDate(o.dueDate))}${late ? `<span class="late-mark">納期超過</span>` : ""}
                     </td>
+                    <td class="next-due-cell">
+                      <input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" ${o.nextDueNone ? "disabled" : ""} title="他社への二次依頼の納期など。手で入力します">
+                      <label class="check-label next-due-none"><input type="checkbox" data-next-none="${o.id}" ${o.nextDueNone ? "checked" : ""}> 二次依頼なし</label>
+                    </td>
+                    <td class="order-customer">${escapeHtml(o.customer)}</td>
                     <td>${escapeHtml(o.branch)}</td>
-                    <td class="order-product">${NAV.customer === CASE_OTHER_GROUP ? `<b>${escapeHtml(o.customer)}</b><br>` : ""}${escapeHtml(o.productName || "")}</td>
+                    <td class="order-product">${escapeHtml(o.productName || "")}</td>
                     <td>${o.caseCode
                       ? `<a class="text-link" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}" title="案件のページ（書類・突き合わせ表）を開く">${escapeHtml(o.caseCode)} ›</a>`
                       : `<span class="text-muted">—</span>`}</td>
-                    <td class="num">${formatAmount(o.amount)}</td>
-                    <td>${escapeHtml(o.quoteNo || "")}</td>
-                    <td>
-                      <button type="button" class="status-pill status-btn ${orderStatusInfo(o.status).cls}" data-status-menu="${o.id}" title="クリックしてステータスを選ぶ">
-                        ${escapeHtml(o.status)} ▾
-                      </button>
-                    </td>
                     <td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>
                     <td class="order-note">${escapeHtml(o.note)}</td>
                     <td class="order-actions">
-                      ${next
-                        ? `<button type="button" class="btn btn-secondary btn-sm" data-next="${o.id}">次へ：${escapeHtml(next)} ▶</button>`
-                        : ""}
+                      ${NAV.view === "pending"
+                        ? `<button type="button" class="btn btn-primary btn-sm" data-ship="${o.id}">🚚 出荷完了</button>`
+                        : `<button type="button" class="btn btn-ghost btn-sm" data-unship="${o.id}">↩ 出荷待ちに戻す</button>` +
+                          (next ? `<button type="button" class="btn btn-secondary btn-sm" data-next="${o.id}">次へ：${escapeHtml(next)} ▶</button>` : "")}
                       ${o.caseCode
                         ? `<a class="btn btn-secondary btn-sm" href="${escapeHtml(caseDetailUrl(customerGroupOf(o.customer), o.caseCode))}" title="書類 ${docCount(o)}件">📂 案件を開く</a>`
                         : `<button type="button" class="btn btn-ghost btn-sm" data-docs="${o.id}">📎 書類（${docCount(o)}）</button>`}
@@ -588,7 +509,7 @@
 
   /* ---------- ステータスの切り替え ---------- */
 
-  async function changeStatus(id, status) {
+  async function changeStatus(id, status, message) {
     if (busy) return;
     const order = orders.find((o) => o.id === id);
     if (!order || order.status === status) return;
@@ -601,7 +522,7 @@
       Object.assign(order, fields, { updatedAtText: data.updatedAtText });
       renderOrders();
       toast(
-        fields.invoiceDate
+        message ? message : fields.invoiceDate
           ? `「${order.customer}」を「${status}」にしました（請求日：${formatOrderDate(fields.invoiceDate)}）`
           : `「${order.customer}」を「${status}」にしました`
       );
@@ -642,6 +563,19 @@
       else openStatusMenu(menuBtn);
       return;
     }
+    const shipBtn = ev.target.closest("[data-ship]");
+    if (shipBtn) {
+      const order = orders.find((o) => o.id === shipBtn.dataset.ship);
+      if (order && confirm(`「${order.customer}／${order.productName || order.caseCode || ""}」を出荷完了にして、「出荷済み」に移しますか？`)) {
+        changeStatus(order.id, "納品済み", `「${order.customer}」を「出荷済み」に移しました`);
+      }
+      return;
+    }
+    const unshipBtn = ev.target.closest("[data-unship]");
+    if (unshipBtn) {
+      changeStatus(unshipBtn.dataset.unship, "製作中", "「出荷待ち」に戻しました");
+      return;
+    }
     const nextBtn = ev.target.closest("[data-next]");
     if (nextBtn) {
       const order = orders.find((o) => o.id === nextBtn.dataset.next);
@@ -656,6 +590,36 @@
     }
     const editBtn = ev.target.closest("[data-edit]");
     if (editBtn) openOrderModal(editBtn.dataset.edit);
+  });
+
+  // 次の納期(手入力)：日付を選んだ／消した、または「二次依頼なし」を切り替えたらすぐ保存する
+  async function saveNextDue(id, fields) {
+    const order = orders.find((o) => o.id === id);
+    if (!order || busy) return;
+    busy = true;
+    try {
+      const data = await updateOrder(id, fields);
+      Object.assign(order, fields, { updatedAtText: data.updatedAtText });
+      toast("次の納期を保存しました");
+    } catch (err) {
+      console.error("次の納期の保存に失敗しました", err);
+      toast("次の納期を保存できませんでした。");
+    } finally {
+      busy = false;
+      renderOrders(); // 並び順と赤い塗りを更新する
+    }
+  }
+
+  document.getElementById("orderArea").addEventListener("change", (ev) => {
+    const dateInput = ev.target.closest("[data-next-due]");
+    if (dateInput) {
+      saveNextDue(dateInput.dataset.nextDue, { nextDueDate: dateInput.value });
+      return;
+    }
+    const noneBox = ev.target.closest("[data-next-none]");
+    if (noneBox) {
+      saveNextDue(noneBox.dataset.nextNone, noneBox.checked ? { nextDueNone: true, nextDueDate: "" } : { nextDueNone: false });
+    }
   });
 
   document.getElementById("statusMenu").addEventListener("click", (ev) => {
@@ -734,7 +698,7 @@
     setRadio("orderBranch", order ? order.branch : "");
     setRadio("orderStatus", order ? order.status : ORDER_STATUSES[0].value);
     // 新しく登録するときは、いま開いている客先を最初から選んでおく
-    renderCustomerSelect(order ? order.customer : (NAV.customer && NAV.customer !== CASE_OTHER_GROUP ? NAV.customer : ""));
+    renderCustomerSelect(order ? order.customer : "");
     document.getElementById("orderReceived").value = order ? order.orderDate || orderReceivedDate(order) : todayText();
     document.getElementById("orderNoInput").value = order ? order.orderNo || "" : "";
     document.getElementById("orderProduct").value = order ? order.productName || "" : "";
