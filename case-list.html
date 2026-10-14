@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>品番の一覧 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011g">
+<link rel="stylesheet" href="css/style.css?v=20261014a">
 </head>
 <body>
 
@@ -60,11 +60,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011g"></script>
-<script src="js/common.js?v=20261011g"></script>
-<script src="js/pdf-store.js?v=20261011g"></script>
-<script src="js/case-store.js?v=20261011g"></script>
-<script src="js/order-store.js?v=20261011g"></script>
+<script src="js/firebase-config.js?v=20261014a"></script>
+<script src="js/common.js?v=20261014a"></script>
+<script src="js/pdf-store.js?v=20261014a"></script>
+<script src="js/case-store.js?v=20261014a"></script>
+<script src="js/order-store.js?v=20261014a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -93,8 +93,14 @@
   }
   document.title = `${groupKey} の一覧 | 未来栄 図面管理システム`;
 
-  const codeLabel = caseCodeLabel(groupKey);
-  document.getElementById("pageTitle").textContent = `${groupKey} の過去の案件（${codeLabel}の一覧）`;
+  // 品番の呼び方は客先ごと(ログイン後に客先一覧を読み込んでから決まる)
+  let codeLabel = "品番";
+  function applyCodeLabel() {
+    codeLabel = caseCodeLabel(groupKey);
+    document.getElementById("pageTitle").textContent = `${groupKey} の過去の案件（${codeLabel}の一覧）`;
+    document.getElementById("keywordLabel").textContent = `検索する：${codeLabel}・品名・図面番号でしぼり込む`;
+  }
+  applyCodeLabel();
 
   // 進行中 = 取引があり、入金済み・受注せずになっていない案件
   const isActiveCase = (c) => !!c.order && !isOrderClosed(c.order.status);
@@ -124,7 +130,6 @@
     document.getElementById("filterMonth").innerHTML = `<option value="">すべて</option>` +
       Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
   }
-  document.getElementById("keywordLabel").textContent = `検索する：${codeLabel}・品名・図面番号でしぼり込む`;
 
   // 英語の品名(SHAFT)もカタカナ(シャフト)で探せる。図面番号のハイフンの有無も問わない
   function matchKeyword(row, kw) {
@@ -227,8 +232,9 @@
   (async () => {
     const ok = await initPage();
     if (!ok) return;
+    applyCodeLabel();
     try {
-      CASES = groupCaseItemsByCode(await fetchCaseItemsByGroup(groupKey));
+      CASES =groupCaseItemsByCode(await fetchCaseItemsByGroup(groupKey));
       try {
         mergeOrders(CASES, await fetchOrders());
       } catch (err) {

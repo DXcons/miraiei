@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客先・外注先の登録 | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css?v=20261014a">
+<style>
+  .pt-table { width: 100%; border-collapse: collapse; }
+  .pt-table th { text-align: left; font-size: 0.85em; padding: 4px 6px; }
+  .pt-table td { padding: 4px 6px; vertical-align: top; }
+  .pt-table input { width: 100%; box-sizing: border-box; }
+  .pt-section { margin-bottom: 28px; }
+  .pt-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .pt-note { color: #555; font-size: 0.9em; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ 客先・外注先の登録</div>
+  <h1 class="page-title">客先・外注先の登録</h1>
+  <p class="page-sub">ここに登録した名前は、ログインした人だけに表示されます（公開されているプログラムには書かれません）。</p>
+
+  <div class="card pt-section">
+    <h2>客先</h2>
+    <p class="pt-note">
+      「過去の案件」「進行中の案件」の最初に出る客先のカードになります。<br>
+      <b>表示名</b>は、すでに登録した案件の客先名と同じ綴りにしてください（違うと「その他」に入ります）。
+      別名は、書類によって表記がゆれる場合に「,」で区切って書きます。
+    </p>
+    <table class="pt-table">
+      <thead><tr>
+        <th>表示名（カードの名前）</th><th>補足（会社名など）</th><th>納品書の宛名（正式名）</th>
+        <th>品番の呼び方</th><th>別名（,区切り）</th><th></th>
+      </tr></thead>
+      <tbody id="customerRows"></tbody>
+    </table>
+    <div class="pt-actions"><button type="button" class="btn btn-secondary btn-sm" id="addCustomer">＋ 客先を追加</button></div>
+  </div>
+
+  <div class="card pt-section">
+    <h2>外注先・材料屋</h2>
+    <p class="pt-note">注文書の宛先や、直送するときの納入先の候補になります。略称は、Excelの「メーカー」「手配先」欄に入れていた短い名前です。</p>
+    <table class="pt-table">
+      <thead><tr><th>名前</th><th>略称</th><th>TEL</th><th>住所</th><th></th></tr></thead>
+      <tbody id="vendorRows"></tbody>
+    </table>
+    <div class="pt-actions"><button type="button" class="btn btn-secondary btn-sm" id="addVendor">＋ 外注先を追加</button></div>
+  </div>
+
+  <div class="pt-actions">
+    <button type="button" class="btn btn-primary" id="saveBtn">保存する</button>
+    <span id="saveStatus" class="pt-note"></span>
+  </div>
+
+  <div class="card pt-section" style="margin-top:28px;">
+    <h2>ファイルから読み込む（最初の1回）</h2>
+    <p class="pt-note">システム担当者から渡された「客先外注先_登録用.json」を選ぶと、上の表に入ります。内容を確かめてから「保存する」を押してください。</p>
+    <input type="file" id="importFile" accept=".json,application/json">
+  </div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js?v=20261014a"></script>
+<script src="js/common.js?v=20261014a"></script>
+<script src="js/pdf-store.js?v=20261014a"></script>
+<script src="js/case-store.js?v=20261014a"></script>
+<script>
+  const PT_CODE_LABELS = ["品番", "注文番号"];
+  let loaded = false;
+
+  function ptInput(cls, value, placeholder) {
+    return `<input type="text" class="${cls}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(placeholder || "")}" autocomplete="off">`;
+  }
+
+  function customerRow(c) {
+    const code = PT_CODE_LABELS.includes(c.codeLabel) ? c.codeLabel : "品番";
+    return `<tr>
+      <td>${ptInput("c-key", c.key)}</td>
+      <td>${ptInput("c-sub", c.sub)}</td>
+      <td>${ptInput("c-formal", c.formalName)}</td>
+      <td><select class="c-code">${PT_CODE_LABELS.map((l) => `<option${l === code ? " selected" : ""}>${l}</option>`).join("")}</select></td>
+      <td>${ptInput("c-aliases", (c.aliases || []).filter((a) => a !== c.key).join(", "))}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-del>削除</button></td>
+    </tr>`;
+  }
+
+  function vendorRow(v) {
+    return `<tr>
+      <td>${ptInput("v-name", v.name, "例：㈱○○工業")}</td>
+      <td>${ptInput("v-short", v.short)}</td>
+      <td>${ptInput("v-tel", v.tel)}</td>
+      <td>${ptInput("v-address", v.address)}</td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-del>削除</button></td>
+    </tr>`;
+  }
+
+  function render(p) {
+    document.getElementById("customerRows").innerHTML = p.customers.map(customerRow).join("");
+    document.getElementById("vendorRows").innerHTML = p.vendors.map(vendorRow).join("");
+  }
+
+  function collect() {
+    const val = (tr, cls) => tr.querySelector("." + cls).value;
+    const customers = Array.from(document.querySelectorAll("#customerRows tr")).map((tr) => ({
+      key: val(tr, "c-key"), label: val(tr, "c-key"), sub: val(tr, "c-sub"), formalName: val(tr, "c-formal"),
+      codeLabel: val(tr, "c-code"),
+      aliases: val(tr, "c-aliases").split(/[,、，]/),
+    }));
+    const vendors = Array.from(document.querySelectorAll("#vendorRows tr")).map((tr) => ({
+      name: val(tr, "v-name"), short: val(tr, "v-short"), tel: val(tr, "v-tel"), address: val(tr, "v-address"),
+    }));
+    return normalizePartners({ customers, vendors });
+  }
+
+  document.addEventListener("click", (ev) => {
+    if (ev.target.matches("[data-del]")) ev.target.closest("tr").remove();
+  });
+  document.getElementById("addCustomer").addEventListener("click", () => {
+    document.getElementById("customerRows").insertAdjacentHTML("beforeend", customerRow({ key: "", sub: "", formalName: "", codeLabel: "品番", aliases: [] }));
+  });
+  document.getElementById("addVendor").addEventListener("click", () => {
+    document.getElementById("vendorRows").insertAdjacentHTML("beforeend", vendorRow({ name: "", short: "", tel: "", address: "" }));
+  });
+
+  document.getElementById("saveBtn").addEventListener("click", async () => {
+    if (!loaded) return toast("まだ読み込み中です。少しお待ちください。");
+    const status = document.getElementById("saveStatus");
+    const p = collect();
+    const keys = p.customers.map((c) => c.key);
+    if (new Set(keys).size !== keys.length) return toast("同じ表示名の客先があります。");
+    status.textContent = "保存しています…";
+    try {
+      await savePartners(p);
+      render(p);
+      status.textContent = `保存しました（客先 ${p.customers.length}件・外注先 ${p.vendors.length}件）。`;
+    } catch (err) {
+      console.error(err);
+      status.textContent = "保存できませんでした。通信を確認して、もう一度お試しください。";
+    }
+  });
+
+  document.getElementById("importFile").addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text());
+      const p = normalizePartners(raw);
+      if (!p.customers.length && !p.vendors.length) throw new Error("empty");
+      render(p);
+      document.getElementById("saveStatus").textContent = "読み込みました。内容を確かめて「保存する」を押してください。";
+    } catch (err) {
+      toast("このファイルは読み込めませんでした。");
+    }
+    ev.target.value = "";
+  });
+
+  (async () => {
+    const ok = await initPage();
+    if (!ok) return;
+    try {
+      render(await fetchPartners());
+      loaded = true;
+    } catch (err) {
+      console.error(err);
+      document.getElementById("saveStatus").textContent = "いまの登録内容を読み込めませんでした。再読み込みしてください。";
+    }
+  })();
+</script>
+
+</body>
+</html>

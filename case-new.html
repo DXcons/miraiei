@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>過去の案件を登録する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011g">
+<link rel="stylesheet" href="css/style.css?v=20261014a">
 </head>
 <body>
 
@@ -36,7 +36,7 @@
     <div class="chip-group" id="customerChoices"></div>
     <div class="field" id="otherNameField" style="display:none; margin-top:14px; max-width:420px;">
       <label for="otherName">客先名 <span class="req">必須</span></label>
-      <input type="text" id="otherName" placeholder="例：TANIDA" autocomplete="off">
+      <input type="text" id="otherName" placeholder="例：○○工業" autocomplete="off">
     </div>
 
     <hr class="divider">
@@ -60,11 +60,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011g"></script>
-<script src="js/common.js?v=20261011g"></script>
-<script src="js/pdf-store.js?v=20261011g"></script>
-<script src="js/case-store.js?v=20261011g"></script>
-<script src="js/order-store.js?v=20261011g"></script>
+<script src="js/firebase-config.js?v=20261014a"></script>
+<script src="js/common.js?v=20261014a"></script>
+<script src="js/pdf-store.js?v=20261014a"></script>
+<script src="js/case-store.js?v=20261014a"></script>
+<script src="js/order-store.js?v=20261014a"></script>
 <script>
   let ITEMS = [];
   let ORDERS = [];
@@ -86,8 +86,7 @@
     const label = caseCodeLabel(group);
     document.getElementById("otherNameField").style.display = group === CASE_OTHER_GROUP ? "" : "none";
     document.getElementById("codeHeading").textContent = `② ${label}を入力する`;
-    document.getElementById("codeInput").placeholder =
-      group === "DID" ? "例：M67182" : group === "伸栄" ? "例：35-115061" : group === "CAM'S" ? "例：CAM-1581" : "例：品番";
+    document.getElementById("codeInput").placeholder = `例：${label}`;
     const codes = new Set();
     ITEMS.filter((d) => customerGroupOf(d.customer) === group).forEach((d) => codes.add(d.productCode));
     ORDERS.filter((o) => o.caseCode && customerGroupOf(o.customer) === group).forEach((o) => codes.add(o.caseCode));
@@ -120,6 +119,7 @@
     syncCustomer();
     const ok = await initPage();
     if (!ok) return;
+    buildCustomerChoices(); // 客先一覧はログイン後に読み込むので、ここで作り直す
     try { ITEMS = await fetchCaseItems(); } catch (err) { console.warn("明細を取得できませんでした", err); }
     try { ORDERS = await fetchOrders(); } catch (err) { console.warn("取引を取得できませんでした", err); }
     syncCustomer();

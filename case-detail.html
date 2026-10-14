@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261011g">
+<link rel="stylesheet" href="css/style.css?v=20261014a">
 </head>
 <body>
 
@@ -346,18 +346,18 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="js/firebase-config.js?v=20261011g"></script>
-<script src="js/common.js?v=20261011g"></script>
-<script src="js/pdf-store.js?v=20261011g"></script>
-<script src="js/case-store.js?v=20261011g"></script>
-<script src="js/order-store.js?v=20261011g"></script>
-<script src="js/doc-store.js?v=20261011g"></script>
+<script src="js/firebase-config.js?v=20261014a"></script>
+<script src="js/common.js?v=20261014a"></script>
+<script src="js/pdf-store.js?v=20261014a"></script>
+<script src="js/case-store.js?v=20261014a"></script>
+<script src="js/order-store.js?v=20261014a"></script>
+<script src="js/doc-store.js?v=20261014a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
   const code = (params.get("code") || "").trim();
   const caseKey = caseKeyOf(groupKey, code);
-  const codeLabel = caseCodeLabel(groupKey);
+  let codeLabel = "品番"; // 客先ごとの呼び方。ログイン後に客先一覧を読み込んでから決まる
   let ROWS = [];
   let ORDER = null;      // この案件の取引(受発注・請求書の管理)。未登録ならnull
   let FILES = [];        // この案件の書類(orderFiles)
@@ -1475,6 +1475,8 @@
     buildDocTypeChoices();
     const ok = await initPage();
     if (!ok) return;
+    codeLabel = caseCodeLabel(groupKey);
+    document.getElementById("pageTitle").textContent = `${groupKey}　${codeLabel} ${code}`;
     try {
       const items = await fetchCaseItemsByGroup(groupKey);
       ROWS = sortRows(items.filter((d) => d.productCode === code));
