@@ -546,8 +546,8 @@ const DEFAULT_PRODUCT_ITEMS = [
   { name: "成形クランプバー", yomi: "せいけいくらんぷばー" },
 ];
 
-// 客先一覧CSVが読み込めない場合の予備。data/customers.csv と同じ初期内容。
-const DEFAULT_CUSTOMERS = ["TANIDA", "CAM'S", "茅原"];
+// 客先一覧CSVが読み込めない場合の予備。客先名は公開ファイルに書かない(「客先一覧の編集」で登録する)。
+const DEFAULT_CUSTOMERS = [];
 
 // CSVの「品名,よみ」を { name, yomi } の配列に変換する
 function parseProductCsvRows(buffer) {

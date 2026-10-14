@@ -28,32 +28,18 @@ const OWN_DESTINATIONS = [
   { key: "head", name: "弊社", tel: COMPANY.head.tel, address: `${COMPANY.head.zip}　${COMPANY.head.address}` },
 ];
 
-// これまでの書類に出てきた外注先・材料屋。注文書の宛先と、直送するときの納入先の候補。
+// 注文書の宛先と、直送するときの納入先の候補になる外注先・材料屋は、
+// case-store.js の PARTNER_VENDORS(Firestore の settings/partners から読む)。
 // short はExcelの「メーカー」「手配先」欄に入れていた略称。
-const DEFAULT_VENDORS = [
-  { name: "㈱テルミック", short: "テル", tel: "092-791-4200", address: "〒810-0041　福岡県福岡市中央区大名2-2-13" },
-  { name: "㈱タツミ精機", short: "タツミ", tel: "0265-25-5299", address: "〒395-0155　長野県飯田市三日市場1777-7" },
-  { name: "㈱丸菱電子", short: "丸菱", tel: "0258-28-2222", address: "〒940-2022　新潟県長岡市鉄工町1丁目2番10号" },
-  { name: "㈱城南キー", short: "城南", tel: "", address: "" },
-  { name: "㈱寿機化", short: "寿", tel: "06-6789-1653", address: "〒577-0026　東大阪市新家東町1-23" },
-  { name: "㈱金太", short: "金太", tel: "", address: "" },
-  { name: "㈱伸栄商会", short: "伸栄", tel: "076-266-8383", address: "〒920-0333　石川県金沢市無量寺2-62" },
-];
-
-// 納品書の宛名(客先グループ → 正式名)
-const CUSTOMER_FORMAL_NAMES = {
-  "CAM'S": "株式会社CAM'S",
-  "伸栄": "株式会社伸栄商會",
-  "DID": "株式会社大同テクノ",
-};
+// 納品書の宛名(CUSTOMER_FORMAL_NAMES)も同じ場所から読む。
 
 const PO_KINDS = { order: "注文書", material: "材料注文書" };
 
 /* ---------- 外注先 ---------- */
 
-// 既定の外注先＋これまでの注文書に出てきた外注先(新しい情報を優先)
+// 登録済みの外注先＋これまでの注文書に出てきた外注先(新しい情報を優先)
 function knownVendors(pos) {
-  const map = new Map(DEFAULT_VENDORS.map((v) => [v.name, { ...v }]));
+  const map = new Map(PARTNER_VENDORS.map((v) => [v.name, { ...v }]));
   (pos || []).forEach((po) => {
     if (!po.vendor) return;
     const v = map.get(po.vendor) || { name: po.vendor, short: "", tel: "", address: "" };

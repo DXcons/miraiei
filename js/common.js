@@ -93,6 +93,9 @@ async function initPage({ loadDrawings = false } = {}) {
   const nameLabel = document.getElementById("userNameLabel");
   if (nameLabel) nameLabel.textContent = (await currentUserName()) + " さん";
 
+  // 客先・外注先の名前は公開ファイルに書かず Firestore から読む(case-store.js)
+  if (typeof loadPartners === "function") await loadPartners();
+
   if (loadDrawings) await fetchDrawings();
 
   return true;

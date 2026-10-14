@@ -17,16 +17,89 @@ const CASE_DOC_COLLECTION = "caseDocs";
 const CASE_IMPORT_FORMAT = "miraiei-case-import";
 
 /* ---------- 客先のグループ ----------
-   「過去の図面をさがす」で最初に選ぶ4つ。aliasesは表記ゆれの吸収用。
+   「過去の案件を管理する」で最初に選ぶカード。aliasesは表記ゆれの吸収用。
    どれにも当てはまらない客先は「その他」に入る。
-   codeLabel は表の「品番」列の呼び方(DIDは注文書の「注文番号」が品番にあたる)。 */
-const CASE_CUSTOMER_GROUPS = [
-  { key: "CAM'S", label: "CAM'S", sub: "", aliases: ["CAM'S", "CAMS", "キャムズ"], codeLabel: "品番" },
-  { key: "伸栄", label: "伸栄", sub: "伸栄商會", aliases: ["伸栄", "伸榮", "伸栄商会", "伸栄商會", "伸榮商會", "神栄"], codeLabel: "品番" },
-  { key: "DID", label: "DID", sub: "大同テクノ", aliases: ["DID", "大同テクノ"], codeLabel: "注文番号" },
-  { key: "その他", label: "その他", sub: "", aliases: [], codeLabel: "品番" },
-];
+   codeLabel は表の「品番」列の呼び方(注文番号で管理する客先もある)。
+
+   客先・外注先の名前は公開ファイルに書かず、Firestoreの settings/partners に保存する。
+   各ページの initPage() が loadPartners() を呼んで、下の配列を中身ごと入れ替える。
+   (partners.html で編集する) */
 const CASE_OTHER_GROUP = "その他";
+const CASE_OTHER_INFO = { key: CASE_OTHER_GROUP, label: "その他", sub: "", aliases: [], codeLabel: "品番" };
+const CASE_CUSTOMER_GROUPS = [CASE_OTHER_INFO];
+
+// 外注先・材料屋 { name, short, tel, address }（注文書の宛先の候補）
+const PARTNER_VENDORS = [];
+// 納品書の宛名(客先グループ → 正式名)
+const CUSTOMER_FORMAL_NAMES = {};
+
+const PARTNERS_COLLECTION = "settings";
+const PARTNERS_DOC_ID = "partners";
+let PARTNERS_LOADED = false;
+let PARTNERS_ERROR = "";
+
+// 画面で編集できる形(partners)を整えて返す
+function normalizePartners(raw) {
+  const str = (v) => String(v == null ? "" : v).trim();
+  const customers = (raw && Array.isArray(raw.customers) ? raw.customers : [])
+    .map((c) => ({
+      key: str(c.key),
+      label: str(c.label) || str(c.key),
+      sub: str(c.sub),
+      formalName: str(c.formalName),
+      codeLabel: str(c.codeLabel) || "品番",
+      aliases: (Array.isArray(c.aliases) ? c.aliases : []).map(str).filter(Boolean),
+    }))
+    .filter((c) => c.key && c.key !== CASE_OTHER_GROUP);
+  const vendors = (raw && Array.isArray(raw.vendors) ? raw.vendors : [])
+    .map((v) => ({ name: str(v.name), short: str(v.short), tel: str(v.tel), address: str(v.address) }))
+    .filter((v) => v.name);
+  return { customers, vendors };
+}
+
+// 読み込んだ内容を、各ページが参照している配列に反映する(配列そのものは差し替えない)
+function applyPartners(partners) {
+  const p = normalizePartners(partners);
+  CASE_CUSTOMER_GROUPS.length = 0;
+  p.customers.forEach((c) => CASE_CUSTOMER_GROUPS.push({
+    key: c.key, label: c.label, sub: c.sub, codeLabel: c.codeLabel,
+    aliases: Array.from(new Set([c.key, c.label, ...c.aliases])),
+  }));
+  CASE_CUSTOMER_GROUPS.push(CASE_OTHER_INFO);
+  PARTNER_VENDORS.length = 0;
+  p.vendors.forEach((v) => PARTNER_VENDORS.push(v));
+  Object.keys(CUSTOMER_FORMAL_NAMES).forEach((k) => delete CUSTOMER_FORMAL_NAMES[k]);
+  p.customers.forEach((c) => { if (c.formalName) CUSTOMER_FORMAL_NAMES[c.key] = c.formalName; });
+}
+
+async function fetchPartners() {
+  const doc = await db.collection(PARTNERS_COLLECTION).doc(PARTNERS_DOC_ID).get();
+  return normalizePartners(doc.exists ? doc.data() : null);
+}
+
+async function savePartners(partners) {
+  const p = normalizePartners(partners);
+  await db.collection(PARTNERS_COLLECTION).doc(PARTNERS_DOC_ID).set({
+    ...p,
+    updatedBy: auth.currentUser ? auth.currentUser.email : "",
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  applyPartners(p);
+  return p;
+}
+
+// ログイン後に各ページの initPage() から呼ばれる。失敗してもページは動かす(客先は「その他」だけになる)
+async function loadPartners() {
+  try {
+    applyPartners(await fetchPartners());
+    PARTNERS_LOADED = true;
+    PARTNERS_ERROR = "";
+  } catch (err) {
+    console.warn("客先・外注先の一覧を読み込めませんでした", err);
+    PARTNERS_ERROR = "客先・外注先の一覧を読み込めませんでした。画面を再読み込みしてください。";
+    if (typeof toast === "function") toast(PARTNERS_ERROR);
+  }
+}
 
 function caseGroupInfo(groupKey) {
   return CASE_CUSTOMER_GROUPS.find((g) => g.key === groupKey) || CASE_CUSTOMER_GROUPS[CASE_CUSTOMER_GROUPS.length - 1];
