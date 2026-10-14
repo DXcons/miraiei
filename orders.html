@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261014c">
+<link rel="stylesheet" href="css/style.css?v=20261014d">
 </head>
 <body>
 
@@ -38,26 +38,17 @@
 
   <div id="listArea" hidden>
   <div class="card">
-    <!-- 出荷待ち：受注拠点で絞り込む -->
-    <div class="field" style="margin-bottom:0;" id="branchFilterBlock">
-      <label>受注拠点</label>
-      <div class="chip-group" id="filterBranch">
-        <label class="chip"><input type="radio" name="filterBranch" value="" checked><span>すべて</span></label>
-      </div>
-    </div>
-
-    <!-- 出荷済み：客先・出荷した月で表を切り替える(月ごと・客先ごとに請求書をつくるため) -->
-    <div class="form-grid ship-filter" id="shipFilterBlock" hidden>
+    <!-- 客先で絞り込む(出荷済みは、出荷した月でも。月ごと・客先ごとに請求書をつくるため) -->
+    <div class="form-grid ship-filter" id="shipFilterBlock">
       <div class="field" style="margin-bottom:0;">
         <label for="shipCustomer">客先</label>
         <select id="shipCustomer"><option value="">すべて</option></select>
       </div>
-      <div class="field" style="margin-bottom:0;">
+      <div class="field" style="margin-bottom:0;" id="shipMonthField">
         <label for="shipMonth">出荷した月</label>
         <select id="shipMonth"><option value="">すべて</option></select>
       </div>
     </div>
-
     <!-- 以前の絞り込み・件数表示。画面には出さない。処理の互換のため要素だけ残している -->
     <div hidden>
       <select id="filterStatus"></select>
@@ -85,52 +76,48 @@
       <button type="button" class="modal-close" id="orderModalClose" title="閉じる">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="form-grid modal-form-grid">
-        <div class="field">
-          <label for="orderReceived">受注日</label>
-          <input type="date" id="orderReceived">
-          <div class="field-note">この日付の月のフォルダに入ります。</div>
-        </div>
-        <div class="field">
-          <label for="orderNoInput">受注№</label>
-          <input type="text" id="orderNoInput" placeholder="空なら自動（例：MDA2610001）" autocomplete="off">
-          <div class="field-note">注文書・納品書に印字する番号です。</div>
-        </div>
-        <div class="field">
-          <label for="orderDue">最終の納期</label>
-          <div class="due-row">
-            <input type="date" id="orderDue">
-            <label class="check-label"><input type="checkbox" id="orderDueUnknown"> 未定</label>
-          </div>
-        </div>
-        <div class="field">
-          <label>受注拠点 <span class="req">必須</span></label>
-          <div class="chip-group" id="orderBranchGroup"></div>
-        </div>
-      </div>
-
+      <!-- 必須の項目(上)。参考情報は「＋ その他の項目」にまとめて隠している -->
       <div class="field">
         <label for="orderCustomer">客先名 <span class="req">必須</span></label>
         <select id="orderCustomer"></select>
         <input type="text" id="orderCustomerManual" class="manual-input" placeholder="客先名を入力してください" autocomplete="off">
       </div>
 
-      <div class="form-grid modal-form-grid">
+      <div class="field">
+        <label for="orderCaseCode">品番（DIDは注文番号） <span class="req">必須</span></label>
+        <input type="text" id="orderCaseCode" placeholder="例：CAM-1581" autocomplete="off">
+        <div class="field-note">案件のページ（書類の追加・単価の入力）とつなぐための番号です。</div>
+      </div>
+
+      <div class="field">
+        <label for="orderDue">最終の納期 <span class="req">必須</span></label>
+        <div class="due-row">
+          <input type="date" id="orderDue">
+          <label class="check-label"><input type="checkbox" id="orderDueUnknown"> 未定</label>
+        </div>
+        <div class="field-note">商品を客先に収める最終の納期です。</div>
+      </div>
+
+      <div class="field">
+        <label>受注拠点 <span class="req">必須</span></label>
+        <div class="chip-group" id="orderBranchGroup"></div>
+      </div>
+
+      <button type="button" class="btn btn-ghost btn-sm" id="orderExtraToggle" aria-expanded="false">＋ その他の項目</button>
+
+      <div id="orderExtra" class="order-extra" hidden>
         <div class="field">
           <label for="orderProduct">品名</label>
           <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
         </div>
         <div class="field">
-          <label for="orderCaseCode">品番（DIDは注文番号） <span class="req">必須</span></label>
-          <input type="text" id="orderCaseCode" placeholder="例：CAM-1581" autocomplete="off">
-          <div class="field-note">案件のページ（書類の追加・単価の入力）とつなぐための番号です。</div>
+          <label for="orderReceived">受注日</label>
+          <input type="date" id="orderReceived">
         </div>
-      </div>
-
-      <div class="form-grid modal-form-grid">
         <div class="field">
-          <label for="orderAmount">金額（税抜・円）</label>
-          <input type="text" id="orderAmount" inputmode="numeric" placeholder="例：1,250,000" autocomplete="off">
+          <label for="orderNoInput">受注№</label>
+          <input type="text" id="orderNoInput" placeholder="空なら自動（例：MDA2610001）" autocomplete="off">
+          <div class="field-note">注文書・納品書に印字する番号です。</div>
         </div>
         <div class="field">
           <label for="orderQuoteNo">見積番号</label>
@@ -140,16 +127,10 @@
           <label for="orderInvoiceDate">請求日</label>
           <input type="date" id="orderInvoiceDate">
         </div>
-      </div>
-
-      <div class="field">
-        <label>ステータス</label>
-        <div class="chip-group" id="orderStatusGroup"></div>
-      </div>
-
-      <div class="field">
-        <label for="orderNote">備考</label>
-        <textarea id="orderNote" rows="3" placeholder="品名・数量・連絡事項など"></textarea>
+        <div class="field">
+          <label for="orderNote">備考</label>
+          <textarea id="orderNote" rows="3" placeholder="数量・連絡事項など"></textarea>
+        </div>
       </div>
     </div>
     <div class="modal-foot">
@@ -314,12 +295,7 @@
   /* ---------- 絞り込み ---------- */
 
   function buildFilters() {
-    document.getElementById("filterBranch").insertAdjacentHTML(
-      "beforeend",
-      ORDER_BRANCHES.map(
-        (b) => `<label class="chip"><input type="radio" name="filterBranch" value="${b}"><span>${b}</span></label>`
-      ).join("")
-    );
+
     document.getElementById("filterStatus").innerHTML =
       `<option value="${FILTER_OPEN}">進行中のみ（入金済み・受注せずを除く）</option>` +
       `<option value="">すべて</option>` +
@@ -368,8 +344,7 @@
     renderBreadcrumbAndTitle();
     const area = document.getElementById("navArea");
     document.getElementById("listArea").hidden = !NAV.view;
-    document.getElementById("branchFilterBlock").hidden = NAV.view !== "pending";
-    document.getElementById("shipFilterBlock").hidden = NAV.view !== "shipped";
+    document.getElementById("shipMonthField").hidden = NAV.view !== "shipped"; // 出荷した月は出荷済みだけ
     if (NAV.view) {
       area.innerHTML = "";
       return;
@@ -409,7 +384,7 @@
 
   // 出荷済みの絞り込み(客先・出荷した月)の選択肢は、実際にある案件から作る
   function refreshShipFilters() {
-    const shipped = orders.filter((o) => !isOrderClosed(o.status) && isShipped(o.status));
+    const shipped = orders.filter((o) => !isOrderClosed(o.status) && NAV.view && VIEWS[NAV.view].test(o));
     const fill = (id, entries) => {
       const select = document.getElementById(id);
       const previous = select.value;
@@ -424,12 +399,8 @@
   function filteredOrders() {
     if (!NAV.view) return [];
     const test = VIEWS[NAV.view].test;
-    if (NAV.view === "pending") {
-      const branch = document.querySelector('input[name="filterBranch"]:checked').value;
-      return orders.filter((o) => !isOrderClosed(o.status) && test(o) && (!branch || o.branch === branch));
-    }
     const cust = document.getElementById("shipCustomer").value;
-    const month = document.getElementById("shipMonth").value;
+    const month = NAV.view === "shipped" ? document.getElementById("shipMonth").value : "";
     return orders.filter((o) => !isOrderClosed(o.status) && test(o) &&
       (!cust || custKey(o) === cust) && (!month || shipMonthOf(o) === month));
   }
@@ -455,7 +426,7 @@
   }
 
   /* ---------- 現在の状態(選択肢＋自由記述) ---------- */
-  const STATE_CHOICES = ["外注先に依頼", "外注先の返答待ち", "自社製作中"];
+  const STATE_CHOICES = ["外注先に要連絡", "外注先の返答待ち", "自社製作中"];
   const STATE_OTHER = "__other__";
 
   function stateCellHtml(o) {
@@ -933,9 +904,6 @@
     document.getElementById("orderBranchGroup").innerHTML = ORDER_BRANCHES.map(
       (b) => `<label class="chip"><input type="radio" name="orderBranch" value="${b}"><span>${b}</span></label>`
     ).join("");
-    document.getElementById("orderStatusGroup").innerHTML = ORDER_STATUSES.map(
-      (s) => `<label class="chip"><input type="radio" name="orderStatus" value="${s.value}"><span>${s.value}</span></label>`
-    ).join("");
   }
 
   // 客先の選択肢は「客先一覧の編集」で登録した一覧を使う
@@ -986,21 +954,30 @@
     document.getElementById("orderDueUnknown").checked = !!order && !order.dueDate;
     syncDueUnknown();
     setRadio("orderBranch", order ? order.branch : "");
-    setRadio("orderStatus", order ? order.status : ORDER_STATUSES[0].value);
     // 新しく登録するときは、いま開いている客先を最初から選んでおく
     renderCustomerSelect(order ? order.customer : "");
     document.getElementById("orderReceived").value = order ? order.orderDate || orderReceivedDate(order) : todayText();
     document.getElementById("orderNoInput").value = order ? order.orderNo || "" : "";
     document.getElementById("orderProduct").value = order ? order.productName || "" : "";
     document.getElementById("orderCaseCode").value = order ? order.caseCode || "" : "";
-    document.getElementById("orderAmount").value =
-      order && typeof order.amount === "number" ? order.amount.toLocaleString("ja-JP") : "";
     document.getElementById("orderQuoteNo").value = order ? order.quoteNo || "" : "";
     document.getElementById("orderInvoiceDate").value = order ? order.invoiceDate || "" : "";
     document.getElementById("orderNote").value = order ? order.note || "" : "";
 
+    setExtraOpen(false); // 「その他の項目」は閉じた状態から始める
     document.getElementById("orderModal").classList.add("open");
   }
+
+  function setExtraOpen(open) {
+    document.getElementById("orderExtra").hidden = !open;
+    const btn = document.getElementById("orderExtraToggle");
+    btn.textContent = open ? "－ その他の項目を閉じる" : "＋ その他の項目";
+    btn.setAttribute("aria-expanded", String(open));
+  }
+
+  document.getElementById("orderExtraToggle").addEventListener("click", () => {
+    setExtraOpen(document.getElementById("orderExtra").hidden);
+  });
 
   function closeOrderModal() {
     document.getElementById("orderModal").classList.remove("open");
@@ -1008,7 +985,6 @@
 
   function readOrderForm() {
     const branch = document.querySelector('input[name="orderBranch"]:checked');
-    const status = document.querySelector('input[name="orderStatus"]:checked');
     return {
       dueDate: document.getElementById("orderDueUnknown").checked ? "" : document.getElementById("orderDue").value,
       branch: branch ? branch.value : "",
@@ -1017,10 +993,8 @@
       caseCode: document.getElementById("orderCaseCode").value.trim(),
       orderDate: document.getElementById("orderReceived").value,
       orderNo: document.getElementById("orderNoInput").value.trim(),
-      amount: parseAmount(document.getElementById("orderAmount").value),
       quoteNo: document.getElementById("orderQuoteNo").value.trim(),
       invoiceDate: document.getElementById("orderInvoiceDate").value,
-      status: status ? status.value : ORDER_STATUSES[0].value,
       note: document.getElementById("orderNote").value.trim(),
     };
   }
@@ -1033,7 +1007,6 @@
     if (!fields.customer) return "客先名を選択、または入力してください。";
     // 新しく登録する案件は、案件のページとつなぐため品番を必須にする(以前の取引は空でも保存できる)
     if (!editingId && !fields.caseCode) return "品番（DIDは注文番号）を入力してください。";
-    if (Number.isNaN(fields.amount)) return "金額は数字で入力してください（例：1,250,000）。";
     return null;
   }
 
@@ -1059,6 +1032,7 @@
         } else {
           // 受注№が空なら、受注日の月の次の番号を付ける
           if (!fields.orderNo) fields.orderNo = nextOrderNo(orders, fields.orderDate);
+          fields.status = ORDER_STATUSES[0].value; // 新しい案件は出荷待ちから始まる
           await addOrder(fields);
           toast("案件を登録しました。続けて書類や単価を入れてください。");
         }
@@ -1446,7 +1420,6 @@
 
   document.getElementById("viewerClose").addEventListener("click", closeViewer);
 
-  document.getElementById("filterBranch").addEventListener("change", renderOrders);
   document.getElementById("filterStatus").addEventListener("change", renderOrders);
   document.getElementById("shipCustomer").addEventListener("change", renderOrders);
   document.getElementById("shipMonth").addEventListener("change", renderOrders);
@@ -1473,11 +1446,6 @@
   });
   document.getElementById("orderDueUnknown").addEventListener("change", syncDueUnknown);
 
-  // 金額は入力欄を離れたときに「1,250,000」のようにカンマ区切りへ整える
-  document.getElementById("orderAmount").addEventListener("blur", (ev) => {
-    const value = parseAmount(ev.target.value);
-    if (typeof value === "number" && !Number.isNaN(value)) ev.target.value = value.toLocaleString("ja-JP");
-  });
 
   /* ---------- 初期化 ---------- */
 
