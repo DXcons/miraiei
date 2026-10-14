@@ -1575,6 +1575,29 @@ footer.mock-footer {
   color: #9aa3af;
 }
 
+/* 「次の納期」が空欄の行(出荷待ち)は薄い赤で塗って、上に並べる */
+.order-table tr.row-need-next td {
+  background: #fde4e1;
+}
+
+.next-due-cell {
+  min-width: 190px;
+}
+
+.next-due-input {
+  width: 100%;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #cfd6df);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.next-due-none {
+  margin-top: 6px;
+  font-size: 15px;
+}
+
 .due-late {
   color: #b3261e !important;
   font-weight: 700;
