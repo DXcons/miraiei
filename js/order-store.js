@@ -20,7 +20,8 @@ const ORDER_STATUSES = [
   { value: "見積もり中", cls: "st-quote" },
   { value: "製作中", cls: "st-make" },
   { value: "納品済み", cls: "st-delivered" },
-  { value: "請求済み", cls: "st-billed" },
+  // 請求書をつくったら完了(過去の案件でも検索できるようになる)
+  { value: "請求済み", cls: "st-billed", closed: true },
   { value: "入金済み", cls: "st-paid", closed: true },
   { value: "受注せず", cls: "st-lost", closed: true },
 ];
@@ -37,7 +38,7 @@ function nextOrderStatus(value) {
   return i >= 0 && i < ORDER_FLOW.length - 1 ? ORDER_FLOW[i + 1] : null;
 }
 
-// 入金済み・受注せずは「終わった取引」
+// 請求済み・入金済み・受注せずは「終わった取引」
 function isOrderClosed(value) {
   return !!orderStatusInfo(value).closed;
 }
@@ -47,13 +48,15 @@ function isBeforeDelivery(value) {
   return ["商談中", "見積もり中", "製作中"].includes(value);
 }
 
-// 「出荷待ち」= 納品前(商談中・見積もり中・製作中)、「出荷済み」= 納品済み・請求済み(入金前)
+// 「出荷待ち」= 納品前(商談中・見積もり中・製作中)
+// 「出荷済み」= 出荷完了を押した案件(納品済み)と、その後に請求書をつくった案件(請求済み・入金済み)。
+// 出荷済みの案件は出荷した月のフォルダに残る。
 function isShipPending(value) {
   return isBeforeDelivery(value);
 }
 
 function isShipped(value) {
-  return value === "納品済み" || value === "請求済み";
+  return value === "納品済み" || value === "請求済み" || value === "入金済み";
 }
 
 /* ---------- 次の納期 ----------
@@ -175,10 +178,20 @@ async function deleteOrder(id) {
 
 const ORDER_FILE_COLLECTION = "orderFiles";
 
-// 書類の種類(表示順)。「見積書」は外注先からの見積書(以前からの呼び方のまま)。
-// 図面は、ここにアップロードするほか、「図面を保存する」で保存したものを紐づけることもできる。
-const ORDER_DOC_TYPES = ["客先の注文書", "見積書", "外注先への注文書", "図面", "納品書", "請求書", "写真", "その他"];
-const ORDER_UPLOAD_TYPES = ORDER_DOC_TYPES;
+// アップロードするときに選ぶ書類の種類
+const ORDER_UPLOAD_TYPES = ["客先からの注文書", "注文メール", "図面", "外注先からの見積もり", "外注先からの検査書", "その他"];
+// 表示するときの種類(表示順)。以前の種類で保存した書類もまとめて出せるよう、昔の種類も残している。
+const ORDER_DOC_TYPES = [
+  ...ORDER_UPLOAD_TYPES.filter((t) => t !== "その他"),
+  "外注先への注文書", "納品書", "請求書", "写真", "その他",
+];
+// 以前の呼び方 → いまの呼び方
+const ORDER_DOC_TYPE_ALIASES = { "客先の注文書": "客先からの注文書", "見積書": "外注先からの見積もり" };
+
+function orderDocType(file) {
+  const t = ORDER_DOC_TYPE_ALIASES[file.docType] || file.docType;
+  return ORDER_DOC_TYPES.includes(t) ? t : "その他";
+}
 
 /* ---------- 案件との対応 ----------
    取引(orders)は caseCode(品番。DIDは注文番号)を持ち、客先グループ＋品番で
