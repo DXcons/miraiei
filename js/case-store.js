@@ -556,8 +556,16 @@ async function openCaseViewer(opts) {
     const blob = await opts.loadBlob();
     if (token !== caseViewerToken) return; // 読み込み中に別のPDFへ切り替わった
     caseViewerUrl = URL.createObjectURL(blob);
-    document.getElementById("caseViewerFrame").innerHTML =
-      `<iframe src="${caseViewerUrl}" title="${escapeHtml(opts.title || "図面")}"></iframe>`;
+    const frame = document.getElementById("caseViewerFrame");
+    // Outlookのメール(.msg/.eml)は、件名・本文・添付を読み取って表示する(order-store.js)
+    if (typeof isMailFile === "function" && isMailFile(opts.fileName)) {
+      frame.innerHTML = `<div class="empty-state">メールを読み込んでいます…</div>`;
+      await renderMailInto(frame, blob, opts.fileName);
+      tab.style.display = "none";
+    } else {
+      frame.innerHTML = `<iframe src="${caseViewerUrl}" title="${escapeHtml(opts.title || "図面")}"></iframe>`;
+      tab.style.display = "";
+    }
     tab.href = caseViewerUrl;
     dl.href = caseViewerUrl;
     dl.setAttribute("download", opts.fileName || "drawing.pdf");

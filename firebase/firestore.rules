@@ -11,6 +11,11 @@
 //               登録・閲覧・編集・削除できます。
 // orderFiles  : 取引ごとの書類(見積書・納品書・請求書・写真など)。
 //               chunksサブコレクションにファイル本体が分割して入っています。
+// caseItems   : 注文書の受注単価と御見積書の外注単価を突き合わせた明細(図面1枚=1件)。
+//               「データの取り込み」で登録し、突き合わせ表の「修正」で編集します。
+// caseDocs    : 取り込んだ元の注文書・御見積書のPDF。chunksに本体が入っています。
+// purchaseOrders : 案件ページで作った下請け・材料屋への注文書。
+// settings/seal  : 注文書に出す担当者印の画像(公開しているアプリのファイルには入れない)。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -36,6 +41,23 @@ service cloud.firestore {
     }
 
     match /orderFiles/{fileId} {
+      allow read, write: if request.auth != null;
+
+      match /chunks/{chunkId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    match /caseItems/{itemId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 下請け・材料屋への注文書(案件ページで作成)
+    match /purchaseOrders/{poId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /caseDocs/{docId} {
       allow read, write: if request.auth != null;
 
       match /chunks/{chunkId} {

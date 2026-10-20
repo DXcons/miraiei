@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261014g">
+<link rel="stylesheet" href="css/style.css?v=20261020b">
 </head>
 <body>
 
@@ -38,6 +38,9 @@
   <!-- 1.5 注文書・納品書をつくる -->
   <div class="card" id="docMakeArea"></div>
 
+  <!-- 1.6 部品の一覧(図番・品名・数量)。「書類を作成する」から開いたときだけ出す -->
+  <div class="card" id="partsArea" hidden></div>
+
   <!-- 2. 書類 -->
   <div class="card">
     <div class="section-head">
@@ -52,6 +55,7 @@
         <label class="btn btn-secondary">
           ファイルを選ぶ
           <input type="file" id="docsFileInput" multiple hidden>
+          <input type="file" id="replaceFileInput" hidden>
         </label>
         <div class="dropzone-note">上で選んだ種類として保存します。PDF・Excel・写真など、1ファイル20MBまで。</div>
       </div>
@@ -63,7 +67,7 @@
   <!-- 3. 突き合わせ表 -->
   <div class="card case-summary" id="summaryArea"></div>
 
-  <div class="card">
+  <div class="card" id="tableTools">
     <div class="case-filter-row">
       <div class="field" style="margin-bottom:0; flex:1;">
         <label for="keyword" class="search-label">検索する：品名・図面番号・外注先でしぼり込む
@@ -349,8 +353,8 @@
 <script src="js/firebase-config.js?v=20261014a"></script>
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
-<script src="js/case-store.js?v=20261014a"></script>
-<script src="js/order-store.js?v=20261014c"></script>
+<script src="js/case-store.js?v=20261020a"></script>
+<script src="js/order-store.js?v=20261020b"></script>
 <script src="js/doc-store.js?v=20261014a"></script>
 <script>
   const params = new URLSearchParams(location.search);
@@ -946,6 +950,7 @@
               </div>
               <div class="doc-actions">
                 <button type="button" class="btn btn-secondary btn-sm" data-file="${f.id}">表示</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-file-replace="${f.id}" title="書き込みをしたPDFなどで、この書類を置き換えます">差し替え</button>
                 <button type="button" class="btn btn-ghost btn-sm btn-danger" data-file-del="${f.id}">削除</button>
               </div>
             </div>`).join("")}
@@ -1043,6 +1048,7 @@
   const priceCell = (v) => (v === null || v === undefined || v === "") ? `<span class="missing">未入力</span>` : formatYen(v);
 
   function render() {
+    renderParts();
     renderSummary();
     const area = document.getElementById("resultArea");
     if (ROWS.length === 0 && MAKE_MODE) {
@@ -1158,6 +1164,111 @@
         </td>
       </tr>`;
   }
+
+  /* ---------- 部品の一覧(「書類を作成する」から開いたとき) ----------
+     図番・品名・数量をその場で直せる。直すと表の行(caseItems)がすぐ保存され、納品書の品物にも使われる。 */
+  function renderParts() {
+    if (!MAKE_MODE) return;
+    const area = document.getElementById("partsArea");
+    area.hidden = false;
+    area.innerHTML = `
+      <div class="section-head">
+        <h2 class="section-title">🔩 部品の一覧（図番・品名・数量）</h2>
+        <span class="field-note">書きかえると、その場で保存されます。納品書の品物にも使われます。</span>
+      </div>
+      <div class="table-wrap">
+        <table class="parts-table">
+          <thead><tr><th>図番</th><th>品名</th><th>数量</th><th></th></tr></thead>
+          <tbody>
+            ${ROWS.map((r) => `
+              <tr>
+                <td><input type="text" data-part="${r.id}" data-k="drawingNo" value="${escapeHtml(r.drawingNo || "")}" autocomplete="off"></td>
+                <td><input type="text" data-part="${r.id}" data-k="productName" value="${escapeHtml(r.productName || "")}" autocomplete="off"></td>
+                <td><input type="number" min="0" class="parts-qty" data-part="${r.id}" data-k="qty" value="${escapeHtml(r.qty ?? "")}"></td>
+                <td class="parts-actions">
+                  ${r.drawingId || r.drawingFileId ? `<button type="button" class="btn btn-secondary btn-sm" data-part-drawing="${r.id}">図面</button>` : ""}
+                  <button type="button" class="btn btn-ghost btn-sm btn-danger" data-part-del="${r.id}">削除</button>
+                </td>
+              </tr>`).join("")}
+            <tr class="parts-new">
+              <td><input type="text" id="newPartDno" placeholder="図番" autocomplete="off"></td>
+              <td><input type="text" id="newPartName" placeholder="品名" autocomplete="off"></td>
+              <td><input type="number" min="0" class="parts-qty" id="newPartQty" placeholder="数量"></td>
+              <td class="parts-actions"><button type="button" class="btn btn-primary btn-sm" id="newPartAdd">＋ 追加</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  async function savePart(el) {
+    const r = ROWS.find((x) => x.id === el.dataset.part);
+    if (!r) return;
+    const key = el.dataset.k;
+    const value = key === "qty" ? (el.value === "" ? 0 : Number(el.value)) : el.value.trim();
+    if (key === "drawingNo" && !value) {
+      el.value = r.drawingNo || "";
+      return toast("図番は空にできません。");
+    }
+    try {
+      await updateCaseItem(r.id, { [key]: value });
+      r[key] = value;
+      toast("保存しました");
+    } catch (err) {
+      console.error("部品の保存に失敗しました", err);
+      toast("保存できませんでした。");
+    }
+  }
+
+  async function addPart() {
+    const drawingNo = document.getElementById("newPartDno").value.trim();
+    if (!drawingNo) return toast("図番を入れてください。");
+    if (busy) return;
+    busy = true;
+    try {
+      const row = await addCaseItemManual({
+        customer: caseCustomerName(), productCode: code, drawingNo,
+        productName: document.getElementById("newPartName").value.trim(),
+        qty: Number(document.getElementById("newPartQty").value) || 0,
+        material: "", orderDate: "", orderSlipNo: "", orderUnitPrice: null, outsourceUnitPrice: null,
+        outsourcer: "", note: "", needsCheck: false, costs: [], quoteNo: "", quoteDate: "",
+      });
+      ROWS = sortRows([...ROWS, row]);
+      render();
+      toast("部品を追加しました");
+    } catch (err) {
+      console.error("部品の追加に失敗しました", err);
+      toast(err.message || "追加できませんでした。");
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function removePart(id) {
+    const r = ROWS.find((x) => x.id === id);
+    if (!r || !confirm(`図番「${r.drawingNo}」の部品を一覧から消しますか？`)) return;
+    try {
+      await deleteCaseItem(id);
+      ROWS = ROWS.filter((x) => x.id !== id);
+      render();
+      toast("消しました");
+    } catch (err) {
+      console.error("部品の削除に失敗しました", err);
+      toast("消せませんでした。");
+    }
+  }
+
+  document.getElementById("partsArea").addEventListener("change", (ev) => {
+    const el = ev.target.closest("[data-part]");
+    if (el) savePart(el);
+  });
+  document.getElementById("partsArea").addEventListener("click", (ev) => {
+    if (ev.target.closest("#newPartAdd")) return addPart();
+    const del = ev.target.closest("[data-part-del]");
+    if (del) return removePart(del.dataset.partDel);
+    const dw = ev.target.closest("[data-part-drawing]");
+    if (dw) viewDrawing(dw.dataset.partDrawing);
+  });
 
   function viewDrawing(id) {
     const r = ROWS.find((x) => x.id === id);
@@ -1466,6 +1577,11 @@
     if (view) return viewFile(view.dataset.file);
     const del = ev.target.closest("[data-file-del]");
     if (del) return removeFile(del.dataset.fileDel);
+    const rep = ev.target.closest("[data-file-replace]");
+    if (rep) {
+      replacingId = rep.dataset.fileReplace;
+      return document.getElementById("replaceFileInput").click();
+    }
     const imported = ev.target.closest("[data-imported]");
     if (imported) {
       const r = ROWS.find((x) => x.docId === imported.dataset.imported);
@@ -1475,6 +1591,32 @@
         fileName: `${(r.sourceFile || "書類").replace(/\.pdf$/i, "")}_書類.pdf`,
         loadBlob: () => loadCaseDocBlob(r.docId),
       });
+    }
+  });
+
+  // 差し替え：Edgeで開いて書き込み・保存したPDFなどを選ぶと、元の書類と入れ替える
+  let replacingId = null;
+  document.getElementById("replaceFileInput").addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    const old = FILES.find((f) => f.id === replacingId);
+    if (!file || !old || busy) return;
+    if (!confirm(`「${old.fileName}」を「${file.name}」に差し替えますか？\n（元の書類は消えます）`)) return;
+    const status = document.getElementById("docsUploadStatus");
+    busy = true;
+    try {
+      const saved = await replaceOrderFile(old, file, (done, total) => {
+        status.textContent = `「${file.name}」を保存中… ${Math.round((done / total) * 100)}%`;
+      });
+      FILES = FILES.filter((f) => f.id !== old.id);
+      FILES.push(saved);
+      status.textContent = `✅「${old.fileName}」を差し替えました。`;
+      renderDocs();
+    } catch (err) {
+      console.error("差し替えに失敗しました", err);
+      status.textContent = "差し替えできませんでした。";
+    } finally {
+      busy = false;
     }
   });
 

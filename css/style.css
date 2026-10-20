@@ -1588,12 +1588,303 @@ footer.mock-footer {
 /* 案件ページを「書類を作成する」から開いたとき(case-detail.html?mode=make)に隠す部分 */
 body.make-mode #infoArea,
 body.make-mode #summaryArea,
-body.make-mode .case-filter-row > .field {
+body.make-mode #tableTools,
+body.make-mode #resultArea {
   display: none !important;
 }
 
-body.make-mode .case-filter-row {
+/* 部品の一覧(図番・品名・数量をその場で直す) */
+.parts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.parts-table th {
+  text-align: left;
+  font-size: 15px;
+  color: var(--text-light);
+  padding: 6px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.parts-table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.parts-table input {
+  width: 100%;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.parts-table .parts-qty {
+  width: 90px;
+}
+
+.parts-table .parts-actions {
+  white-space: nowrap;
+  text-align: right;
+  width: 1%;
+}
+
+.parts-table tr.parts-new td {
+  background: #fbf7f2;
+}
+
+/* Outlookのメール(.msg/.eml)の表示 */
+.mail-view {
+  padding: 16px 20px;
+  overflow: auto;
+  max-height: 72vh;
+}
+
+.mail-head {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+}
+
+.mail-head th,
+.mail-head td {
+  text-align: left;
+  vertical-align: top;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mail-head th {
+  width: 5em;
+  color: var(--text-light);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mail-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mail-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+.mail-html {
+  width: 100%;
+  height: 55vh;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* PDFを書類ごとに分ける画面 */
+.split-pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.split-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.split-thumb {
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-thumb canvas {
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.split-label {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.split-page select {
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  padding: 4px 6px;
+}
+
+#splitModal {
+  z-index: 1100;
+}
+
+.modal-box.modal-box-split {
+  max-width: 1000px;
+  width: 100%;
+}
+
+/* 注文詳細(No の ▸ で行の下に開く) */
+.no-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.no-toggle span {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.no-toggle.is-open {
+  border-color: var(--accent);
+}
+
+.detail-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.order-table tr.detail-row td {
+  background: #fbf7f2;
+  white-space: normal;
+  padding: 12px 16px 14px 22px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 14px;
+}
+
+.detail-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-light);
+}
+
+.detail-grid label small {
+  font-weight: 400;
+}
+
+.detail-grid .detail-wide {
+  grid-column: span 2;
+}
+
+.detail-grid input,
+.detail-grid textarea {
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text);
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.count-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.count-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+#orderModal .count-row input[type="number"] {
+  width: 80px;
+}
+
+/* 進行中の表：1行目の通し番号と、右端の短いボタン(アイコン＋2文字) */
+.order-table .row-no {
+  width: 1%;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-light);
+}
+
+.order-table td.order-actions {
+  min-width: 0;
+}
+
+.icon-actions {
+  display: flex;
+  gap: 4px;
   justify-content: flex-end;
+}
+
+.icon-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  padding: 4px 4px 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  line-height: 1.1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.icon-btn span {
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.icon-btn:hover {
+  border-color: var(--accent);
+}
+
+.icon-btn.is-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.state-select.is-done {
+  background: #e7f5ea;
+  border-color: #9ccfa8;
 }
 
 /* 表が画面より横に長いときも、右端のボタン(出荷完了・書類・編集)は常に見えるように固定する */
@@ -1629,7 +1920,11 @@ body.make-mode .case-filter-row {
 }
 
 .state-cell {
-  min-width: 175px;
+  min-width: 130px;
+}
+
+.state-cell .state-select {
+  width: 125px;
 }
 
 .state-text {

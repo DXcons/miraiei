@@ -222,13 +222,97 @@ const IMAGE_JPEG_QUALITY = 0.85;
 
 // ブラウザの中で表示できる形式か(できないもの=Excelなどはダウンロードして開く)
 function fileViewKind(mimeType, fileName) {
+  if (isMailFile(fileName)) return "mail";
   if (mimeType === "application/pdf" || /\.pdf$/i.test(fileName)) return "pdf";
   if (/^image\//.test(mimeType || "") || /\.(png|jpe?g|gif|webp)$/i.test(fileName)) return "image";
   return "download";
 }
 
+/* ---------- メール(Outlookの .msg、新しいOutlookなどの .eml) ----------
+   保存はファイルのまま。表示するときにブラウザの中で読み、件名・差出人・本文・添付を画面に出す。
+   読み取りの部品は、メールを開いたときだけCDNから読み込む。 */
+const MSGREADER_URL = "https://cdn.jsdelivr.net/npm/@kenjiuno/msgreader@1.28.0/+esm";
+const POSTALMIME_URL = "https://cdn.jsdelivr.net/npm/postal-mime@2.7.6/+esm";
+
+function isMailFile(fileName) {
+  return /\.(msg|eml)$/i.test(fileName || "");
+}
+
+// メールを { subject, from, to, date, text, html, attachments:[{ name, blob }] } にする
+async function parseMailFile(blob, fileName) {
+  const buf = await blob.arrayBuffer();
+  if (/\.msg$/i.test(fileName)) {
+    const mod = await import(MSGREADER_URL);
+    const MsgReader = (mod.default && mod.default.default) || mod.default || mod.MsgReader;
+    const reader = new MsgReader(buf);
+    const d = reader.getFileData();
+    if (d.error) throw new Error(d.error);
+    const person = (name, mail) => (name && mail && name !== mail ? `${name} <${mail}>` : name || mail || "");
+    let html = "";
+    if (d.html) html = typeof d.html === "string" ? d.html : new TextDecoder("utf-8").decode(d.html);
+    else if (d.bodyHtml) html = d.bodyHtml;
+    return {
+      subject: d.subject || "",
+      from: person(d.senderName, d.senderSmtpAddress || d.senderEmail),
+      to: (d.recipients || []).map((r) => person(r.name, r.smtpAddress || r.email)).filter(Boolean).join("、"),
+      date: d.messageDeliveryTime || d.clientSubmitTime || d.creationTime || "",
+      text: d.body || "",
+      html,
+      attachments: (d.attachments || []).filter((a) => !a.attachmentHidden).map((a) => {
+        const f = reader.getAttachment(a);
+        return { name: f.fileName || a.fileName || a.name || "添付ファイル", blob: new Blob([f.content]) };
+      }),
+    };
+  }
+  const mod = await import(POSTALMIME_URL);
+  const e = await mod.default.parse(buf);
+  const person = (p) => (p ? (p.name && p.address ? `${p.name} <${p.address}>` : p.name || p.address || "") : "");
+  return {
+    subject: e.subject || "",
+    from: person(e.from),
+    to: (e.to || []).map(person).join("、"),
+    date: e.date || "",
+    text: e.text || "",
+    html: e.html || "",
+    attachments: (e.attachments || []).map((a) => ({
+      name: a.filename || "添付ファイル", blob: new Blob([a.content], { type: a.mimeType || "" }),
+    })),
+  };
+}
+
+let mailAttachmentUrls = [];
+
+// メールを画面に出す。本文は文字の本文を優先し、無ければHTMLの本文を、スクリプトを止めた枠の中に出す
+async function renderMailInto(area, blob, fileName) {
+  mailAttachmentUrls.forEach((u) => URL.revokeObjectURL(u));
+  mailAttachmentUrls = [];
+  const mail = await parseMailFile(blob, fileName);
+  const when = mail.date && !isNaN(new Date(mail.date)) ? new Date(mail.date).toLocaleString("ja-JP") : mail.date;
+  const attach = mail.attachments.map((a) => {
+    const url = URL.createObjectURL(a.blob);
+    mailAttachmentUrls.push(url);
+    return `<a class="btn btn-secondary btn-sm" href="${url}" download="${escapeHtml(a.name)}">📎 ${escapeHtml(a.name)}</a>`;
+  }).join("");
+  area.innerHTML = `
+    <div class="mail-view">
+      <table class="mail-head">
+        <tr><th>件名</th><td><b>${escapeHtml(mail.subject || "（件名なし）")}</b></td></tr>
+        <tr><th>差出人</th><td>${escapeHtml(mail.from)}</td></tr>
+        <tr><th>宛先</th><td>${escapeHtml(mail.to)}</td></tr>
+        <tr><th>日時</th><td>${escapeHtml(when)}</td></tr>
+        ${attach ? `<tr><th>添付</th><td class="mail-attach">${attach}</td></tr>` : ""}
+      </table>
+      ${mail.text.trim()
+        ? `<div class="mail-body">${escapeHtml(mail.text)}</div>`
+        : `<iframe class="mail-html" sandbox="" title="メール本文"></iframe>`}
+    </div>`;
+  const frame = area.querySelector(".mail-html");
+  if (frame) frame.srcdoc = mail.html || "（本文はありません）";
+}
+
 function fileIcon(mimeType, fileName) {
   const kind = fileViewKind(mimeType, fileName);
+  if (kind === "mail") return "✉️";
   if (kind === "pdf") return "📄";
   if (kind === "image") return "🖼️";
   if (/\.(xlsx?|xlsm|csv)$/i.test(fileName)) return "📊";
@@ -301,6 +385,13 @@ async function saveOrderFile(orderId, docType, file, onProgress) {
   };
   await docRef.set(data);
   return { id: docRef.id, ...data };
+}
+
+// 書類を差し替える(Edgeで書き込みをしたPDFなど)。同じ案件・同じ種類で新しく保存してから、元の書類を消す
+async function replaceOrderFile(old, file, onProgress) {
+  const saved = await saveOrderFile(old.orderId, old.docType, file, onProgress);
+  await deleteOrderFile(old.id);
+  return saved;
 }
 
 async function loadOrderFileBlob(id, mimeType) {
