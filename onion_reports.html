@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>村上農園 - 玉ねぎ日報レポート</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: #f0f7f0;
+      min-height: 100vh;
+      padding-bottom: 40px;
+      color: #222;
+    }
+
+    header {
+      background: #2e5c28;
+      color: #fff;
+      padding: 13px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-back {
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+
+    .header-title { font-size: 17px; font-weight: 800; }
+
+    main { max-width: 640px; margin: 0 auto; padding: 16px 12px; }
+
+    .section-title { font-size: 15px; font-weight: 800; color: #7a3f13; margin: 4px 0 10px; }
+
+    .table-wrap { overflow-x: auto; }
+    .report-table { min-width: 420px; }
+
+    .report-row {
+      display: grid;
+      grid-template-columns: 26px 1fr 64px 64px 64px;
+      align-items: center;
+      gap: 6px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    }
+
+    .report-row.header {
+      background: transparent;
+      box-shadow: none;
+      padding: 0 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #777;
+      text-align: center;
+    }
+
+    .report-row input[type="checkbox"] { width: 20px; height: 20px; }
+    .report-date { font-size: 14px; font-weight: 700; }
+
+    .eff-cell { font-size: 13px; font-weight: 700; text-align: center; }
+    .eff-cell.ok { color: #2e7d32; }
+    .eff-cell.ng { color: #444; }
+    .eff-cell.na { color: #ccc; }
+
+    .note { font-size: 12px; color: #777; margin: 8px 2px 14px; line-height: 1.6; }
+
+    .actions { display: flex; gap: 10px; margin-top: 12px; }
+
+    .btn-export {
+      flex: 2;
+      padding: 15px;
+      background: #2e5c28;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .btn-delete {
+      flex: 1;
+      padding: 15px;
+      background: #fff0ef;
+      color: #c0392b;
+      border: 1.5px solid #f3c3bd;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-export:disabled, .btn-delete:disabled { opacity: 0.6; }
+
+    .empty { text-align: center; color: #999; padding: 40px 10px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="btn-back" id="backLink" href="staff.html">←</a>
+  <div class="header-title" id="pageTitle">🧅 玉ねぎ日報 レポート</div>
+</header>
+
+<main>
+  <div class="section-title" id="listTitle"></div>
+  <div id="reportList"><div class="empty" id="loadingText"></div></div>
+  <div class="note" id="effNote"></div>
+  <div class="actions">
+    <button type="button" class="btn-delete" id="deleteBtn" onclick="deleteSelectedReports()"></button>
+    <button type="button" class="btn-export" id="exportBtn" onclick="exportSelectedReports()"></button>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/onion-common.js"></script>
+<script>
+  // 玉ねぎ作業日報の一覧・Excel出力・削除。スタッフ画面のメニュー「レポート出力」と管理者画面の両方から開く。
+  // 文言はスタッフが選んだ言語（staffLang）で表示する（管理者は通常日本語）
+  const REPORT_I18N = {
+    ja: {
+      back: '← もどる', title: '🧅 玉ねぎ日報（たまねぎにっぽう） レポート',
+      listTitle: '日報（にっぽう）の一覧（いちらん）', loading: '読み込み中（よみこみちゅう）...',
+      empty: 'まだ日報（にっぽう）がありません',
+      effNote: '数字は作業効率（さぎょうこうりつ）（kg/人時）。緑（みどり）は目標（もくひょう）達成（たっせい）',
+      export: '選んだ日（ひ）をExcel出力（しゅつりょく）', exporting: '出力中（しゅつりょくちゅう）...',
+      delete: '削除（さくじょ）', deleting: '削除中（さくじょちゅう）...',
+      selectDate: '日付（ひづけ）を選んで（えらんで）ください', fetchFailed: 'データの取得（しゅとく）に失敗（しっぱい）しました',
+      deleteFailed: '削除（さくじょ）に失敗（しっぱい）しました',
+      deleteConfirm: n => `${n}件（けん）の日報（にっぽう）を削除（さくじょ）しますか？\nこの操作（そうさ）は取り消せません（とりけせません）。`,
+    },
+    id: {
+      back: '← Kembali', title: '🧅 Laporan Bawang',
+      listTitle: 'Daftar laporan', loading: 'Memuat...', empty: 'Belum ada laporan',
+      effNote: 'Angka = efisiensi kerja (kg/orang-jam). Hijau = target tercapai',
+      export: 'Ekspor Excel tanggal terpilih', exporting: 'Mengekspor...',
+      delete: 'Hapus', deleting: 'Menghapus...',
+      selectDate: 'Silakan pilih tanggal', fetchFailed: 'Gagal mengambil data', deleteFailed: 'Gagal menghapus',
+      deleteConfirm: n => `Hapus ${n} laporan? Tindakan ini tidak dapat dibatalkan.`,
+    },
+    km: {
+      back: '← ត្រឡប់', title: '🧅 របាយការណ៍ខ្ទឹមបារាំង',
+      listTitle: 'បញ្ជីរបាយការណ៍', loading: 'កំពុងផ្ទុក...', empty: 'មិនទាន់មានរបាយការណ៍ទេ',
+      effNote: 'លេខ = ប្រសិទ្ធភាពការងារ (kg/មនុស្ស-ម៉ោង)។ ពណ៌បៃតង = សម្រេចគោលដៅ',
+      export: 'នាំចេញ Excel ថ្ងៃដែលបានជ្រើស', exporting: 'កំពុងនាំចេញ...',
+      delete: 'លុប', deleting: 'កំពុងលុប...',
+      selectDate: 'សូមជ្រើសរើសកាលបរិច្ឆេទ', fetchFailed: 'ទាញយកទិន្នន័យមិនជោគជ័យ', deleteFailed: 'លុបមិនជោគជ័យ',
+      deleteConfirm: n => `លុបរបាយការណ៍ ${n} ចំនួន? សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។`,
+    },
+  };
+
+  let uiLang = localStorage.getItem('staffLang') || 'ja';
+
+  function t(key, ...args) {
+    const dict = REPORT_I18N[uiLang] ?? REPORT_I18N.ja;
+    const val = dict[key] ?? REPORT_I18N.ja[key];
+    return typeof val === 'function' ? val(...args) : val;
+  }
+
+  function formatDateJa(dateStr) {
+    const d = new Date(`${dateStr}T00:00:00`);
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    return `${d.getMonth() + 1}/${d.getDate()}（${weekdays[d.getDay()]}）`;
+  }
+
+  function applyText() {
+    document.getElementById('backLink').textContent = t('back');
+    document.getElementById('pageTitle').textContent = t('title');
+    document.getElementById('listTitle').textContent = t('listTitle');
+    document.getElementById('effNote').textContent = t('effNote');
+    document.getElementById('exportBtn').textContent = t('export');
+    document.getElementById('deleteBtn').textContent = t('delete');
+    const loading = document.getElementById('loadingText');
+    if (loading) loading.textContent = t('loading');
+  }
+
+  async function loadReportList() {
+    const { data, error } = await supabaseClient
+      .from('onion_reports')
+      .select('date, data')
+      .order('date', { ascending: false });
+
+    const el = document.getElementById('reportList');
+    if (error || !data?.length) {
+      if (error) console.error(error);
+      el.innerHTML = `<div class="empty">${error ? t('fetchFailed') : t('empty')}</div>`;
+      return;
+    }
+
+    const headerCells = ONION_EXPORT_COLUMN_ORDER
+      .map(bi => `<span>${ONION_BLOCK_TEMPLATES[bi].destination}</span>`).join('');
+
+    const rows = data.map(r => {
+      const cells = ONION_EXPORT_COLUMN_ORDER.map(bi => {
+        const e = calcOnionEfficiency(bi, r.data?.blocks?.[bi] ?? {});
+        if (!e) return '<span class="eff-cell na">-</span>';
+        return `<span class="eff-cell ${e.achieved ? 'ok' : 'ng'}">${e.efficiency.toFixed(1)}</span>`;
+      }).join('');
+      return `
+        <label class="report-row">
+          <input type="checkbox" class="report-cb" value="${r.date}">
+          <span class="report-date">${formatDateJa(r.date)}</span>
+          ${cells}
+        </label>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="table-wrap">
+        <div class="report-table">
+          <div class="report-row header"><span></span><span></span>${headerCells}</div>
+          ${rows}
+        </div>
+      </div>`;
+  }
+
+  function selectedDates() {
+    return [...document.querySelectorAll('.report-cb:checked')].map(cb => cb.value);
+  }
+
+  function buildOnionSheet(date, state) {
+    const rows = [['玉ねぎ作業日報', '', '', 'ひづけ', date], []];
+
+    ONION_BLOCK_TEMPLATES.forEach((tpl, bi) => {
+      const b = state.blocks?.[bi] ?? {};
+      rows.push(['出荷先', tpl.destination, '', 'サイン', b.sign ?? '']);
+      rows.push([]);
+
+      if (b.sizeEntries) {
+        // 2026-10-24以降の形式：サイズ・荷姿・個数・重さを1行ずつ
+        rows.push(['使ったサイズ', '荷姿', '個数', '重さ(kg)']);
+        b.sizeEntries.forEach(e => (e.packages ?? []).forEach(p => {
+          const w = onionPackageKg(p);
+          rows.push([e.size ?? '', p.type, p.count ?? '', w == null || isNaN(w) ? '' : w]);
+        }));
+      } else {
+        // 旧形式（サイズ3列横並び）
+        const sizeCols = b.sizeColumns ?? [];
+        const sizeLabelRow = ['使ったサイズ'];
+        const kindRow = ['しゅるい'];
+        const weightRow = ['おもさ'];
+        tpl.sizeLabels.forEach((fixedLabel, si) => {
+          const c = sizeCols[si] ?? {};
+          sizeLabelRow.push(tpl.sizeEditable ? (c.label ?? '') : fixedLabel);
+          kindRow.push(c.kind ?? '');
+          weightRow.push(c.weightCustom ? `${c.weightCustom}kg` : (c.weightMode === '20kg' ? '20kg' : ''));
+        });
+        rows.push(sizeLabelRow, kindRow, weightRow);
+      }
+      rows.push(['つかったかず(kg)', b.usedCount ?? '']);
+      rows.push([]);
+
+      rows.push(['時間と人数']);
+      rows.push(['開始', '終了', '人数']);
+      (b.timeRows ?? []).forEach(r => {
+        if (r.start || r.end || r.people) rows.push([r.start ?? '', r.end ?? '', r.people ?? '']);
+      });
+      rows.push([]);
+
+      if (b.producedRows) {
+        // 2026-10-24以降の形式：使用日ごとの行
+        rows.push(['できたもの', '使用日', 'コンテナ', '区分', '個数', '重さ(kg)']);
+        b.producedRows.forEach(r => {
+          const w = onionProducedKg(r);
+          rows.push(['', r.date ?? '', r.container ?? '', r.kind ?? '', r.count ?? '', w == null || isNaN(w) ? '' : w]);
+        });
+        rows.push(['できたもの合計(kg)', calcOnionProducedKg(b.producedRows).total]);
+      } else {
+        // 旧形式（つうじょう／やりなおし／ざいこ の表）
+        const producedCols = b.producedColumns ?? [];
+        const producedHeaderRow = ['できたもの'];
+        const usualRow = ['つうじょう'];
+        const redoRow  = ['やりなおし'];
+        const stockRow = ['ざいこ'];
+        tpl.producedLabels.forEach((fixedLabel, pi) => {
+          const c = producedCols[pi] ?? {};
+          producedHeaderRow.push(tpl.producedEditable[pi] ? (c.label ?? '') : fixedLabel);
+          usualRow.push(c.usual ?? '');
+          redoRow.push(c.redo ?? '');
+          stockRow.push(c.stock ?? '');
+        });
+        rows.push(producedHeaderRow, usualRow, redoRow, stockRow);
+      }
+      rows.push([]);
+
+      rows.push(['今日の様子', b.todayCondition ?? '']);
+      rows.push([]);
+      rows.push([]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    return ws;
+  }
+
+  async function exportSelectedReports() {
+    const dates = selectedDates();
+    if (!dates.length) { alert(t('selectDate')); return; }
+
+    const btn = document.getElementById('exportBtn');
+    btn.disabled = true;
+    btn.textContent = t('exporting');
+
+    const { data, error } = await supabaseClient
+      .from('onion_reports')
+      .select('date, data')
+      .in('date', dates)
+      .order('date');
+
+    btn.disabled = false;
+    btn.textContent = t('export');
+
+    if (error || !data?.length) { alert(t('fetchFailed')); console.error(error); return; }
+
+    const wb = XLSX.utils.book_new();
+    data.forEach(r => XLSX.utils.book_append_sheet(wb, buildOnionSheet(r.date, r.data), r.date));
+    XLSX.writeFile(wb, `玉ねぎ作業日報_${data[0].date}_${data[data.length - 1].date}.xlsx`);
+  }
+
+  async function deleteSelectedReports() {
+    const dates = selectedDates();
+    if (!dates.length) { alert(t('selectDate')); return; }
+    if (!confirm(t('deleteConfirm', dates.length))) return;
+
+    const btn = document.getElementById('deleteBtn');
+    btn.disabled = true;
+    btn.textContent = t('deleting');
+
+    const { error } = await supabaseClient.from('onion_reports').delete().in('date', dates);
+
+    btn.disabled = false;
+    btn.textContent = t('delete');
+
+    if (error) { alert(t('deleteFailed')); console.error(error); return; }
+    await loadReportList();
+  }
+
+  (async () => {
+    applyText();
+    const profile = await requireAuth();
+    if (!profile) return;
+    if (profile.role !== 'staff' && profile.role !== 'admin') {
+      window.location.href = roleHomePage(profile.role);
+      return;
+    }
+    if (profile.role === 'admin') {
+      // 管理者は日本語で表示し、管理画面へ戻る
+      uiLang = 'ja';
+      applyText();
+      document.getElementById('backLink').href = 'admin.html';
+    }
+    await loadReportList();
+  })();
+</script>
+</body>
+</html>

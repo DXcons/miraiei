@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>村上農園 - スタッフ用QRコード</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Meiryo', sans-serif;
+      background: #f0f7f0;
+      min-height: 100vh;
+      padding: 24px 16px 40px;
+      color: #222;
+    }
+
+    .toolbar {
+      max-width: 640px;
+      margin: 0 auto 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar a, .toolbar button {
+      background: #fff;
+      border: 1.5px solid #c8dcc6;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #2e5c28;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .toolbar .btn-print { background: #2e5c28; border-color: #2e5c28; color: #fff; }
+    .toolbar .btn-reset { margin-left: auto; color: #c0392b; border-color: #f0c4c0; }
+
+    .sheet {
+      max-width: 640px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      padding: 36px 24px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 80, 0, 0.08);
+    }
+
+    .sheet h1 { font-size: 30px; color: #2e5c28; margin-bottom: 6px; }
+
+    .sheet .lead {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    #qr { display: inline-block; padding: 12px; background: #fff; }
+    #qr img, #qr canvas { display: block; width: 300px; height: 300px; }
+
+    .langs { font-size: 15px; color: #555; margin-top: 18px; line-height: 1.8; }
+
+    .note {
+      max-width: 640px;
+      margin: 16px auto 0;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.7;
+    }
+
+    .url { word-break: break-all; font-family: monospace; font-size: 12px; color: #888; }
+
+    @media print {
+      body { background: #fff; padding: 0; }
+      .toolbar, .note { display: none; }
+      .sheet { box-shadow: none; max-width: none; }
+      #qr img, #qr canvas { width: 420px; height: 420px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="admin.html">← 管理画面へ戻る</a>
+  <button type="button" class="btn-print" onclick="window.print()">🖨 印刷する</button>
+  <button type="button" class="btn-reset" onclick="resetKey()">QRコードを作り直す</button>
+</div>
+
+<div class="sheet">
+  <h1>🌿 村上農園</h1>
+  <div class="lead">スマホのカメラで読み取ってください<br>作業（さぎょう）の画面（がめん）が開きます</div>
+  <div id="qr"></div>
+  <div class="langs">
+    Scan dengan kamera HP Anda<br>
+    ស្កេនដោយកាមេរ៉ាទូរស័ព្ទរបស់អ្នក
+  </div>
+</div>
+
+<div class="note">
+  <div>QRコードの中身（URL）：<span class="url" id="qrUrl"></span></div>
+  <div style="margin-top:8px">
+    ・このQRコードを読み取ると、だれでもスタッフとして名前を選んでログインできます（管理者のアカウントにはログインできません）。<br>
+    ・QRコードの写真が外部に出てしまった場合は「QRコードを作り直す」を押して、新しいQRコードを貼り直してください。古いQRコードは使えなくなります（すでにログイン済みのスマホはそのまま使えます）。
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="js/supabase.js"></script>
+<script>
+  function startUrl(key) {
+    const url = new URL('start.html', window.location.href);
+    url.searchParams.set('k', key);
+    return url.toString();
+  }
+
+  function renderQr(key) {
+    const url = startUrl(key);
+    document.getElementById('qrUrl').textContent = url;
+    const el = document.getElementById('qr');
+    el.innerHTML = '';
+    new QRCode(el, { text: url, width: 600, height: 600, correctLevel: QRCode.CorrectLevel.M });
+  }
+
+  async function loadKey() {
+    const { data, error } = await supabaseClient.from('staff_qr_keys').select('key').eq('id', 1).maybeSingle();
+    if (error || !data) {
+      console.error(error);
+      alert('QRコードの情報を読み込めませんでした。migration_2026-10-24_staff_qr_login.sql が実行済みか確認してください。');
+      return;
+    }
+    renderQr(data.key);
+  }
+
+  async function resetKey() {
+    if (!confirm('QRコードを作り直しますか？\n今貼ってあるQRコードは使えなくなります（ログイン済みのスマホはそのまま使えます）。')) return;
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const key = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+    const { error } = await supabaseClient
+      .from('staff_qr_keys')
+      .update({ key, updated_at: new Date().toISOString() })
+      .eq('id', 1);
+    if (error) {
+      console.error(error);
+      alert('作り直しに失敗しました。もう一度お試しください。');
+      return;
+    }
+    renderQr(key);
+    alert('新しいQRコードを作りました。印刷して貼り直してください。');
+  }
+
+  (async () => {
+    const profile = await requireAuth('admin');
+    if (!profile) return;
+    await loadKey();
+  })();
+</script>
+</body>
+</html>
