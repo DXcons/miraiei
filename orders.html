@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261020b">
+<link rel="stylesheet" href="css/style.css?v=20261027a">
 </head>
 <body>
 
@@ -93,26 +93,25 @@
       </div>
 
       <div class="field">
-        <label for="orderShipPlan">出荷予定</label>
-        <input type="date" id="orderShipPlan">
+        <label>区分</label>
+        <div class="chip-group" id="orderMakeGroup"></div>
       </div>
 
       <div class="field">
-        <label for="orderDue">最終の納期</label>
+        <label for="orderDue">納期</label>
         <div class="due-row">
           <input type="date" id="orderDue">
           <label class="check-label"><input type="checkbox" id="orderDueUnknown"> 未定</label>
         </div>
-        <div class="field-note">商品を客先に収める最終の納期です。</div>
+        <div class="field-note">商品を客先に収める納期です。</div>
       </div>
 
       <div class="field">
-        <label for="orderNextDue">次の納期</label>
-        <div class="due-row">
-          <input type="date" id="orderNextDue">
-          <label class="check-label"><input type="checkbox" id="orderNextNone"> 二次依頼なし</label>
+        <label class="check-label"><input type="checkbox" id="orderOutsourceNext"> 外注次加工あり</label>
+        <div class="due-row" id="orderNextDueRow" hidden>
+          <input type="date" id="orderNextDue" title="外注次加工の日程">
         </div>
-        <div class="field-note">外注先への依頼の納期など、途中の段階の納期です。</div>
+        <div class="field-note">ありにチェックしたときだけ、日程の欄が出ます。</div>
       </div>
 
       <div class="field">
@@ -171,11 +170,8 @@
           </div>
         </div>
         <div class="field">
-          <label for="orderOutShipDate">外注への出荷日・送り先</label>
-          <div class="count-row">
-            <input type="date" id="orderOutShipDate">
-            <input type="text" id="orderOutShipTo" list="vendorList" placeholder="送り先（外注先）" autocomplete="off">
-          </div>
+          <label for="orderOutShipTo">送り先（外注先）</label>
+          <input type="text" id="orderOutShipTo" list="vendorList" autocomplete="off">
         </div>
         <div class="field">
           <label for="orderSalesStaff">営業担当</label>
@@ -341,7 +337,7 @@
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261020a"></script>
-<script src="js/order-store.js?v=20261020b"></script>
+<script src="js/order-store.js?v=20261027a"></script>
 <script src="js/doc-store.js?v=20261014c"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script>
@@ -378,7 +374,7 @@
      出荷済みの行は消さず、出荷した月のフォルダに残す。 */
   const VIEWS = {
     pending: { label: "出荷待ち", icon: "📦", test: (o) => isShipPending(o.status),
-               note: "納品前の案件です。「次の納期」が空欄の案件は赤く塗って上に並べます。" },
+               note: "納品前の案件です。納期が近い順に並べます。" },
     shipped: { label: "出荷済み", icon: "🚚", test: (o) => isShipped(o.status),
                note: "出荷した月ごとのフォルダに入ります。客先ごとに、月1枚の請求書をつくります。" },
   };
@@ -538,9 +534,7 @@
           const all = orders.filter(v.test);
           let summary;
           if (key === "pending") {
-            const unset = all.filter(needsNextDue).length;
-            summary = (all.length ? `${all.length}件` : "案件はありません") +
-              (unset ? `<br><span class="due-late">次の納期が未記入：${unset}件</span>` : "");
+            summary = all.length ? `${all.length}件` : "案件はありません";
           } else {
             const unbilled = all.filter((o) => o.status === "納品済み").length;
             summary = unbilled ? `<span class="due-late">請求書がまだの案件：${unbilled}件</span>` : "請求書がまだの案件はありません";
@@ -579,17 +573,11 @@
 
   const dueKey = (o) => o.dueDate || "9999-99-99"; // 納期未定は最後
 
-  // 出荷待ち：「次の納期」が空欄の案件を先頭に、それぞれ最終の納期が近い順。
-  // 出荷済み：最近の納期が上。
+  // 出荷待ち：納期が近い順。出荷済み：最近の納期が上。
   function sortOrders(list) {
-    return list.slice().sort((a, b) => {
-      if (NAV.view === "pending") {
-        const na = needsNextDue(a), nb = needsNextDue(b);
-        if (na !== nb) return na ? -1 : 1;
-        return dueKey(a).localeCompare(dueKey(b));
-      }
-      return dueKey(b).localeCompare(dueKey(a));
-    });
+    return list.slice().sort((a, b) => NAV.view === "pending"
+      ? dueKey(a).localeCompare(dueKey(b))
+      : dueKey(b).localeCompare(dueKey(a)));
   }
 
   function todayText() {
@@ -611,32 +599,50 @@
       </select>`;
   }
 
+  /* ---------- 区分(工場のみ／工場＋外注／外注のみ) ----------
+     表では色付きの選択欄にし、行の左端の帯も同じ色にする。 */
+  function makeCellHtml(o) {
+    const t = orderMakeType(o.makeType);
+    return `
+      <select class="make-select ${t ? t.cls : ""}" data-make="${o.id}" title="${t ? escapeHtml(t.note) : "区分を選んでください"}">
+        ${t ? "" : `<option value="" selected>— 区分 —</option>`}
+        ${ORDER_MAKE_TYPES.map((m) => `<option value="${m.value}" title="${escapeHtml(m.note)}" ${m.value === o.makeType ? "selected" : ""}>${m.label}</option>`).join("")}
+      </select>`;
+  }
+
   /* ---------- 一覧表示 ----------
      1画面で表全体が見えるよう、列は最小限にし、右端のボタンは短い表記で1行に並べる。 */
 
   /* ---------- 注文詳細(行の下に開く) ----------
-     表に出さない詳しい情報。No の右の ▸ を押すと、その行の下に開く。入力するとその場で保存する。 */
+     表に出さない詳しい情報。No の右の ▸ を押すと、その行の下に開く。入力するとその場で保存する。
+     出荷待ちでは、現在の状態と外注次加工もここに置く(2026-10-27 社長のコメント)。 */
   const openDetails = new Set();
-  const DETAIL_FIELDS = ["customerOrderNos", "countTotal", "countFactory", "countOutsource", "outShipDate", "outShipTo", "salesStaff", "note"];
+  const DETAIL_FIELDS = ["customerOrderNos", "countTotal", "countFactory", "countOutsource", "outShipTo", "salesStaff", "note", "stateText", "nextDueDate"];
   const NUMBER_FIELDS = ["countTotal", "countFactory", "countOutsource"];
 
   function hasDetail(o) {
-    return DETAIL_FIELDS.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== "");
+    return DETAIL_FIELDS.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== "") || !!o.outsourceNext;
   }
 
   function detailRowHtml(o, colspan) {
     const v = (k) => escapeHtml(o[k] === undefined || o[k] === null ? "" : o[k]);
     const f = (k) => `data-detail-field="${k}" data-id="${o.id}"`;
+    const next = hasOutsourceNext(o);
     return `
       <tr class="detail-row">
         <td colspan="${colspan}">
           <div class="detail-grid">
+            ${NAV.view === "pending" ? `
+            <label>現在の状態${stateCellHtml(o)}</label>
+            <div class="detail-next">
+              <label class="check-label"><input type="checkbox" data-outsource-next="${o.id}" ${next ? "checked" : ""}> 外注次加工あり</label>
+              ${next ? `<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注次加工の日程">` : ""}
+            </div>` : ""}
             <label class="detail-wide">客先の注文番号<small>（複数あるときは「、」で区切る）</small>
               <input type="text" ${f("customerOrderNos")} value="${v("customerOrderNos")}" placeholder="例：000444444、000444445" autocomplete="off"></label>
             <label>総数<input type="number" min="0" ${f("countTotal")} value="${v("countTotal")}"></label>
             <label>工場<input type="number" min="0" ${f("countFactory")} value="${v("countFactory")}"></label>
             <label>外注<input type="number" min="0" ${f("countOutsource")} value="${v("countOutsource")}"></label>
-            <label>外注への出荷日<input type="date" ${f("outShipDate")} value="${v("outShipDate")}"></label>
             <label>送り先（外注先）<input type="text" list="vendorList" ${f("outShipTo")} value="${v("outShipTo")}" autocomplete="off"></label>
             <label>営業担当<input type="text" ${f("salesStaff")} value="${v("salesStaff")}" autocomplete="off"></label>
             <label class="detail-wide">連絡・備考<textarea rows="2" ${f("note")}>${v("note")}</textarea></label>
@@ -665,34 +671,28 @@
   function orderRowHtml(o, today, no) {
     const pending = NAV.view === "pending";
     const late = o.dueDate && o.dueDate < today && isBeforeDelivery(o.status);
-    const needNext = pending && needsNextDue(o);
     const caseUrl = o.caseCode ? caseDetailUrl(customerGroupOf(o.customer), o.caseCode) : "";
+    const make = orderMakeType(o.makeType);
+    // 品名／品番は1つの列にまとめる。品番は案件のページへのリンク
+    const code = caseUrl
+      ? `<a class="text-link" href="${escapeHtml(caseUrl)}" title="案件のページ（書類・突き合わせ表）を開く">${escapeHtml(o.caseCode)} ›</a>`
+      : escapeHtml(o.caseCode || "");
     return `
-      <tr class="${orderStatusInfo(o.status).cls} ${needNext ? "row-need-next" : ""}">
+      <tr class="${orderStatusInfo(o.status).cls} ${make ? make.cls : ""}">
         <td class="row-no">
           <button type="button" class="no-toggle ${openDetails.has(o.id) ? "is-open" : ""}" data-detail="${o.id}" title="注文詳細を開く／閉じる">
             ${no}<span>${openDetails.has(o.id) ? "▾" : "▸"}</span>${hasDetail(o) ? `<i class="detail-dot" title="注文詳細の入力あり"></i>` : ""}
           </button>
         </td>
-        ${pending
-          ? `<td>${escapeHtml(formatOrderDate(o.shipPlanDate))}</td>`
-          : `<td class="next-due-cell">
+        <td class="make-cell">${makeCellHtml(o)}</td>
+        ${pending ? "" : `<td class="next-due-cell">
                <input type="date" class="next-due-input" data-shipped-date="${o.id}" value="${escapeHtml(shipDateOf(o))}" title="出荷した日。月ごとの請求書のまとめ方に使います">
              </td>`}
         <td class="${late ? "due-late" : ""}">
           ${escapeHtml(formatDueDate(o.dueDate))}${late ? `<span class="late-mark">納期超過</span>` : ""}
         </td>
-        ${pending ? `
-        <td class="next-due-cell">
-          <input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" ${o.nextDueNone ? "disabled" : ""} title="他社への二次依頼の納期など。手で入力します">
-          <label class="check-label next-due-none"><input type="checkbox" data-next-none="${o.id}" ${o.nextDueNone ? "checked" : ""}> 二次依頼なし</label>
-        </td>
-        <td class="state-cell">${stateCellHtml(o)}</td>` : ""}
         <td class="order-customer">${escapeHtml(o.customer)}</td>
-        <td class="order-product">${escapeHtml(o.productName || "")}</td>
-        <td>${caseUrl
-          ? `<a class="text-link" href="${escapeHtml(caseUrl)}" title="案件のページ（書類・突き合わせ表）を開く">${escapeHtml(o.caseCode)} ›</a>`
-          : `<span class="text-muted">—</span>`}</td>
+        <td class="order-product">${[escapeHtml(o.productName || ""), code].filter(Boolean).join(" ／ ") || `<span class="text-muted">—</span>`}</td>
         ${pending ? "" : `<td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>`}
         <td class="order-actions">
           <div class="icon-actions">
@@ -706,7 +706,7 @@
             <button type="button" class="icon-btn" data-edit="${o.id}" title="編集">✏️<span>編集</span></button>
           </div>
         </td>
-      </tr>${openDetails.has(o.id) ? detailRowHtml(o, pending ? 9 : 8) : ""}`;
+      </tr>${openDetails.has(o.id) ? detailRowHtml(o, pending ? 6 : 8) : ""}`;
   }
 
   function orderTableHtml(list, today) {
@@ -717,12 +717,11 @@
           <thead>
             <tr>
               <th class="row-no">No</th>
-              <th>${pending ? "出荷予定" : "出荷日"}</th>
-              <th>最終の納期</th>
-              ${pending ? `<th>次の納期</th><th>現在の状態</th>` : ""}
+              <th>区分</th>
+              ${pending ? "" : `<th>出荷日</th>`}
+              <th>納期</th>
               <th>客先</th>
-              <th>品名</th>
-              <th>品番</th>
+              <th>品名／品番</th>
               ${pending ? "" : `<th>請求日</th>`}
               <th></th>
             </tr>
@@ -917,8 +916,8 @@
     if (editBtn) openOrderModal(editBtn.dataset.edit);
   });
 
-  // 次の納期(手入力)：日付を選んだ／消した、または「二次依頼なし」を切り替えたらすぐ保存する
-  // (次の納期・現在の状態・出荷日の入力欄の保存に共通で使う)
+  // 外注次加工の日程：日付を選んだ／消した、または「外注次加工あり」を切り替えたらすぐ保存する
+  // (外注次加工・現在の状態・区分・出荷日の入力欄の保存に共通で使う)
   async function saveNextDue(id, fields, message) {
     const order = orders.find((o) => o.id === id);
     if (!order || busy) return;
@@ -926,14 +925,14 @@
     try {
       const data = await updateOrder(id, fields);
       Object.assign(order, fields, { updatedAtText: data.updatedAtText });
-      toast(message || "次の納期を保存しました");
+      toast(message || "外注次加工の日程を保存しました");
       if ("shippedDate" in fields) refreshShipFilters();
     } catch (err) {
       console.error("保存に失敗しました", err);
       toast("保存できませんでした。");
     } finally {
       busy = false;
-      renderOrders(); // 並び順と赤い塗りを更新する
+      renderOrders(); // 日程の欄・区分の色を更新する
     }
   }
 
@@ -948,9 +947,16 @@
       saveNextDue(dateInput.dataset.nextDue, { nextDueDate: dateInput.value });
       return;
     }
-    const noneBox = ev.target.closest("[data-next-none]");
-    if (noneBox) {
-      saveNextDue(noneBox.dataset.nextNone, noneBox.checked ? { nextDueNone: true, nextDueDate: "" } : { nextDueNone: false });
+    // 外注次加工あり：チェックすると日程の欄が出る。外すと日程も消す
+    const nextBox = ev.target.closest("[data-outsource-next]");
+    if (nextBox) {
+      saveNextDue(nextBox.dataset.outsourceNext, nextBox.checked ? { outsourceNext: true } : { outsourceNext: false, nextDueDate: "" },
+        nextBox.checked ? "外注次加工ありにしました。日程を入れてください" : "外注次加工なしにしました");
+      return;
+    }
+    const makeSel = ev.target.closest("[data-make]");
+    if (makeSel) {
+      saveNextDue(makeSel.dataset.make, { makeType: makeSel.value }, "区分を保存しました");
       return;
     }
     // 現在の状態(未手配／手配済み)：選んだらすぐ保存
@@ -1129,6 +1135,9 @@
     document.getElementById("orderBranchGroup").innerHTML = ORDER_BRANCHES.map(
       (b) => `<label class="chip"><input type="radio" name="orderBranch" value="${b}"><span>${b}</span></label>`
     ).join("");
+    document.getElementById("orderMakeGroup").innerHTML = ORDER_MAKE_TYPES.map(
+      (t) => `<label class="chip make-chip ${t.cls}" title="${escapeHtml(t.note)}"><input type="radio" name="orderMake" value="${t.value}"><span>${t.label}</span></label>`
+    ).join("");
   }
 
   // 客先の選択肢は「客先一覧の編集」で登録した一覧を使う
@@ -1164,11 +1173,11 @@
     if (unknown) due.value = "";
   }
 
-  function syncNextNone() {
-    const none = document.getElementById("orderNextNone").checked;
-    const next = document.getElementById("orderNextDue");
-    next.disabled = none;
-    if (none) next.value = "";
+  // 外注次加工ありのときだけ、日程の欄を出す
+  function syncOutsourceNext() {
+    const on = document.getElementById("orderOutsourceNext").checked;
+    document.getElementById("orderNextDueRow").hidden = !on;
+    if (!on) document.getElementById("orderNextDue").value = "";
   }
 
   function setRadio(name, value) {
@@ -1186,6 +1195,7 @@
     document.getElementById("orderDueUnknown").checked = !!order && !order.dueDate;
     syncDueUnknown();
     setRadio("orderBranch", order ? order.branch : "");
+    setRadio("orderMake", order ? order.makeType || "" : "");
     // 新しく登録するときは、いま開いている客先を最初から選んでおく
     renderCustomerSelect(order ? order.customer : "");
     document.getElementById("orderReceived").value = order ? order.orderDate || orderReceivedDate(order) : todayText();
@@ -1195,18 +1205,16 @@
     document.getElementById("orderQuoteNo").value = order ? order.quoteNo || "" : "";
     document.getElementById("orderInvoiceDate").value = order ? order.invoiceDate || "" : "";
     document.getElementById("orderNote").value = order ? order.note || "" : "";
-    document.getElementById("orderShipPlan").value = order ? order.shipPlanDate || "" : "";
     const val = (k) => (order && order[k] !== undefined && order[k] !== null ? order[k] : "");
     document.getElementById("orderCustomerOrderNos").value = val("customerOrderNos");
     document.getElementById("orderCountTotal").value = val("countTotal");
     document.getElementById("orderCountFactory").value = val("countFactory");
     document.getElementById("orderCountOutsource").value = val("countOutsource");
-    document.getElementById("orderOutShipDate").value = val("outShipDate");
     document.getElementById("orderOutShipTo").value = val("outShipTo");
     document.getElementById("orderSalesStaff").value = val("salesStaff");
     document.getElementById("orderNextDue").value = order ? order.nextDueDate || "" : "";
-    document.getElementById("orderNextNone").checked = !!order && !!order.nextDueNone;
-    syncNextNone();
+    document.getElementById("orderOutsourceNext").checked = !!order && hasOutsourceNext(order);
+    syncOutsourceNext();
     // 以前の選択肢(外注先の返答待ちなど)で保存した案件は、その値も選べるように足しておく
     const stateSel = document.getElementById("orderState");
     stateSel.querySelectorAll("option[data-old]").forEach((op) => op.remove());
@@ -1254,6 +1262,8 @@
 
   function readOrderForm() {
     const branch = document.querySelector('input[name="orderBranch"]:checked');
+    const make = document.querySelector('input[name="orderMake"]:checked');
+    const outsourceNext = document.getElementById("orderOutsourceNext").checked;
     return {
       dueDate: document.getElementById("orderDueUnknown").checked ? "" : document.getElementById("orderDue").value,
       branch: branch ? branch.value : "",
@@ -1265,15 +1275,14 @@
       quoteNo: document.getElementById("orderQuoteNo").value.trim(),
       invoiceDate: document.getElementById("orderInvoiceDate").value,
       note: document.getElementById("orderNote").value.trim(),
-      shipPlanDate: document.getElementById("orderShipPlan").value,
-      nextDueDate: document.getElementById("orderNextNone").checked ? "" : document.getElementById("orderNextDue").value,
-      nextDueNone: document.getElementById("orderNextNone").checked,
+      makeType: make ? make.value : "",
+      nextDueDate: outsourceNext ? document.getElementById("orderNextDue").value : "",
+      outsourceNext,
       stateText: document.getElementById("orderState").value,
       customerOrderNos: document.getElementById("orderCustomerOrderNos").value.trim(),
       countTotal: numOrNull("orderCountTotal"),
       countFactory: numOrNull("orderCountFactory"),
       countOutsource: numOrNull("orderCountOutsource"),
-      outShipDate: document.getElementById("orderOutShipDate").value,
       outShipTo: document.getElementById("orderOutShipTo").value.trim(),
       salesStaff: document.getElementById("orderSalesStaff").value.trim(),
     };
@@ -1872,7 +1881,7 @@
     }
   });
   document.getElementById("orderDueUnknown").addEventListener("change", syncDueUnknown);
-  document.getElementById("orderNextNone").addEventListener("change", syncNextNone);
+  document.getElementById("orderOutsourceNext").addEventListener("change", syncOutsourceNext);
 
 
   /* ---------- 初期化 ---------- */
