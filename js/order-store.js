@@ -59,12 +59,24 @@ function isShipped(value) {
   return value === "納品済み" || value === "請求済み" || value === "入金済み";
 }
 
-/* ---------- 次の納期 ----------
-   dueDate は客先に収める「最終の納期」。nextDueDate は、他社への二次依頼の納期など
-   途中のステップの納期で、社長らが手で入れる。二次依頼がない案件は nextDueNone を立てる。
-   出荷待ちの表では、どちらも入っていない案件(=入力待ち)を赤で目立たせて上に並べる。 */
-function needsNextDue(order) {
-  return !order.nextDueDate && !order.nextDueNone;
+/* ---------- 外注次加工 ----------
+   dueDate は客先に収める「納期」。外注先での次加工がある案件だけ outsourceNext を立て、
+   その日程を nextDueDate に手で入れる(2026-10-27 社長のコメントで「二次依頼なし」から変更)。
+   以前に日程だけ入れた案件も「次加工あり」とみなす。 */
+function hasOutsourceNext(order) {
+  return !!order.outsourceNext || !!order.nextDueDate;
+}
+
+/* ---------- 案件の区分(makeType) ----------
+   どこで作るかで3つに分け、表では色で見分ける。 */
+const ORDER_MAKE_TYPES = [
+  { value: "工場", label: "工場のみ", note: "自社工場での製作のみ（次工程の外注を含む）", cls: "mk-factory" },
+  { value: "工場＋外注", label: "工場＋外注", note: "自社工場と外注先からの仕入れがある", cls: "mk-mixed" },
+  { value: "外注", label: "外注のみ", note: "外注先からの仕入れのみ", cls: "mk-out" },
+];
+
+function orderMakeType(value) {
+  return ORDER_MAKE_TYPES.find((t) => t.value === value) || null;
 }
 
 // "2026-12-12" → "2026/12/12"、空なら「未定」
