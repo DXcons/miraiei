@@ -1621,20 +1621,9 @@ footer.mock-footer {
   display: none;
 }
 
-/* 注文詳細の「外注次加工あり」：チェックしたときだけ日程の欄が出る */
-.detail-next {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.detail-grid .detail-next label {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  color: var(--text);
+/* 表の「外注次加工」列のチェック。ありのときだけ、行の下の詳細に日程の欄が出る */
+.next-check-cell {
+  white-space: nowrap;
 }
 
 .next-due-cell {
