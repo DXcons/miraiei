@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261027a">
+<link rel="stylesheet" href="css/style.css?v=20261027b">
 </head>
 <body>
 
@@ -634,10 +634,7 @@
           <div class="detail-grid">
             ${NAV.view === "pending" ? `
             <label>現在の状態${stateCellHtml(o)}</label>
-            <div class="detail-next">
-              <label class="check-label"><input type="checkbox" data-outsource-next="${o.id}" ${next ? "checked" : ""}> 外注次加工あり</label>
-              ${next ? `<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注次加工の日程">` : ""}
-            </div>` : ""}
+            ${next ? `<label>外注次加工の日程<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}"></label>` : ""}` : ""}
             <label class="detail-wide">客先の注文番号<small>（複数あるときは「、」で区切る）</small>
               <input type="text" ${f("customerOrderNos")} value="${v("customerOrderNos")}" placeholder="例：000444444、000444445" autocomplete="off"></label>
             <label>総数<input type="number" min="0" ${f("countTotal")} value="${v("countTotal")}"></label>
@@ -691,6 +688,9 @@
         <td class="${late ? "due-late" : ""}">
           ${escapeHtml(formatDueDate(o.dueDate))}${late ? `<span class="late-mark">納期超過</span>` : ""}
         </td>
+        ${pending ? `<td class="next-check-cell">
+          <label class="check-label" title="チェックすると、行の下の詳細に日程の欄が出ます"><input type="checkbox" data-outsource-next="${o.id}" ${hasOutsourceNext(o) ? "checked" : ""}> あり</label>
+        </td>` : ""}
         <td class="order-customer">${escapeHtml(o.customer)}</td>
         <td class="order-product">${[escapeHtml(o.productName || ""), code].filter(Boolean).join(" ／ ") || `<span class="text-muted">—</span>`}</td>
         ${pending ? "" : `<td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>`}
@@ -706,7 +706,7 @@
             <button type="button" class="icon-btn" data-edit="${o.id}" title="編集">✏️<span>編集</span></button>
           </div>
         </td>
-      </tr>${openDetails.has(o.id) ? detailRowHtml(o, pending ? 6 : 8) : ""}`;
+      </tr>${openDetails.has(o.id) ? detailRowHtml(o, pending ? 7 : 8) : ""}`;
   }
 
   function orderTableHtml(list, today) {
@@ -720,6 +720,7 @@
               <th>区分</th>
               ${pending ? "" : `<th>出荷日</th>`}
               <th>納期</th>
+              ${pending ? `<th>外注次加工</th>` : ""}
               <th>客先</th>
               <th>品名／品番</th>
               ${pending ? "" : `<th>請求日</th>`}
@@ -947,9 +948,10 @@
       saveNextDue(dateInput.dataset.nextDue, { nextDueDate: dateInput.value });
       return;
     }
-    // 外注次加工あり：チェックすると日程の欄が出る。外すと日程も消す
+    // 外注次加工あり(表の列)：チェックすると行の下の詳細を開いて日程の欄を出す。外すと日程も消す
     const nextBox = ev.target.closest("[data-outsource-next]");
     if (nextBox) {
+      if (nextBox.checked) openDetails.add(nextBox.dataset.outsourceNext);
       saveNextDue(nextBox.dataset.outsourceNext, nextBox.checked ? { outsourceNext: true } : { outsourceNext: false, nextDueDate: "" },
         nextBox.checked ? "外注次加工ありにしました。日程を入れてください" : "外注次加工なしにしました");
       return;
