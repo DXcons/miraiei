@@ -2896,6 +2896,19 @@ body.make-mode #resultArea {
   color: var(--text-light);
 }
 
+/* 過去の案件一覧の「進行中の案件も表示する」：見落とされないよう「検索する：」と同じ見た目にする */
+.check-label.search-check {
+  margin-top: 16px !important;
+  font-size: 20px !important;
+  font-weight: 800;
+  color: var(--accent) !important;
+}
+
+.check-label.search-check input {
+  width: 20px;
+  height: 20px;
+}
+
 #readStatus {
   font-weight: 700;
   color: var(--success);
