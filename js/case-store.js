@@ -313,6 +313,11 @@ function validateCaseBundle(bundle) {
   return bundle;
 }
 
+// 単価：空欄(""・null)は「未入力」のまま残す。Number(null) は 0 になってしまうため
+function priceOrNull(value) {
+  return value === "" || value === null || value === undefined ? null : Number(value);
+}
+
 function base64ToFile(base64, fileName) {
   const blob = base64ToBlob(base64, "application/pdf");
   return new File([blob], fileName, { type: "application/pdf" });
@@ -477,10 +482,10 @@ async function saveCaseImport(bundle, items, onProgress) {
       drawingNo: it.drawingNo,
       material: it.material || "",
       qty: Number(it.qty) || 0,
-      orderUnitPrice: it.orderUnitPrice === "" ? null : Number(it.orderUnitPrice),
+      orderUnitPrice: priceOrNull(it.orderUnitPrice),
       orderSlipNo: it.orderSlipNo || "",
       orderDate: it.orderDate || "",
-      outsourceUnitPrice: it.outsourceUnitPrice === "" ? null : Number(it.outsourceUnitPrice),
+      outsourceUnitPrice: priceOrNull(it.outsourceUnitPrice),
       outsourceQty: Number(it.outsourceQty) || 0,
       outsourcer: it.outsourcer || "",
       quoteNo: it.quoteNo || "",
