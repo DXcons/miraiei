@@ -1576,9 +1576,65 @@ footer.mock-footer {
   color: #9aa3af;
 }
 
-/* 「次の納期」が空欄の行(出荷待ち)は薄い赤で塗って、上に並べる */
-.order-table tr.row-need-next td {
-  background: #fde4e1;
+/* 案件の区分(工場のみ／工場＋外注／外注のみ)。行の左端の帯と、区分の選択欄を同じ色にする */
+.mk-factory { --mk-bg: #dff2e5; --mk-fg: #1d6b3a; --mk-band: #3a9d5d; }
+.mk-mixed   { --mk-bg: #fdebd3; --mk-fg: #8a4b06; --mk-band: #e08a1e; }
+.mk-out     { --mk-bg: #ebe4f8; --mk-fg: #4e3590; --mk-band: #7c5cc4; }
+
+.order-table tr.mk-factory,
+.order-table tr.mk-mixed,
+.order-table tr.mk-out {
+  --st-bg: var(--mk-band);
+}
+
+.make-cell {
+  min-width: 120px;
+}
+
+.make-select {
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #cfd6df);
+  border-radius: 6px;
+  background: var(--mk-bg, #fff);
+  color: var(--mk-fg, var(--text-light));
+}
+
+.make-select option {
+  background: #fff;
+  color: var(--text);
+}
+
+#orderMakeGroup .make-chip span {
+  background: var(--mk-bg);
+  color: var(--mk-fg);
+}
+
+#orderMakeGroup .make-chip input:checked + span {
+  background: var(--mk-band);
+  border-color: var(--mk-band);
+  color: #fff;
+}
+
+#orderNextDueRow[hidden] {
+  display: none;
+}
+
+/* 注文詳細の「外注次加工あり」：チェックしたときだけ日程の欄が出る */
+.detail-next {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.detail-grid .detail-next label {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--text);
 }
 
 .next-due-cell {
@@ -1901,10 +1957,6 @@ body.make-mode #resultArea {
   background: #f7f9fb;
 }
 
-.order-table tr.row-need-next td.order-actions {
-  background: #fde4e1;
-}
-
 .next-due-input,
 .state-select,
 .state-text {
@@ -1935,7 +1987,7 @@ body.make-mode #resultArea {
   display: none;
 }
 
-/* 「二次依頼なし」は日付欄の下に置く(横に並べると隣の列に重なる) */
+/* 以前の「二次依頼なし」のチェック(今は使っていない) */
 .next-due-none {
   display: flex !important;
   margin-top: 6px !important;
