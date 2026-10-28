@@ -191,14 +191,15 @@ async function deleteOrder(id) {
 const ORDER_FILE_COLLECTION = "orderFiles";
 
 // アップロードするときに選ぶ書類の種類
-const ORDER_UPLOAD_TYPES = ["客先からの注文書", "注文メール", "図面", "外注先からの見積もり", "外注先からの検査書", "その他"];
+// 「外注先からの検査書」は「その他」にまとめた(2026-10-28 ユーザー要望)
+const ORDER_UPLOAD_TYPES = ["客先からの注文書", "注文メール", "図面", "外注先からの見積もり", "その他"];
 // 表示するときの種類(表示順)。以前の種類で保存した書類もまとめて出せるよう、昔の種類も残している。
 const ORDER_DOC_TYPES = [
   ...ORDER_UPLOAD_TYPES.filter((t) => t !== "その他"),
   "外注先への注文書", "納品書", "請求書", "写真", "その他",
 ];
 // 以前の呼び方 → いまの呼び方
-const ORDER_DOC_TYPE_ALIASES = { "客先の注文書": "客先からの注文書", "見積書": "外注先からの見積もり" };
+const ORDER_DOC_TYPE_ALIASES = { "客先の注文書": "客先からの注文書", "見積書": "外注先からの見積もり", "外注先からの検査書": "その他" };
 
 function orderDocType(file) {
   const t = ORDER_DOC_TYPE_ALIASES[file.docType] || file.docType;
