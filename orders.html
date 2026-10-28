@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261027c">
+<link rel="stylesheet" href="css/style.css?v=20261028c">
 </head>
 <body>
 
@@ -73,30 +73,9 @@
       <button type="button" class="modal-close" id="orderModalClose" title="閉じる">&times;</button>
     </div>
     <div class="modal-body">
-      <!-- 上：出荷待ちの表に出る項目。表に出ない項目は「＋ その他の項目」にまとめて隠している。
+      <!-- 上：出荷待ちの表に出る項目を、表の列と同じ順(納期・客先・品名／品番・部品の総数・区分・外注次加工)に並べる。
+           表に出ない項目は「＋ その他の項目」にまとめて隠している。
            必須の項目は無し(空のまま保存して、あとで埋めてもよい) -->
-      <div class="field">
-        <label for="orderCustomer">客先名</label>
-        <select id="orderCustomer"></select>
-        <input type="text" id="orderCustomerManual" class="manual-input" placeholder="客先名を入力してください" autocomplete="off">
-      </div>
-
-      <div class="field">
-        <label for="orderCaseCode">品番（DIDは注文番号）</label>
-        <input type="text" id="orderCaseCode" placeholder="例：CAM-1581" autocomplete="off">
-        <div class="field-note">品番を入れると、案件のページ（書類の作成・単価の入力）とつながります。</div>
-      </div>
-
-      <div class="field">
-        <label for="orderProduct">品名</label>
-        <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
-      </div>
-
-      <div class="field">
-        <label>区分</label>
-        <div class="chip-group" id="orderMakeGroup"></div>
-      </div>
-
       <div class="field">
         <label for="orderDue">納期</label>
         <div class="due-row">
@@ -107,11 +86,44 @@
       </div>
 
       <div class="field">
+        <label for="orderCustomer">客先名</label>
+        <select id="orderCustomer"></select>
+        <input type="text" id="orderCustomerManual" class="manual-input" placeholder="客先名を入力してください" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="orderProduct">品名</label>
+        <input type="text" id="orderProduct" placeholder="例：ベルトコンベヤ一式" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="orderCaseCode">品番（DIDは注文番号）</label>
+        <input type="text" id="orderCaseCode" placeholder="例：CAM-1581" autocomplete="off">
+        <div class="field-note">品番を入れると、案件のページ（書類の作成・単価の入力）とつながります。</div>
+      </div>
+
+      <div class="field">
+        <label>部品の総数（総数・工場・外注）</label>
+        <div class="count-row">
+          <label>総数 <input type="number" min="0" id="orderCountTotal">
+            <select id="orderCountUnit" title="総数の単位"><option value="種">種</option><option value="式">式</option></select></label>
+          <label>工場 <input type="number" min="0" id="orderCountFactory"></label>
+          <label>外注 <input type="number" min="0" id="orderCountOutsource"></label>
+        </div>
+        <div class="field-note">注文書にある部品の種類数と、その内訳（自社工場で加工する数・外注の数）です。</div>
+      </div>
+
+      <div class="field">
+        <label>区分</label>
+        <div class="chip-group" id="orderMakeGroup"></div>
+      </div>
+
+      <div class="field">
         <label class="check-label"><input type="checkbox" id="orderOutsourceNext"> 外注次加工あり</label>
         <div class="due-row" id="orderNextDueRow" hidden>
-          <input type="date" id="orderNextDue" title="外注次加工の日程">
+          <label class="check-label">納期 <input type="date" id="orderNextDue" title="外注先への納期"></label>
         </div>
-        <div class="field-note">ありにチェックしたときだけ、日程の欄が出ます。</div>
+        <div class="field-note">ありにチェックしたときだけ、外注先への納期の欄が出ます。</div>
       </div>
 
       <div class="field">
@@ -160,14 +172,6 @@
         <div class="field">
           <label for="orderCustomerOrderNos">客先の注文番号（複数あるときは「、」で区切る）</label>
           <input type="text" id="orderCustomerOrderNos" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>点数（総数・工場・外注）</label>
-          <div class="count-row">
-            <label>総数 <input type="number" min="0" id="orderCountTotal"></label>
-            <label>工場 <input type="number" min="0" id="orderCountFactory"></label>
-            <label>外注 <input type="number" min="0" id="orderCountOutsource"></label>
-          </div>
         </div>
         <div class="field">
           <label for="orderOutShipTo">送り先（外注先）</label>
@@ -337,7 +341,7 @@
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261020a"></script>
-<script src="js/order-store.js?v=20261027a"></script>
+<script src="js/order-store.js?v=20261028a"></script>
 <script src="js/doc-store.js?v=20261014c"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script>
@@ -610,36 +614,47 @@
       </select>`;
   }
 
+  /* ---------- 部品の総数 ----------
+     注文書にある部品の種類数(総数)と、その内訳(工場＝自社加工・外注)。総数の単位は「種」か「式」(countUnit)。
+     表ではコンパクトに「5種 工3/外2」、1式なら「一式」と出す。 */
+  const hasValue = (v) => v !== undefined && v !== null && v !== "";
+
+  function countCellHtml(o) {
+    const unit = o.countUnit === "式" ? "式" : "種";
+    const main = !hasValue(o.countTotal) ? ""
+      : unit === "式" && Number(o.countTotal) === 1 ? "一式" : `${o.countTotal}${unit}`;
+    const sub = [hasValue(o.countFactory) ? `工${o.countFactory}` : "", hasValue(o.countOutsource) ? `外${o.countOutsource}` : ""]
+      .filter(Boolean).join("/");
+    if (!main && !sub) return `<span class="text-muted">—</span>`;
+    return `<span class="count-main">${escapeHtml(main)}</span>${sub ? ` <small class="count-sub" title="工＝自社工場、外＝外注">${escapeHtml(sub)}</small>` : ""}`;
+  }
+
   /* ---------- 一覧表示 ----------
-     1画面で表全体が見えるよう、列は最小限にし、右端のボタンは短い表記で1行に並べる。 */
+     1画面で表全体が見えるよう、列は最小限にし、右端のボタンは短い表記で1行に並べる。
+     列の並び(2026-10-28 社長のコメント)：No・納期・客先・品名／品番・部品の総数・区分・外注次加工 */
 
   /* ---------- 注文詳細(行の下に開く) ----------
      表に出さない詳しい情報。No の右の ▸ を押すと、その行の下に開く。入力するとその場で保存する。
-     出荷待ちでは、現在の状態と外注次加工もここに置く(2026-10-27 社長のコメント)。 */
+     出荷待ちでは、現在の状態もここに置く(2026-10-27 社長のコメント)。
+     部品の総数(総数・工場・外注)は表の列に移したので、ここには出さない(入力は「編集」から)。 */
   const openDetails = new Set();
-  const DETAIL_FIELDS = ["customerOrderNos", "countTotal", "countFactory", "countOutsource", "outShipTo", "salesStaff", "note", "stateText", "nextDueDate"];
-  const NUMBER_FIELDS = ["countTotal", "countFactory", "countOutsource"];
+  const DETAIL_FIELDS = ["customerOrderNos", "outShipTo", "salesStaff", "note", "stateText"];
 
   function hasDetail(o) {
-    return DETAIL_FIELDS.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== "") || !!o.outsourceNext;
+    return DETAIL_FIELDS.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== "");
   }
 
   function detailRowHtml(o, colspan) {
     const v = (k) => escapeHtml(o[k] === undefined || o[k] === null ? "" : o[k]);
     const f = (k) => `data-detail-field="${k}" data-id="${o.id}"`;
-    const next = hasOutsourceNext(o);
     return `
       <tr class="detail-row">
         <td colspan="${colspan}">
           <div class="detail-grid">
             ${NAV.view === "pending" ? `
-            <label>現在の状態${stateCellHtml(o)}</label>
-            ${next ? `<label>外注次加工の日程<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}"></label>` : ""}` : ""}
+            <label>現在の状態${stateCellHtml(o)}</label>` : ""}
             <label class="detail-wide">客先の注文番号<small>（複数あるときは「、」で区切る）</small>
               <input type="text" ${f("customerOrderNos")} value="${v("customerOrderNos")}" placeholder="例：000444444、000444445" autocomplete="off"></label>
-            <label>総数<input type="number" min="0" ${f("countTotal")} value="${v("countTotal")}"></label>
-            <label>工場<input type="number" min="0" ${f("countFactory")} value="${v("countFactory")}"></label>
-            <label>外注<input type="number" min="0" ${f("countOutsource")} value="${v("countOutsource")}"></label>
             <label>送り先（外注先）<input type="text" list="vendorList" ${f("outShipTo")} value="${v("outShipTo")}" autocomplete="off"></label>
             <label>営業担当<input type="text" ${f("salesStaff")} value="${v("salesStaff")}" autocomplete="off"></label>
             <label class="detail-wide">連絡・備考<textarea rows="2" ${f("note")}>${v("note")}</textarea></label>
@@ -652,8 +667,7 @@
     const order = orders.find((o) => o.id === el.dataset.id);
     if (!order) return;
     const key = el.dataset.detailField;
-    let value = el.value.trim();
-    if (NUMBER_FIELDS.includes(key)) value = value === "" ? null : Number(value);
+    const value = el.value.trim();
     try {
       const data = await updateOrder(order.id, { [key]: value });
       order[key] = value;
@@ -681,19 +695,20 @@
             ${no}<span>${openDetails.has(o.id) ? "▾" : "▸"}</span>${hasDetail(o) ? `<i class="detail-dot" title="注文詳細の入力あり"></i>` : ""}
           </button>
         </td>
-        <td class="make-cell">${makeCellHtml(o)}</td>
         ${pending ? "" : `<td class="next-due-cell">
                <input type="date" class="next-due-input" data-shipped-date="${o.id}" value="${escapeHtml(shipDateOf(o))}" title="出荷した日。月ごとの請求書のまとめ方に使います">
              </td>`}
         <td class="${late ? "due-late" : ""}">
           ${escapeHtml(formatDueDate(o.dueDate))}${late ? `<span class="late-mark">納期超過</span>` : ""}
         </td>
-        ${pending ? `<td class="next-check-cell">
-          <label class="check-label" title="チェックすると、行の下の詳細に日程の欄が出ます"><input type="checkbox" data-outsource-next="${o.id}" ${hasOutsourceNext(o) ? "checked" : ""}> あり</label>
-        </td>` : ""}
         <td class="order-customer">${escapeHtml(o.customer)}</td>
         <td class="order-product">${[escapeHtml(o.productName || ""), code].filter(Boolean).join(" ／ ") || `<span class="text-muted">—</span>`}</td>
-        ${pending ? "" : `<td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>`}
+        <td class="count-cell">${countCellHtml(o)}</td>
+        <td class="make-cell">${makeCellHtml(o)}</td>
+        ${pending ? `<td class="next-check-cell">
+          <label class="check-label" title="チェックすると、外注先への納期の欄が出ます"><input type="checkbox" data-outsource-next="${o.id}" ${hasOutsourceNext(o) ? "checked" : ""}> あり</label>
+          ${hasOutsourceNext(o) ? `<label class="next-due-label">納期<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注先への納期"></label>` : ""}
+        </td>` : `<td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>`}
         <td class="order-actions">
           <div class="icon-actions">
             ${pending
@@ -706,7 +721,7 @@
             <button type="button" class="icon-btn" data-edit="${o.id}" title="編集">✏️<span>編集</span></button>
           </div>
         </td>
-      </tr>${openDetails.has(o.id) ? detailRowHtml(o, pending ? 7 : 8) : ""}`;
+      </tr>${openDetails.has(o.id) ? detailRowHtml(o, pending ? 8 : 9) : ""}`;
   }
 
   function orderTableHtml(list, today) {
@@ -717,13 +732,13 @@
           <thead>
             <tr>
               <th class="row-no">No</th>
-              <th>区分</th>
               ${pending ? "" : `<th>出荷日</th>`}
               <th>納期</th>
-              ${pending ? `<th>外注次加工</th>` : ""}
               <th>客先</th>
               <th>品名／品番</th>
-              ${pending ? "" : `<th>請求日</th>`}
+              <th>部品の総数</th>
+              <th>区分</th>
+              <th>${pending ? "外注次加工" : "請求日"}</th>
               <th></th>
             </tr>
           </thead>
@@ -926,7 +941,7 @@
     try {
       const data = await updateOrder(id, fields);
       Object.assign(order, fields, { updatedAtText: data.updatedAtText });
-      toast(message || "外注次加工の日程を保存しました");
+      toast(message || "外注先への納期を保存しました");
       if ("shippedDate" in fields) refreshShipFilters();
     } catch (err) {
       console.error("保存に失敗しました", err);
@@ -948,12 +963,11 @@
       saveNextDue(dateInput.dataset.nextDue, { nextDueDate: dateInput.value });
       return;
     }
-    // 外注次加工あり(表の列)：チェックすると行の下の詳細を開いて日程の欄を出す。外すと日程も消す
+    // 外注次加工あり(表の列)：チェックすると、すぐ下に外注先への納期の欄が出る。外すと納期も消す
     const nextBox = ev.target.closest("[data-outsource-next]");
     if (nextBox) {
-      if (nextBox.checked) openDetails.add(nextBox.dataset.outsourceNext);
       saveNextDue(nextBox.dataset.outsourceNext, nextBox.checked ? { outsourceNext: true } : { outsourceNext: false, nextDueDate: "" },
-        nextBox.checked ? "外注次加工ありにしました。日程を入れてください" : "外注次加工なしにしました");
+        nextBox.checked ? "外注次加工ありにしました。外注先への納期を入れてください" : "外注次加工なしにしました");
       return;
     }
     const makeSel = ev.target.closest("[data-make]");
@@ -1210,6 +1224,7 @@
     const val = (k) => (order && order[k] !== undefined && order[k] !== null ? order[k] : "");
     document.getElementById("orderCustomerOrderNos").value = val("customerOrderNos");
     document.getElementById("orderCountTotal").value = val("countTotal");
+    document.getElementById("orderCountUnit").value = val("countUnit") === "式" ? "式" : "種";
     document.getElementById("orderCountFactory").value = val("countFactory");
     document.getElementById("orderCountOutsource").value = val("countOutsource");
     document.getElementById("orderOutShipTo").value = val("outShipTo");
@@ -1283,6 +1298,7 @@
       stateText: document.getElementById("orderState").value,
       customerOrderNos: document.getElementById("orderCustomerOrderNos").value.trim(),
       countTotal: numOrNull("orderCountTotal"),
+      countUnit: document.getElementById("orderCountUnit").value,
       countFactory: numOrNull("orderCountFactory"),
       countOutsource: numOrNull("orderCountOutsource"),
       outShipTo: document.getElementById("orderOutShipTo").value.trim(),
