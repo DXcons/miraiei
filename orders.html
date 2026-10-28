@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261028c">
+<link rel="stylesheet" href="css/style.css?v=20261028d">
 </head>
 <body>
 
@@ -616,17 +616,26 @@
 
   /* ---------- 部品の総数 ----------
      注文書にある部品の種類数(総数)と、その内訳(工場＝自社加工・外注)。総数の単位は「種」か「式」(countUnit)。
-     表ではコンパクトに「5種 工3/外2」、1式なら「一式」と出す。 */
-  const hasValue = (v) => v !== undefined && v !== null && v !== "";
+     表のセルで直接手入力する(2026-10-28 ユーザー要望)。コンパクトに1段目「総数＋単位」、2段目「工・外」。 */
+  const COUNT_FIELDS = ["countTotal", "countFactory", "countOutsource"];
 
   function countCellHtml(o) {
+    const v = (k) => escapeHtml(o[k] === undefined || o[k] === null ? "" : o[k]);
+    const f = (k) => `data-detail-field="${k}" data-id="${o.id}"`;
     const unit = o.countUnit === "式" ? "式" : "種";
-    const main = !hasValue(o.countTotal) ? ""
-      : unit === "式" && Number(o.countTotal) === 1 ? "一式" : `${o.countTotal}${unit}`;
-    const sub = [hasValue(o.countFactory) ? `工${o.countFactory}` : "", hasValue(o.countOutsource) ? `外${o.countOutsource}` : ""]
-      .filter(Boolean).join("/");
-    if (!main && !sub) return `<span class="text-muted">—</span>`;
-    return `<span class="count-main">${escapeHtml(main)}</span>${sub ? ` <small class="count-sub" title="工＝自社工場、外＝外注">${escapeHtml(sub)}</small>` : ""}`;
+    return `
+      <div class="count-edit">
+        <span class="count-line">
+          <input type="number" min="0" class="count-input" ${f("countTotal")} value="${v("countTotal")}" title="総数（注文書の部品の種類数）">
+          <select class="count-unit" ${f("countUnit")} title="総数の単位">
+            ${["種", "式"].map((u) => `<option value="${u}" ${u === unit ? "selected" : ""}>${u}</option>`).join("")}
+          </select>
+        </span>
+        <span class="count-line count-sub">
+          工<input type="number" min="0" class="count-input" ${f("countFactory")} value="${v("countFactory")}" title="自社工場で加工する数">
+          外<input type="number" min="0" class="count-input" ${f("countOutsource")} value="${v("countOutsource")}" title="外注の数">
+        </span>
+      </div>`;
   }
 
   /* ---------- 一覧表示 ----------
@@ -667,12 +676,13 @@
     const order = orders.find((o) => o.id === el.dataset.id);
     if (!order) return;
     const key = el.dataset.detailField;
-    const value = el.value.trim();
+    let value = el.value.trim();
+    if (COUNT_FIELDS.includes(key)) value = value === "" ? null : Number(value);
     try {
       const data = await updateOrder(order.id, { [key]: value });
       order[key] = value;
       order.updatedAtText = data.updatedAtText;
-      toast("注文詳細を保存しました");
+      toast(key.startsWith("count") ? "部品の総数を保存しました" : "注文詳細を保存しました");
     } catch (err) {
       console.error("注文詳細の保存に失敗しました", err);
       toast("保存できませんでした。");
