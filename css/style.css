@@ -1629,18 +1629,51 @@ footer.mock-footer {
   width: 220px;
 }
 
-/* 表の「部品の総数」：「5種 工3/外2」を1行に収める */
+/* 表の「部品の総数」：セルで手入力する。1段目「総数＋単位」、2段目「工・外」 */
 .count-cell {
   white-space: nowrap;
 }
 
-.count-cell .count-main {
-  font-weight: 700;
+.count-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.count-cell .count-sub {
+.count-line {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.count-sub {
   font-size: 13px;
+  font-weight: 700;
   color: var(--text-light);
+}
+
+.count-edit .count-input {
+  width: 52px;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.count-edit .count-unit {
+  padding: 3px 2px;
+  font: inherit;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.count-sub .count-input {
+  width: 40px;
+  margin-right: 4px;
 }
 
 /* 表の「外注次加工」列のチェック。ありのときだけ、行の下の詳細に日程の欄が出る */
