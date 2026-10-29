@@ -1802,6 +1802,119 @@ body.make-mode #resultArea {
   background: #fff;
 }
 
+/* 図面に書き込む画面(pdf-annotate.js)：画面いっぱいに図面を出し、上に道具を並べる */
+.ann-box {
+  width: min(1400px, 96vw);
+  max-width: none;
+  height: 94vh;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.ann-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #f7f9fb;
+}
+
+.ann-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ann-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-light);
+  margin-right: 2px;
+}
+
+.ann-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.ann-btn span {
+  font-size: 17px;
+}
+
+.ann-btn.is-on {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.ann-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ann-color {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px var(--border);
+  background: var(--c);
+  cursor: pointer;
+}
+
+.ann-color.is-on {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.ann-pages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  background: #525659;
+}
+
+.ann-page {
+  position: relative;
+  margin: 0 auto 20px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.ann-page canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.ann-over {
+  touch-action: none;
+}
+
+.ann-text-input {
+  position: absolute;
+  z-index: 2;
+  min-width: 160px;
+  padding: 0 2px;
+  border: 1px dashed var(--accent);
+  background: rgba(255, 255, 255, 0.85);
+  font-family: "Yu Gothic", "Meiryo", sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+  outline: none;
+}
+
 /* PDFを書類ごとに分ける画面 */
 .split-pages {
   display: grid;
