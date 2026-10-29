@@ -407,6 +407,35 @@ async function replaceOrderFile(old, file, onProgress) {
   return saved;
 }
 
+/* 書類の中身だけを上書きする(図面への書き込みを保存するとき)。
+   差し替え(replaceOrderFile)と違って書類のIDが変わらないので、突き合わせ表の行に紐づけた図面(drawingFileId)も切れない。
+   古い版は残さない(社長以外に見せたくないため。原本は社長のメールに残っている)。
+   本体の書き込みに失敗したら、元の中身を書き戻す。 */
+async function overwriteOrderFile(old, file, onProgress) {
+  const docRef = db.collection(ORDER_FILE_COLLECTION).doc(old.id);
+  const original = await readFileChunks(docRef, old.mimeType);
+  await deleteFileChunks(docRef);
+  let chunkCount;
+  try {
+    chunkCount = await writeFileChunks(docRef, file, onProgress);
+  } catch (err) {
+    await deleteFileChunks(docRef).catch(() => {});
+    await writeFileChunks(docRef, original).catch(() => {});
+    throw err;
+  }
+  const now = new Date();
+  const fields = {
+    fileSize: file.size,
+    mimeType: file.type || old.mimeType,
+    chunkCount,
+    editedBy: auth.currentUser ? auth.currentUser.email : "",
+    editedAtText: `${now.getFullYear()}/${pad2(now.getMonth() + 1)}/${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`,
+    editedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  await docRef.update(fields);
+  return { ...old, ...fields };
+}
+
 async function loadOrderFileBlob(id, mimeType) {
   return readFileChunks(db.collection(ORDER_FILE_COLLECTION).doc(id), mimeType);
 }
