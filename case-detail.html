@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261028d">
+<link rel="stylesheet" href="css/style.css?v=20261029a">
 </head>
 <body>
 
@@ -354,8 +354,10 @@
 <script src="js/common.js?v=20261014a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261020a"></script>
-<script src="js/order-store.js?v=20261028a"></script>
+<script src="js/order-store.js?v=20261029a"></script>
 <script src="js/doc-store.js?v=20261014a"></script>
+<script src="js/pdf-split.js?v=20261020a"></script>
+<script src="js/pdf-annotate.js?v=20261029a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -946,10 +948,12 @@
               <div class="doc-icon">${fileIcon(f.mimeType, f.fileName)}</div>
               <div class="doc-info">
                 <button type="button" class="doc-name" data-file="${f.id}">${escapeHtml(f.fileName)}</button>
-                <div class="doc-meta">${formatFileSize(f.fileSize)}・${escapeHtml(f.createdAtText || "")} 登録</div>
+                <div class="doc-meta">${formatFileSize(f.fileSize)}・${escapeHtml(f.createdAtText || "")} 登録${f.editedAtText ? `・${escapeHtml(f.editedAtText)} 書き込み` : ""}</div>
               </div>
               <div class="doc-actions">
                 <button type="button" class="btn btn-secondary btn-sm" data-file="${f.id}">表示</button>
+                ${fileViewKind(f.mimeType, f.fileName) === "pdf"
+                  ? `<button type="button" class="btn btn-secondary btn-sm" data-file-annotate="${f.id}" title="白塗り・文字・矢印などを書き込みます">✏️ 書き込む</button>` : ""}
                 <button type="button" class="btn btn-ghost btn-sm" data-file-replace="${f.id}" title="書き込みをしたPDFなどで、この書類を置き換えます">差し替え</button>
                 <button type="button" class="btn btn-ghost btn-sm btn-danger" data-file-del="${f.id}">削除</button>
               </div>
@@ -1582,6 +1586,8 @@
       replacingId = rep.dataset.fileReplace;
       return document.getElementById("replaceFileInput").click();
     }
+    const ann = ev.target.closest("[data-file-annotate]");
+    if (ann) return annotateFile(ann.dataset.fileAnnotate);
     const imported = ev.target.closest("[data-imported]");
     if (imported) {
       const r = ROWS.find((x) => x.docId === imported.dataset.imported);
@@ -1593,6 +1599,32 @@
       });
     }
   });
+
+  // 書き込む：図面に白塗り・文字・矢印などを書き込み、同じ書類に上書き保存する(古い版は残さない)。
+  // 書類のIDが変わらないので、表の行に紐づけた図面もそのまま
+  async function annotateFile(id) {
+    const f = FILES.find((x) => x.id === id);
+    if (!f || busy) return;
+    const status = document.getElementById("docsUploadStatus");
+    try {
+      status.textContent = `「${f.fileName}」を読み込んでいます…`;
+      const edited = await openPdfAnnotator(await loadOrderFileBlob(id, f.mimeType), f.fileName);
+      status.textContent = "";
+      if (!edited) return;
+      busy = true;
+      const saved = await overwriteOrderFile(f, edited, (done, total) => {
+        status.textContent = `「${f.fileName}」を保存中… ${Math.round((done / total) * 100)}%`;
+      });
+      Object.assign(f, saved);
+      status.textContent = `✅「${f.fileName}」に書き込みを保存しました。`;
+      renderDocs();
+    } catch (err) {
+      console.error("書き込みを保存できませんでした", err);
+      status.textContent = `書き込みを保存できませんでした。${err.message || ""}`;
+    } finally {
+      busy = false;
+    }
+  }
 
   // 差し替え：Edgeで開いて書き込み・保存したPDFなどを選ぶと、元の書類と入れ替える
   let replacingId = null;
