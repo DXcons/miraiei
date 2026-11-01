@@ -1,67 +1,86 @@
 // Firebaseコンソール > Firestore Database > ルール タブに貼り付けて「公開」してください。
 //
-// drawings    : 検索用の図面データ。「ログイン済みユーザーのみ閲覧可・書き込み不可」。
-//               投入(初回のみ)は seed.html を使い、投入後にこの状態へ戻してください。
-// pdfDrawings : 「図面を保存する」で登録したPDF図面。ログイン済みユーザーが
-//               登録・閲覧・削除できます。chunksサブコレクションにPDF本体が
+// ■ 使える人の決め方(2026-11-01〜)
+//   ログインできるだけでは使えません。appUsers コレクションに「ドキュメントID＝その人のUID」の
+//   ドキュメントがある人だけが、アプリのデータを読み書きできます。
+//   (公開リポジトリにメールアドレスを書かないよう、UIDで登録します)
+//   appUsers はアプリからは書き換えられません。人の追加・削除は Firebaseコンソールで行います。
+//     追加：Authentication > ユーザー でUIDをコピー →
+//           Firestore Database > データ > appUsers > 「ドキュメントを追加」で、ドキュメントIDにUIDを貼る
+//           (フィールドは email・name など、誰か分かるメモを入れておく)
+//     削除：appUsers のその人のドキュメントを削除(あわせて Authentication のユーザーも無効化・削除)
+//   ※ このルールを公開する前に、今使っている人全員を appUsers に登録してください。
+//     登録していない人は、ルールを公開した時点で何も見られなくなります。
+//
+// drawings    : 検索用の図面データ(旧画面用)。「使える人のみ閲覧可・書き込み不可」。
+// pdfDrawings : 「図面を保存する」で登録したPDF図面。chunksサブコレクションにPDF本体が
 //               分割して入っています。
 // settings    : 「客先一覧の編集」で保存した客先一覧(settings/customers)など。
-//               ログイン済みユーザーが閲覧・編集できます。
-// orders      : 「受発注・請求書の管理」の取引一覧。ログイン済みユーザーが
-//               登録・閲覧・編集・削除できます。
+// orders      : 「受発注・請求書の管理」の取引一覧。
 // orderFiles  : 取引ごとの書類(見積書・納品書・請求書・写真など)。
 //               chunksサブコレクションにファイル本体が分割して入っています。
 // caseItems   : 注文書の受注単価と御見積書の外注単価を突き合わせた明細(図面1枚=1件)。
-//               「データの取り込み」で登録し、突き合わせ表の「修正」で編集します。
 // caseDocs    : 取り込んだ元の注文書・御見積書のPDF。chunksに本体が入っています。
 // purchaseOrders : 案件ページで作った下請け・材料屋への注文書。
 // settings/seal  : 注文書に出す担当者印の画像(公開しているアプリのファイルには入れない)。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // appUsers に登録された人か
+    function isAppUser() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/appUsers/$(request.auth.uid));
+    }
+
+    // 利用者の登録簿。自分の分だけ読める(アプリが「使える人か」を確かめるため)。書き換えはコンソールのみ
+    match /appUsers/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     match /drawings/{drawingId} {
-      allow read: if request.auth != null;
+      allow read: if isAppUser();
       allow write: if false;
     }
 
     match /pdfDrawings/{pdfId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
 
       match /chunks/{chunkId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAppUser();
       }
     }
 
     match /settings/{settingId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
     }
 
     match /orders/{orderId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
     }
 
     match /orderFiles/{fileId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
 
       match /chunks/{chunkId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAppUser();
       }
     }
 
     match /caseItems/{itemId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
     }
 
     // 下請け・材料屋への注文書(案件ページで作成)
     match /purchaseOrders/{poId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
     }
 
     match /caseDocs/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAppUser();
 
       match /chunks/{chunkId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if isAppUser();
       }
     }
   }
