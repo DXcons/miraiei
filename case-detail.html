@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261029a">
+<link rel="stylesheet" href="css/style.css?v=20261101a">
 </head>
 <body>
 
@@ -351,13 +351,13 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js?v=20261014a"></script>
-<script src="js/common.js?v=20261014a"></script>
+<script src="js/common.js?v=20261101a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261020a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
 <script src="js/doc-store.js?v=20261014a"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
-<script src="js/pdf-annotate.js?v=20261029a"></script>
+<script src="js/pdf-annotate.js?v=20261101a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -1608,7 +1608,8 @@
     const status = document.getElementById("docsUploadStatus");
     try {
       status.textContent = `「${f.fileName}」を読み込んでいます…`;
-      const edited = await openPdfAnnotator(await loadOrderFileBlob(id, f.mimeType), f.fileName);
+      // ダウンロードの完了を待たずに書き込み画面を開く(画面の中で読み込みを待つ)
+      const edited = await openPdfAnnotator(loadOrderFileBlob(id, f.mimeType), f.fileName);
       status.textContent = "";
       if (!edited) return;
       busy = true;

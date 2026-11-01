@@ -36,20 +36,29 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js"></script>
-<script src="js/common.js"></script>
+<script src="js/common.js?v=20261101a"></script>
 <script>
+  const DENIED_MESSAGE = "このアカウントには利用の許可がありません。管理者にお問い合わせください。";
+
+  function showLoginError(message) {
+    const errorBox = document.getElementById("loginError");
+    errorBox.textContent = message;
+    errorBox.style.display = "block";
+  }
+
+  // 使えない人としてログイン画面に戻されたとき
+  if (new URLSearchParams(location.search).get("denied")) showLoginError(DENIED_MESSAGE);
+
   async function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById("loginId").value.trim();
     const pass = document.getElementById("loginPass").value.trim();
-    const errorBox = document.getElementById("loginError");
 
-    const { ok } = await loginWithPassword(email, pass);
+    const { ok, denied } = await loginWithPassword(email, pass);
     if (ok) {
       window.location.href = "home.html";
     } else {
-      errorBox.textContent = "メールアドレスまたはパスワードが正しくありません。";
-      errorBox.style.display = "block";
+      showLoginError(denied ? DENIED_MESSAGE : "メールアドレスまたはパスワードが正しくありません。");
     }
     return false;
   }
