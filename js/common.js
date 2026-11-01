@@ -58,18 +58,40 @@ const LOCATION_LABELS = {
 // ---------- ログイン(Firebase Authentication) ----------
 async function loginWithPassword(email, password) {
   try {
-    await auth.signInWithEmailAndPassword(email, password);
+    const { user } = await auth.signInWithEmailAndPassword(email, password);
+    if (!(await isAllowedUser(user))) {
+      await auth.signOut();
+      return { ok: false, denied: true };
+    }
     return { ok: true };
   } catch (error) {
     return { ok: false, error };
   }
 }
 
-// ログイン必須ページの先頭で呼ぶ。未ログインならログイン画面へ飛ばしてfalseを返す。
+// 利用を許可された人か(Firestoreの appUsers/{uid} があるか)。
+// 本当の守りはFirestoreのルール(同じ条件)で、ここは「使えない人に分かるように知らせる」ためのもの。
+// 通信エラーなどで確かめられないときは通す(ルールが守るので、データは見えない)。
+async function isAllowedUser(user) {
+  try {
+    const snap = await db.collection("appUsers").doc(user.uid).get();
+    return snap.exists;
+  } catch (err) {
+    console.error("利用者の確認ができませんでした", err);
+    return true;
+  }
+}
+
+// ログイン必須ページの先頭で呼ぶ。未ログイン・使えない人ならログイン画面へ飛ばしてfalseを返す。
 async function requireLogin() {
   const user = await waitForAuthUser();
   if (!user) {
     window.location.href = "login.html";
+    return false;
+  }
+  if (!(await isAllowedUser(user))) {
+    await auth.signOut();
+    window.location.href = "login.html?denied=1";
     return false;
   }
   return true;
