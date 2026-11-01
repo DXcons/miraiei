@@ -8,6 +8,8 @@
 //     追加：Authentication > ユーザー でUIDをコピー →
 //           Firestore Database > データ > appUsers > 「ドキュメントを追加」で、ドキュメントIDにUIDを貼る
 //           (フィールドは email・name など、誰か分かるメモを入れておく)
+//           バックアップを取る係(社長)には、フィールド backup(種類 boolean・値 true)も入れる
+//           (バックアップのお知らせとボタンが、その人にだけ出る)
 //     削除：appUsers のその人のドキュメントを削除(あわせて Authentication のユーザーも無効化・削除)
 //   ※ このルールを公開する前に、今使っている人全員を appUsers に登録してください。
 //     登録していない人は、ルールを公開した時点で何も見られなくなります。
@@ -23,6 +25,7 @@
 // caseDocs    : 取り込んだ元の注文書・御見積書のPDF。chunksに本体が入っています。
 // purchaseOrders : 案件ページで作った下請け・材料屋への注文書。
 // settings/seal  : 注文書に出す担当者印の画像(公開しているアプリのファイルには入れない)。
+// backups     : バックアップの記録(backup.html)。state＝最後に取った日時と履歴、files_○○＝どのファイルをどのZIPに入れたか。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -73,6 +76,11 @@ service cloud.firestore {
 
     // 下請け・材料屋への注文書(案件ページで作成)
     match /purchaseOrders/{poId} {
+      allow read, write: if isAppUser();
+    }
+
+    // バックアップの記録(最後に取った日時・どのファイルをどのZIPに入れたか)
+    match /backups/{docId} {
       allow read, write: if isAppUser();
     }
 
