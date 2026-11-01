@@ -1885,11 +1885,46 @@ body.make-mode #resultArea {
   background: #525659;
 }
 
+.ann-page-block {
+  width: fit-content;
+  margin: 0 auto 20px;
+}
+
+/* ページ番号と回転ボタン */
+.ann-page-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ann-page-head span {
+  margin-right: auto;
+}
+
+.ann-page-head .ann-btn {
+  padding: 3px 10px;
+  font-size: 14px;
+}
+
 .ann-page {
   position: relative;
-  margin: 0 auto 20px;
   background: #fff;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* 画面に見えてくるまで、ページはまだ描かずにこの表示を出す */
+.ann-page-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  font-size: 15px;
 }
 
 .ann-page canvas {
