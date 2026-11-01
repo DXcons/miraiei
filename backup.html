@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>データのバックアップ | 未来栄 図面管理システム</title>
+<link rel="stylesheet" href="css/style.css?v=20261101b">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="logo-mark">未</div>
+    <div>
+      未来栄株式会社
+      <small>図面管理システム</small>
+    </div>
+  </div>
+  <nav>
+    <div class="user-chip">
+      <span id="userNameLabel">ゲスト</span>
+      <a href="#" onclick="logout(); return false;">ログアウト</a>
+    </div>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="breadcrumb"><a href="home.html">ホーム</a> ＞ データのバックアップ</div>
+  <h1 class="page-title">データのバックアップ</h1>
+  <p class="page-sub">図面・書類（請求書・納品書など）と、取引・明細などのデータを、このパソコンにZIPで保存します。月に1回は取ってください。</p>
+
+  <div class="card backup-section">
+    <h2>最後のバックアップ</h2>
+    <div id="backupLast" class="backup-note">読み込んでいます…</div>
+  </div>
+
+  <div class="card backup-section" id="steps">
+    <h2>手順</h2>
+    <ol class="backup-steps">
+      <li>下の「<b>バックアップを取る</b>」を押します。終わるまでこの画面を閉じないでください。</li>
+      <li>終わると、ZIPファイルが<b>ダウンロード</b>フォルダに保存されます。
+        大きいときはZIPが複数に分かれます（「複数のファイルをダウンロードしようとしています」と聞かれたら「<b>許可</b>」を押します）。</li>
+      <li>ZIPを、決めておいたバックアップの置き場所（社内のNAS・外付けディスクなど。<b>このパソコン以外</b>）の
+        「未来栄バックアップ」フォルダへ移します。</li>
+      <li>下に出る「結果」で、<b>問題があったファイルが0件</b>か確かめます。0件でなければシステム担当者に連絡してください。</li>
+    </ol>
+    <div class="backup-warn">
+      <b>これまでのZIPは消さずに、全部残してください。</b><br>
+      2回目からは、前回から増えた・変わったファイルだけを取ります（差分）。古いZIPを1つでも無くすと、その中のファイルは戻せません。<br>
+      半年に1回ほど「全部取り直す」で取っておくと、それより前のZIPは整理しても大丈夫になります。
+    </div>
+  </div>
+
+  <div class="card backup-section">
+    <h2>バックアップを取る</h2>
+    <label class="backup-check"><input type="checkbox" id="backupFull">
+      全部取り直す（前回までの分に関係なく、すべてのファイルを入れる。時間がかかります）</label>
+    <div class="backup-actions">
+      <button type="button" class="btn btn-primary btn-lg" id="backupStart">バックアップを取る</button>
+      <span id="backupProgress" class="backup-note"></span>
+    </div>
+    <div id="backupResult"></div>
+  </div>
+
+  <div class="card backup-section">
+    <h2>これまでのバックアップ</h2>
+    <div id="backupHistory" class="backup-note"></div>
+  </div>
+</main>
+
+<footer class="mock-footer">未来栄株式会社 図面管理システム — © 2026</footer>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="js/firebase-config.js?v=20261014a"></script>
+<script src="js/common.js?v=20261101a"></script>
+<script src="js/pdf-store.js?v=20261014a"></script>
+<script src="js/case-store.js?v=20261020a"></script>
+<script src="js/order-store.js?v=20261029a"></script>
+<script src="js/backup.js?v=20261101a"></script>
+<script>
+  let running = false;
+
+  function renderState(state) {
+    const days = backupDaysSince(state);
+    document.getElementById("backupLast").innerHTML = days === null
+      ? `<span class="backup-bad">まだ一度もバックアップを取っていません。</span>`
+      : `${escapeHtml(state.lastAtText || "")}（${days}日前）・${escapeHtml(state.lastBy || "")}
+         ${days >= BACKUP_REMIND_DAYS ? `<span class="backup-bad">　${BACKUP_REMIND_DAYS}日以上たっています。取ってください。</span>` : ""}`;
+    const h = (state && state.history) || [];
+    document.getElementById("backupHistory").innerHTML = h.length
+      ? `<table class="backup-table">
+          <thead><tr><th>日時</th><th>取った人</th><th>方式</th><th>入れたファイル</th><th>問題</th><th>削除されていた</th><th>ZIP</th></tr></thead>
+          <tbody>${h.map((x) => `<tr>
+            <td>${escapeHtml(x.atText)}</td><td>${escapeHtml(x.by)}</td><td>${escapeHtml(x.kind)}</td>
+            <td>${x.files}件（${formatFileSize(x.bytes || 0)}）</td>
+            <td class="${x.errors ? "backup-bad" : ""}">${x.errors}件</td><td>${x.deleted || 0}件</td>
+            <td>${(x.zips || []).map(escapeHtml).join("<br>")}</td></tr>`).join("")}</tbody>
+        </table>`
+      : "まだありません。";
+  }
+
+  async function loadState() {
+    try {
+      renderState(await fetchBackupState());
+    } catch (err) {
+      console.error(err);
+      document.getElementById("backupLast").textContent = "記録を読み込めませんでした。" + (err.message || "");
+    }
+  }
+
+  async function start() {
+    if (running) return;
+    running = true;
+    const btn = document.getElementById("backupStart");
+    const progress = document.getElementById("backupProgress");
+    const resultEl = document.getElementById("backupResult");
+    btn.disabled = true;
+    resultEl.innerHTML = "";
+    try {
+      const r = await runBackup({
+        full: document.getElementById("backupFull").checked,
+        onProgress: (text) => (progress.textContent = text),
+      });
+      progress.textContent = "";
+      resultEl.innerHTML = `
+        <div class="backup-result ${r.errors.length ? "is-bad" : "is-ok"}">
+          <b>${r.errors.length ? "⚠️ バックアップを取りましたが、問題があったファイルがあります" : "✅ バックアップを取りました"}</b>
+          <ul>
+            <li>方式：${r.kind}</li>
+            <li>保存したZIP：${r.zips.map((z) => `${escapeHtml(z.name)}（${formatFileSize(z.size)}）`).join("、")}</li>
+            <li>今回入れたファイル：${r.added}件（${formatFileSize(r.addedBytes)}）${r.kind === "差分" ? `／前回までのZIPにある分：${r.kept}件` : ""}</li>
+            <li class="${r.errors.length ? "backup-bad" : ""}">問題があったファイル：${r.errors.length}件
+              ${r.errors.length ? `<ul>${r.errors.map((e) => `<li>${escapeHtml(e.s.label)}　${escapeHtml(e.d.fileName || e.d.id)}：${escapeHtml(e.message)}</li>`).join("")}</ul>` : ""}</li>
+            <li class="${r.deleted.length >= 10 ? "backup-bad" : ""}">前回のあとで削除されたファイル：${r.deleted.length}件
+              ${r.deleted.length >= 10 ? "（とても多いです。心当たりがなければ、すぐにシステム担当者に連絡してください）" : ""}</li>
+          </ul>
+          ダウンロードフォルダのZIPを、バックアップの置き場所へ移してください（手順3）。
+        </div>`;
+    } catch (err) {
+      console.error("バックアップを取れませんでした", err);
+      progress.textContent = "";
+      resultEl.innerHTML = `<div class="backup-result is-bad"><b>バックアップを取れませんでした。</b><br>${escapeHtml(err.message || String(err))}<br>
+        もう一度押してみてください。続くときはシステム担当者に連絡してください。</div>`;
+    } finally {
+      running = false;
+      btn.disabled = false;
+      loadState();
+    }
+  }
+
+  window.addEventListener("beforeunload", (ev) => {
+    if (running) { ev.preventDefault(); ev.returnValue = ""; }
+  });
+
+  (async () => {
+    const ok = await initPage();
+    if (!ok) return;
+    document.getElementById("backupStart").onclick = start;
+    await loadState();
+    // ホームのお知らせから「今すぐバックアップを取る」で来たとき
+    if (new URLSearchParams(location.search).get("start")) start();
+  })();
+</script>
+
+</body>
+</html>

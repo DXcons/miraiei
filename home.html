@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ホーム | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261029a">
+<link rel="stylesheet" href="css/style.css?v=20261101b">
 </head>
 <body>
 
@@ -60,6 +60,7 @@
     <a href="pdf-new.html" class="text-link">案件に関係なく、図面のPDFだけを保存する ›</a>
     　<a href="pdf-list.html" class="text-link">保存した図面のPDFをさがす ›</a>
     　<a href="partners.html" class="text-link">客先・外注先を登録する ›</a>
+    　<a href="backup.html" class="text-link">データのバックアップ ›</a>
   </p>
 </main>
 
@@ -71,10 +72,13 @@
 <script src="js/firebase-config.js"></script>
 <script src="js/common.js?v=20261101a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
+<script src="js/backup.js?v=20261101a"></script>
 <script>
   (async () => {
     const ok = await initPage();
-    if (ok) renderStorageMeter("storageMeter");
+    if (!ok) return;
+    renderStorageMeter("storageMeter");
+    showBackupReminder(); // 最後のバックアップから1か月以上たっていたら知らせる
   })();
 </script>
 
