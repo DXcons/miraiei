@@ -3505,3 +3505,229 @@ body.make-mode #resultArea {
     display: block;
   }
 }
+
+/* データのバックアップ(backup.html・ホームのお知らせ) */
+.backup-section {
+  margin-bottom: 20px;
+}
+
+.backup-note {
+  color: #444;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.backup-steps {
+  margin: 0 0 12px 1.4em;
+  line-height: 1.9;
+}
+
+.backup-warn {
+  padding: 10px 14px;
+  border-left: 4px solid #d97706;
+  background: #fff7e6;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.backup-check {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.backup-bad {
+  color: #c62828;
+  font-weight: 700;
+}
+
+.backup-result {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  line-height: 1.8;
+}
+
+.backup-result.is-ok {
+  background: #ecf8ef;
+  border: 1px solid #8fd19e;
+}
+
+.backup-result.is-bad {
+  background: #fdecea;
+  border: 1px solid #f5a3a3;
+}
+
+.backup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.backup-table th,
+.backup-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.backup-remind {
+  max-width: 560px;
+}
+
+.backup-remind-main {
+  font-size: 17px;
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+/* 書類の図面の下の図番・品名・数量(js/drawing-parts.js)。図面の行の下に横いっぱいで出す */
+.doc-item:has(> .dp-editor) {
+  flex-wrap: wrap;
+}
+
+.doc-item > .dp-editor {
+  flex: 0 0 calc(100% - 38px);
+  margin-left: 38px;
+  box-sizing: border-box;
+}
+
+.dp-editor {
+  margin-top: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fbf7f2;
+}
+
+.dp-editor-off {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.dp-head {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.dp-head small {
+  font-weight: 400;
+  color: var(--text-light);
+  margin-left: 6px;
+}
+
+.dp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp-row + .dp-row {
+  margin-top: 4px;
+}
+
+.dp-row input {
+  font: inherit;
+  font-size: 15px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.dp-row .dp-no { width: 34%; flex: none; }
+.dp-row .dp-name { flex: 1; }
+.dp-row .dp-qty { width: 70px; flex: none; }
+
+.dp-draft input {
+  border-color: #e0a36c;
+}
+
+.dp-ok {
+  color: #15803d;
+  width: 1.2em;
+}
+
+.dp-more {
+  margin-top: 4px;
+}
+
+/* 登録画面：図面ごとの図番・品名・数量 */
+.new-doc-part {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 90px;
+  gap: 6px 10px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: #fbf7f2;
+}
+
+.new-doc-part label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+#orderModal .new-doc-part input {
+  width: 100%;
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.new-doc-part .new-doc-part-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.new-doc-entry + .new-doc-entry {
+  margin-top: 6px;
+}
+
+.new-doc-entry:has(.new-doc-part) .new-doc-item {
+  border-radius: 8px 8px 0 0;
+}
+
+/* AI読み取りの依頼と、AIの下書き */
+.dp-ai-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 6px 0 4px;
+}
+
+.dp-ai-status {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.dp-ai-note {
+  font-size: 13.5px;
+  color: #1d4ed8;
+  margin: 2px 0 4px;
+}
+
+.dp-ai-memo {
+  color: var(--text-light);
+}
+
+.dp-ai input {
+  border-color: #93b4f0;
+  background: #f3f7ff;
+}
