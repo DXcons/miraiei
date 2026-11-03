@@ -386,6 +386,31 @@ async function addCaseItemManual(item) {
   return { id, ...data };
 }
 
+// 図面をアップロードしたあとに入れた正式な図番・品名・数量を、表の行にする。
+// 同じ案件に同じ図番の行があれば、その行の品名・数量を直して図面を結びつける。無ければ行を作る。
+// part: { customer, productCode, drawingNo, productName, qty, drawingFileId }
+async function saveDrawingPart(part) {
+  const all = await fetchCaseItems();
+  const group = customerGroupOf(part.customer);
+  const same = all.find((d) => customerGroupOf(d.customer) === group && d.productCode === part.productCode && d.drawingNo === part.drawingNo);
+  if (same) {
+    const fields = {
+      productName: part.productName || same.productName || "",
+      qty: part.qty,
+      drawingFileId: part.drawingFileId,
+      drawingId: "",
+    };
+    await updateCaseItem(same.id, fields);
+    return { ...same, ...fields };
+  }
+  return addCaseItemManual({
+    customer: part.customer, productCode: part.productCode, drawingNo: part.drawingNo,
+    productName: part.productName || "", qty: part.qty, drawingFileId: part.drawingFileId,
+    material: "", orderDate: "", orderSlipNo: "", orderUnitPrice: null, outsourceUnitPrice: null,
+    outsourcer: "", note: "", needsCheck: false, costs: [], quoteNo: "", quoteDate: "",
+  });
+}
+
 // 行を消す(図面や書類は消さない)
 async function deleteCaseItem(id) {
   await db.collection(CASE_ITEM_COLLECTION).doc(id).delete();
