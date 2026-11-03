@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261101a">
+<link rel="stylesheet" href="css/style.css?v=20261103a">
 </head>
 <body>
 
@@ -340,7 +340,8 @@
 <script src="js/firebase-config.js?v=20261014a"></script>
 <script src="js/common.js?v=20261101a"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
-<script src="js/case-store.js?v=20261020a"></script>
+<script src="js/case-store.js?v=20261103a"></script>
+<script src="js/drawing-parts.js?v=20261103a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
 <script src="js/doc-store.js?v=20261014c"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
@@ -1355,28 +1356,59 @@
 
   function renderNewDocs() {
     document.getElementById("newDocList").innerHTML = newDocs.map((d, i) => `
-      <div class="new-doc-item">
-        <span class="doc-icon">${fileIcon(d.file.type, d.file.name)}</span>
-        <span class="new-doc-name">${escapeHtml(d.file.name)} <small>${formatFileSize(d.file.size)}</small></span>
-        <select data-newdoc-type="${i}">
-          ${ORDER_UPLOAD_TYPES.map((t) => `<option value="${t}" ${t === d.docType ? "selected" : ""}>${t}</option>`).join("")}
-        </select>
-        ${isPdfFile(d.file) ? `<button type="button" class="btn btn-secondary btn-sm" data-newdoc-split="${i}" title="注文書と図面が1つのPDFになっているときに、書類ごとに分けます">✂ 分ける</button>` : ""}
-        <button type="button" class="btn btn-ghost btn-sm btn-danger" data-newdoc-remove="${i}" title="外す">×</button>
+      <div class="new-doc-entry">
+        <div class="new-doc-item">
+          <span class="doc-icon">${fileIcon(d.file.type, d.file.name)}</span>
+          <span class="new-doc-name">${escapeHtml(d.file.name)} <small>${formatFileSize(d.file.size)}</small></span>
+          <select data-newdoc-type="${i}">
+            ${ORDER_UPLOAD_TYPES.map((t) => `<option value="${t}" ${t === d.docType ? "selected" : ""}>${t}</option>`).join("")}
+          </select>
+          ${isPdfFile(d.file) ? `<button type="button" class="btn btn-secondary btn-sm" data-newdoc-split="${i}" title="注文書と図面が1つのPDFになっているときに、書類ごとに分けます">✂ 分ける</button>` : ""}
+          <button type="button" class="btn btn-ghost btn-sm btn-danger" data-newdoc-remove="${i}" title="外す">×</button>
+        </div>
+        ${d.docType === "図面" ? newDocPartHtml(d, i) : ""}
       </div>`).join("");
   }
 
+  // 図面には正式な図番・品名・数量を入れられる。保存すると案件の表の行になり、注文書・納品書の品物に使われる
+  function newDocPartHtml(d, i) {
+    const p = d.part || (d.part = { drawingNo: "", productName: "", qty: 1 });
+    return `
+      <div class="new-doc-part">
+        <label>🔩 図番<input type="text" data-newdoc-part="${i}" data-pk="drawingNo" value="${escapeHtml(p.drawingNo)}" placeholder="例：MN-10202" autocomplete="off"></label>
+        <label>品名<input type="text" data-newdoc-part="${i}" data-pk="productName" value="${escapeHtml(p.productName)}" placeholder="例：シャフト" autocomplete="off"></label>
+        <label>数量<input type="number" min="0" data-newdoc-part="${i}" data-pk="qty" value="${escapeHtml(p.qty)}"></label>
+        <div class="field-note new-doc-part-note">図面に書かれた正式な図番・品名・数量。注文書・納品書の品物になります（空なら、あとで案件ページで入れられます）。</div>
+      </div>`;
+  }
+
   // 預かっていた書類を保存する。保存できなかったファイル名の一覧を返す
-  async function uploadNewDocs(key) {
+  // fields：案件の項目。品番のある案件では、図面に入れた図番・品名・数量を表の行にする
+  async function uploadNewDocs(key, fields) {
     const status = document.getElementById("newDocStatus");
     const failed = [];
     for (let i = 0; i < newDocs.length; i++) {
-      const { file, docType } = newDocs[i];
+      const { file, docType, part } = newDocs[i];
       try {
         const saved = await saveOrderFile(key, docType, file, (done, total) => {
           status.textContent = `${i + 1} / ${newDocs.length} 件目「${file.name}」を保存中… ${Math.round((done / total) * 100)}%`;
         });
         orderFiles.push(saved);
+        const drawingNo = docType === "図面" && part ? String(part.drawingNo || "").trim() : "";
+        if (drawingNo && !fields.caseCode) failed.push(`${file.name} の図番・品名・数量（品番が無いので表に入れられません）`);
+        if (drawingNo && fields.caseCode) {
+          try {
+            await saveDrawingPart({
+              customer: fields.customer, productCode: fields.caseCode, drawingNo,
+              productName: String(part.productName || "").trim(),
+              qty: part.qty === "" ? 0 : Number(part.qty) || 0,
+              drawingFileId: saved.id,
+            });
+          } catch (err) {
+            console.error("図番・品名・数量の保存に失敗しました", err);
+            failed.push(`${file.name} の図番・品名・数量`);
+          }
+        }
       } catch (err) {
         console.error("書類の保存に失敗しました", err);
         failed.push(file.name);
@@ -1404,7 +1436,14 @@
   newDocDropzone.addEventListener("drop", (ev) => addNewDocs(ev.dataTransfer.files));
   document.getElementById("newDocList").addEventListener("change", (ev) => {
     const sel = ev.target.closest("[data-newdoc-type]");
-    if (sel) newDocs[Number(sel.dataset.newdocType)].docType = sel.value;
+    if (sel) {
+      newDocs[Number(sel.dataset.newdocType)].docType = sel.value;
+      renderNewDocs(); // 図面にしたときだけ図番・品名・数量の欄を出す
+    }
+  });
+  document.getElementById("newDocList").addEventListener("input", (ev) => {
+    const el = ev.target.closest("[data-newdoc-part]");
+    if (el) newDocs[Number(el.dataset.newdocPart)].part[el.dataset.pk] = el.value;
   });
   document.getElementById("newDocList").addEventListener("click", async (ev) => {
     const split = ev.target.closest("[data-newdoc-split]");
@@ -1462,7 +1501,7 @@
       // 書類は案件キー(客先グループ＋品番)に保存する。品番の無い昔の取引は取引そのものに
       if (newDocs.length) {
         const key = fields.caseCode ? caseKeyOf(customerGroupOf(fields.customer), fields.caseCode) : (editingId || newOrderId);
-        const failed = await uploadNewDocs(key);
+        const failed = await uploadNewDocs(key, fields);
         if (failed.length) message += `。ただし保存できなかった書類があります：${failed.join("、")}`;
         else message += "（書類も保存しました）";
       }
@@ -1505,6 +1544,38 @@
 
   let docsOrderId = null;
   let uploading = false;
+  let docsCaseRows = []; // 開いている案件の表の行(図面の図番・品名・数量)
+
+  // 図面の下の図番・品名・数量の欄(js/drawing-parts.js)
+  const partsEditor = createDrawingPartsEditor({
+    rows: () => docsCaseRows,
+    customer: () => (currentDocsOrder() || {}).customer || "",
+    productCode: () => String((currentDocsOrder() || {}).caseCode || "").trim(),
+    rerender: () => renderDocsList(),
+    onSaved: () => { invCaseItems = null; }, // 請求書の画面は読み直す
+    drawingFiles: () => (currentDocsOrder() ? filesOfOrder(currentDocsOrder()).filter((f) => orderDocType(f) === "図面") : []),
+    refFiles: () => (currentDocsOrder() ? filesOfOrder(currentDocsOrder())
+      .filter((f) => ["客先からの注文書", "注文メール"].includes(orderDocType(f))) : []),
+    request: () => {
+      const o = currentDocsOrder();
+      const caseKey = orderCaseKey(o);
+      return { key: caseKey || o.id, caseKey: caseKey || "", orderId: o.id, groupKey: customerGroupOf(o.customer),
+        caseCode: String(o.caseCode || "").trim(), customer: o.customer, title: `${o.customer}　${o.productName || ""}　${o.caseCode || ""}`.trim() };
+    },
+  });
+  partsEditor.bind(document.getElementById("docsList"));
+
+  async function loadDocsCaseRows(order) {
+    docsCaseRows = [];
+    if (!order.caseCode) return;
+    try {
+      const group = customerGroupOf(order.customer);
+      docsCaseRows = (await fetchCaseItems()).filter((d) =>
+        customerGroupOf(d.customer) === group && String(d.productCode || "").trim() === String(order.caseCode).trim());
+    } catch (err) {
+      console.warn("案件の表を読み込めませんでした", err);
+    }
+  }
 
   function currentDocsOrder() {
     return orders.find((o) => o.id === docsOrderId);
@@ -1536,7 +1607,10 @@
     document.getElementById("docsList").innerHTML = `<div class="empty-state">読み込んでいます…</div>`;
     document.getElementById("docsModal").classList.add("open");
     renderStorageMeter("docsStorageMeter");
+    partsEditor.reset();
     if ((order.drawingIds || []).length > 0) await ensureDrawings();
+    await loadDocsCaseRows(order);
+    await partsEditor.refresh();
     renderDocsList();
   }
 
@@ -1564,6 +1638,7 @@
           ${item.key.startsWith("file:") ? `<button type="button" class="btn btn-ghost btn-sm" data-replace="${item.key}" title="書き込みをしたPDFなどで、この書類を置き換えます">差し替え</button>` : ""}
           <button type="button" class="btn btn-ghost btn-sm btn-danger" data-remove="${item.key}">${item.removeLabel}</button>
         </div>
+        ${item.partsFileId ? partsEditor.html(item.partsFileId) : ""}
       </div>`;
   }
 
@@ -1596,6 +1671,7 @@
           meta: `${formatFileSize(f.fileSize)}・${escapeHtml(f.createdAtText || "")} 登録${f.editedAtText ? `・${escapeHtml(f.editedAtText)} 書き込み` : ""}`,
           removeLabel: "削除",
           pdf: fileViewKind(f.mimeType, f.fileName) === "pdf",
+          partsFileId: orderDocType(f) === "図面" ? f.id : "",
         });
       });
     return groups;
@@ -1608,6 +1684,7 @@
     document.getElementById("docsList").innerHTML = ORDER_DOC_TYPES.filter((t) => ORDER_UPLOAD_TYPES.includes(t) || groups[t].length > 0).map((t) => `
       <div class="doc-group">
         <div class="doc-group-title">${t} <span>${groups[t].length}</span></div>
+        ${t === "図面" ? partsEditor.aiBarHtml() : ""}
         ${groups[t].length > 0
           ? groups[t].map(docItemHtml).join("")
           : `<div class="doc-empty">まだありません</div>`}
@@ -1624,6 +1701,7 @@
     uploading = true;
     let ok = 0;
     const failed = [];
+    let firstDrawing = null;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
@@ -1631,6 +1709,7 @@
           status.textContent = `${i + 1} / ${files.length} 件目「${file.name}」を保存中… ${Math.round((done / total) * 100)}%`;
         });
         orderFiles.push(saved);
+        if (docType === "図面" && !firstDrawing) firstDrawing = saved;
         ok++;
         renderDocsList();
       } catch (err) {
@@ -1643,6 +1722,12 @@
     status.textContent = failed.length === 0
       ? `${ok}件を「${docType}」として保存しました。`
       : `${ok}件を保存しました。保存できなかったファイル：${failed.join(" / ")}`;
+    // 図面を上げたら、続けて図番・品名・数量を入れられるよう、その図面の図番の欄へ
+    const input = firstDrawing && document.querySelector(`[data-dp-file="${CSS.escape(firstDrawing.id)}"] input[data-k="drawingNo"]`);
+    if (input) {
+      input.scrollIntoView({ block: "center" });
+      input.focus();
+    }
   }
 
   async function removeDoc(key) {
@@ -1658,6 +1743,8 @@
         if (!confirm(`「${f.fileName}」を削除しますか？\nこの操作は元に戻せません。`)) return;
         await deleteOrderFile(id);
         orderFiles = orderFiles.filter((x) => x.id !== id);
+        await unlinkDrawingFile(docsCaseRows, id);
+        invCaseItems = null;
         renderStorageMeter("docsStorageMeter");
       }
       renderDocsList();
