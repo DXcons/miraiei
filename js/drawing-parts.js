@@ -125,9 +125,7 @@ function createDrawingPartsEditor(ctx) {
   async function requestAi() {
     const files = unreadDrawings();
     if (!files.length) return toast("図番がまだの図面はありません。");
-    if (!confirm(`図番・品名・数量がまだの図面${files.length}枚を、AIで読み取るよう管理者に依頼します。
-` +
-      "図面と注文書の画像はAI(Anthropic社)に送られます。よろしいですか？")) return;
+    if (!confirm("図番・品名・数量がまだの図面の読み取りを、アプリ管理者に依頼します。よろしいですか？")) return;
     try {
       await addAiRequest({
         ...ctx.request(),
