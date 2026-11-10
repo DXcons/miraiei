@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261103a">
+<link rel="stylesheet" href="css/style.css?v=20261110c">
 </head>
 <body>
 
@@ -244,10 +244,6 @@
           <datalist id="poVendorList"></datalist>
         </div>
         <div class="field">
-          <label for="poVendorShort">略称（メーカー・手配先の欄）</label>
-          <input type="text" id="poVendorShort" placeholder="例：城南" autocomplete="off">
-        </div>
-        <div class="field">
           <label for="poVendorPerson">担当者（○○ 様）</label>
           <input type="text" id="poVendorPerson" autocomplete="off">
         </div>
@@ -259,6 +255,16 @@
 
       <div class="filter-label" style="margin:6px 0 8px;">明細 <span class="field-note">「結びつける行」を選ぶと、その行の外注単価（内訳）に自動で入ります。</span></div>
       <div class="table-wrap"><table class="po-lines" id="poLines"></table></div>
+      <!-- 明細の「名称」「単位」の選択肢(一覧から選ぶか、そのまま手入力もできる) -->
+      <datalist id="poMatNameList">
+        <option value="丸鋼"></option><option value="ミガキ丸"></option><option value="パイプ"></option>
+        <option value="リング板"></option><option value="円板"></option><option value="切板"></option>
+        <option value="レーザー板"></option><option value="角パイプ"></option><option value="アングル材"></option>
+        <option value="チャンネル材"></option>
+      </datalist>
+      <datalist id="poUnitList">
+        <option value="個"></option><option value="本"></option><option value="式"></option><option value="set"></option>
+      </datalist>
       <div class="po-line-actions">
         <select id="poAddFromRow"></select>
         <button type="button" class="btn btn-secondary btn-sm" id="poAddRowBtn">＋ 表の行から追加</button>
@@ -288,7 +294,7 @@
           <label for="poDestAddress">直送先の住所</label>
           <input type="text" id="poDestAddress" autocomplete="off">
         </div>
-        <div class="field">
+        <div class="field" id="poShipNoteField">
           <label for="poShipNote">送状記載事項</label>
           <input type="text" id="poShipNote" value="無" autocomplete="off">
         </div>
@@ -351,14 +357,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js?v=20261014a"></script>
-<script src="js/common.js?v=20261101a"></script>
+<script src="js/common.js?v=20261110b"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
-<script src="js/case-store.js?v=20261103a"></script>
+<script src="js/case-store.js?v=20261110a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261014a"></script>
+<script src="js/doc-store.js?v=20261110a"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
-<script src="js/drawing-parts.js?v=20261105a"></script>
+<script src="js/drawing-parts.js?v=20261110a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -658,18 +664,23 @@
 
   /* ---------- 注文書の作成・編集 ---------- */
 
+  // [項目, 見出し, 入力の種類, 幅, 選択肢(datalist)]
+  // メーカー・手配先の欄はなくした(2026/11)。前のデータに入っていても、画面と印刷には出さない
   const PO_COLUMNS = {
     order: [
       ["name", "図面№/部品名称", "text", "w-name"], ["spec", "表示型式", "text", "w-spec"], ["material", "材質", "text", "w-s"],
-      ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-xs"], ["maker", "ﾒｰｶｰ", "text", "w-s"],
-      ["arranger", "手配先", "text", "w-s"], ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "text", "w-s"],
+      ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-unit", "poUnitList"],
+      ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "date", "w-date"],
     ],
     material: [
-      ["name", "名称", "text", "w-s"], ["size", "SIZE", "text", "w-spec"], ["material", "材質", "text", "w-s"],
-      ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-xs"], ["maker", "ﾒｰｶｰ", "text", "w-s"],
-      ["arranger", "手配先", "text", "w-s"], ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "text", "w-s"],
+      ["name", "名称", "text", "w-mname", "poMatNameList"], ["size", "SIZE", "text", "w-spec"], ["material", "材質", "text", "w-s"],
+      ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-unit", "poUnitList"],
+      ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "date", "w-date"],
     ],
   };
+
+  // 納期は「2026-11-20」の形で持つ。前に手入力した「11/20」などは日付の欄に出せないので、横に元の文字を添える
+  const isIsoDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
 
   function vendorInfo(name) {
     return knownVendors(ALL_POS).find((v) => v.name === name) || null;
@@ -685,7 +696,6 @@
     document.getElementById("poVendorList").innerHTML = knownVendors(ALL_POS)
       .map((v) => `<option value="${escapeHtml(v.name)}"></option>`).join("");
     document.getElementById("poVendor").value = poEditing.vendor || "";
-    document.getElementById("poVendorShort").value = poEditing.vendorShort || "";
     document.getElementById("poVendorPerson").value = poEditing.vendorPerson || "";
     document.getElementById("poIssueDate").value = poEditing.issueDate || "";
     const dest = poEditing.deliverTo || OWN_DESTINATIONS[0];
@@ -695,6 +705,8 @@
     document.getElementById("poDestAddress").value = dest.key ? "" : dest.address || "";
     syncDestFields();
     document.getElementById("poShipNote").value = poEditing.shipNote || "無";
+    // 送状記載事項は注文書だけ。材料注文書では使わない
+    document.getElementById("poShipNoteField").style.display = poEditing.kind === "material" ? "none" : "";
     document.getElementById("poRemarks").value = poEditing.remarks || "";
     document.getElementById("poAddFromRow").innerHTML = `<option value="">表の行を選ぶ…</option>` +
       ROWS.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.drawingNo)}　${escapeHtml(r.productName || "")}（${escapeHtml(r.qty)}個）</option>`).join("");
@@ -723,7 +735,14 @@
         ${poEditing.lines.length ? poEditing.lines.map((l, i) => `
           <tr>
             <td class="c">${i + 1}</td>
-            ${cols.map(([key, , type, w]) => `<td><input class="${w}" type="${type}" data-li="${i}" data-lk="${key}" value="${escapeHtml(l[key] ?? "")}"></td>`).join("")}
+            ${cols.map(([key, , type, w, list]) => {
+              const v = l[key] ?? "";
+              if (type === "date") {
+                const old = v && !isIsoDate(v) ? `<div class="field-note">前の入力：${escapeHtml(v)}</div>` : "";
+                return `<td><input class="${w}" type="date" data-li="${i}" data-lk="${key}" value="${isIsoDate(v) ? escapeHtml(v) : ""}">${old}</td>`;
+              }
+              return `<td><input class="${w}" type="${type}" data-li="${i}" data-lk="${key}" value="${escapeHtml(v)}"${list ? ` list="${list}" autocomplete="off"` : ""}></td>`;
+            }).join("")}
             <td class="num">${formatYen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td>
             <td><select data-li="${i}" data-lk="itemId">${rowOptions(l.itemId)}</select></td>
             <td><button type="button" class="btn btn-ghost btn-sm" data-ldel="${i}">削除</button></td>
@@ -742,6 +761,21 @@
         }
       });
     });
+    // 選択肢つきの欄(名称・単位)：入っている文字があると候補がしぼられてしまうので、
+    // クリックしたときはいったん空にして全部の候補を出す。何も選ばずに離れたら元にもどす
+    document.querySelectorAll("#poLines input[list]").forEach((el) => {
+      el.addEventListener("focus", () => {
+        if (!el.value) return;
+        el.dataset.prev = el.value;
+        el.placeholder = el.value;
+        el.value = "";
+      });
+      el.addEventListener("blur", () => {
+        if (el.value === "" && el.dataset.prev) el.value = el.dataset.prev;
+        delete el.dataset.prev;
+        el.placeholder = "";
+      });
+    });
     document.querySelectorAll("#poLines [data-ldel]").forEach((b) => b.addEventListener("click", () => {
       poEditing.lines.splice(Number(b.dataset.ldel), 1);
       renderPoLines();
@@ -749,9 +783,7 @@
   }
 
   function blankLine() {
-    const short = document.getElementById("poVendorShort").value.trim();
-    return { name: "", spec: "", size: "", material: "", qty: "", unit: poEditing.kind === "material" ? "個" : "個",
-             maker: short, arranger: short, unitPrice: "", due: "", itemId: "" };
+    return { name: "", spec: "", size: "", material: "", qty: "", unit: "個", unitPrice: "", due: "", itemId: "" };
   }
 
   // 表の行(部品)から明細を作る。材料注文書では、材質と数量だけ引き継ぐ
@@ -777,10 +809,11 @@
       ...poEditing,
       caseKey, groupKey, caseCode: code,
       vendor: document.getElementById("poVendor").value.trim(),
-      vendorShort: document.getElementById("poVendorShort").value.trim(),
+      // 略称の入力欄はなくした。外注単価(内訳)に入れる名前用に、前の注文書で使った略称があれば引き継ぐ
+      vendorShort: (vendorInfo(document.getElementById("poVendor").value.trim()) || {}).short || "",
       vendorPerson: document.getElementById("poVendorPerson").value.trim(),
       issueDate: document.getElementById("poIssueDate").value,
-      shipNote: document.getElementById("poShipNote").value.trim() || "無",
+      shipNote: poEditing.kind === "material" ? "" : document.getElementById("poShipNote").value.trim() || "無",
       remarks: document.getElementById("poRemarks").value.trim(),
       deliverTo,
       // 何も入っていない行は捨てる
@@ -1538,16 +1571,6 @@
   document.getElementById("keyword").addEventListener("input", render);
 
   // 注文書の画面
-  document.getElementById("poVendor").addEventListener("change", () => {
-    const v = vendorInfo(document.getElementById("poVendor").value.trim());
-    const shortEl = document.getElementById("poVendorShort");
-    if (v && v.short && !shortEl.value) {
-      shortEl.value = v.short;
-      // まだ空のメーカー・手配先にも略称を入れる
-      poEditing.lines.forEach((l) => { if (!l.maker) l.maker = v.short; if (!l.arranger) l.arranger = v.short; });
-      renderPoLines();
-    }
-  });
   document.getElementById("poDest").addEventListener("change", syncDestFields);
   document.getElementById("poDestName").addEventListener("change", () => {
     const v = vendorInfo(document.getElementById("poDestName").value.trim());
@@ -1562,7 +1585,7 @@
   });
   document.getElementById("poAddBlankBtn").addEventListener("click", () => { poEditing.lines.push(blankLine()); renderPoLines(); });
   document.getElementById("poAddNoteBtn").addEventListener("click", () => {
-    const l = { ...blankLine(), maker: "", arranger: "", unit: "" };
+    const l = { ...blankLine(), unit: "" };
     if (poEditing.kind === "material") l.size = "※"; else l.spec = "※";
     poEditing.lines.push(l);
     renderPoLines();

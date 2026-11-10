@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261103a">
+<link rel="stylesheet" href="css/style.css?v=20261110c">
 </head>
 <body>
 
@@ -338,12 +338,12 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js?v=20261014a"></script>
-<script src="js/common.js?v=20261101a"></script>
+<script src="js/common.js?v=20261110b"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
-<script src="js/case-store.js?v=20261103a"></script>
-<script src="js/drawing-parts.js?v=20261105a"></script>
+<script src="js/case-store.js?v=20261110a"></script>
+<script src="js/drawing-parts.js?v=20261110a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261014c"></script>
+<script src="js/doc-store.js?v=20261110a"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
 <script>
@@ -1372,13 +1372,14 @@
 
   // 図面には正式な図番・品名・数量を入れられる。保存すると案件の表の行になり、注文書・納品書の品物に使われる
   function newDocPartHtml(d, i) {
-    const p = d.part || (d.part = { drawingNo: "", productName: "", qty: 1 });
+    const p = d.part || (d.part = { drawingNo: "", productName: "", qty: 1, orderUnitPrice: "" });
     return `
       <div class="new-doc-part">
         <label>🔩 図番<input type="text" data-newdoc-part="${i}" data-pk="drawingNo" value="${escapeHtml(p.drawingNo)}" placeholder="例：MN-10202" autocomplete="off"></label>
         <label>品名<input type="text" data-newdoc-part="${i}" data-pk="productName" value="${escapeHtml(p.productName)}" placeholder="例：シャフト" autocomplete="off"></label>
         <label>数量<input type="number" min="0" data-newdoc-part="${i}" data-pk="qty" value="${escapeHtml(p.qty)}"></label>
-        <div class="field-note new-doc-part-note">図面に書かれた正式な図番・品名・数量。注文書・納品書の品物になります（空なら、あとで案件ページで入れられます）。</div>
+        <label>単価（円・税抜）<input type="number" min="0" data-newdoc-part="${i}" data-pk="orderUnitPrice" value="${escapeHtml(p.orderUnitPrice ?? "")}" placeholder="受注単価"></label>
+        <div class="field-note new-doc-part-note">図面に書かれた正式な図番・品名・数量と、受注単価。注文書・納品書・請求書の品物になります（空なら、あとで案件ページで入れられます）。</div>
       </div>`;
   }
 
@@ -1402,6 +1403,7 @@
               customer: fields.customer, productCode: fields.caseCode, drawingNo,
               productName: String(part.productName || "").trim(),
               qty: part.qty === "" ? 0 : Number(part.qty) || 0,
+              orderUnitPrice: part.orderUnitPrice ?? "",
               drawingFileId: saved.id,
             });
           } catch (err) {
