@@ -245,3 +245,79 @@ function toast(message) {
   clearTimeout(el._timer);
   el._timer = setTimeout(() => el.classList.remove("show"), 2200);
 }
+
+/* ---------- ポップアップ(モーダル)をドラッグで動かす ----------
+   どの画面のポップアップも、上の見出しの帯(.modal-head)をつかんで動かせる。
+   閉じて開き直すと、元の真ん中の位置にもどる。 */
+(function enableModalDrag() {
+  let drag = null;        // { box, startX, startY, baseX, baseY, moved }
+  let swallowClick = false;
+
+  document.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    const head = ev.target.closest(".modal-overlay .modal-head");
+    if (!head) return;
+    // ×ボタンや入力欄はふつうに使えるようにする
+    if (ev.target.closest("button, a, input, select, textarea, label, [contenteditable]")) return;
+    const box = head.closest(".modal-box") || head.parentElement;
+    drag = {
+      box,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      baseX: parseFloat(box.dataset.dragX) || 0,
+      baseY: parseFloat(box.dataset.dragY) || 0,
+      moved: false,
+    };
+    ev.preventDefault(); // 文字の選択を防ぐ
+  });
+
+  document.addEventListener("pointermove", (ev) => {
+    if (!drag) return;
+    let dx = ev.clientX - drag.startX;
+    let dy = ev.clientY - drag.startY;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    drag.moved = true;
+    // 見出しの帯が画面の外に出てしまわないようにする
+    const r = drag.box.getBoundingClientRect();
+    const curX = parseFloat(drag.box.dataset.dragX) || 0;
+    const curY = parseFloat(drag.box.dataset.dragY) || 0;
+    const left0 = r.left - curX, top0 = r.top - curY; // 動かす前の位置
+    let x = drag.baseX + dx, y = drag.baseY + dy;
+    x = Math.min(Math.max(x, 80 - left0 - r.width), window.innerWidth - 80 - left0);
+    y = Math.min(Math.max(y, -top0), window.innerHeight - 50 - top0);
+    drag.box.dataset.dragX = x;
+    drag.box.dataset.dragY = y;
+    drag.box.style.transform = `translate(${x}px, ${y}px)`;
+  });
+
+  const endDrag = () => {
+    if (drag && drag.moved) {
+      swallowClick = true; // ドラッグを離したときに背景クリックで閉じないように
+      setTimeout(() => { swallowClick = false; }, 0);
+    }
+    drag = null;
+  };
+  document.addEventListener("pointerup", endDrag);
+  document.addEventListener("pointercancel", endDrag);
+  document.addEventListener("click", (ev) => {
+    if (swallowClick) { ev.stopPropagation(); ev.preventDefault(); swallowClick = false; }
+  }, true);
+
+  // 開き直したら真ん中にもどす
+  const reset = (overlay) => {
+    overlay.querySelectorAll(".modal-box").forEach((box) => {
+      delete box.dataset.dragX;
+      delete box.dataset.dragY;
+      box.style.transform = "";
+    });
+  };
+  const watch = () => {
+    new MutationObserver((list) => {
+      list.forEach((m) => {
+        if (m.type === "attributes" && m.target.classList.contains("modal-overlay") &&
+            !m.target.classList.contains("open")) reset(m.target);
+      });
+    }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ["class"] });
+  };
+  watch();
+})();

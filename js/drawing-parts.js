@@ -142,11 +142,29 @@ function createDrawingPartsEditor(ctx) {
     }
   }
 
+  // 金額 = 受注単価 × 数量(単価が空なら出さない)
+  function amountText(v) {
+    const p = v.orderUnitPrice;
+    if (p === "" || p === null || p === undefined) return "";
+    return `= ${formatYen((Number(p) || 0) * (Number(v.qty) || 0))}`;
+  }
+
   function inputs(attr, v) {
     return `
       <input type="text" class="dp-no" ${attr} data-k="drawingNo" value="${escapeHtml(v.drawingNo || "")}" placeholder="図番" autocomplete="off">
       <input type="text" class="dp-name" ${attr} data-k="productName" value="${escapeHtml(v.productName || "")}" placeholder="品名" autocomplete="off">
-      <input type="number" min="0" class="dp-qty" ${attr} data-k="qty" value="${escapeHtml(v.qty ?? "")}" placeholder="数量">`;
+      <input type="number" min="0" class="dp-qty" ${attr} data-k="qty" value="${escapeHtml(v.qty ?? "")}" placeholder="数量" title="数量">
+      <input type="number" min="0" class="dp-price" ${attr} data-k="orderUnitPrice" value="${escapeHtml(v.orderUnitPrice ?? "")}" placeholder="単価(円)" title="受注単価(円・税抜)。請求書・納品書の単価になります">
+      <span class="dp-amount" title="金額(単価×数量)">${amountText(v)}</span>`;
+  }
+
+  // 入力に合わせて、その行の金額の表示を直す
+  function updateAmount(el) {
+    const row = el.closest(".dp-row");
+    if (!row) return;
+    const val = (k) => { const x = row.querySelector(`[data-k="${k}"]`); return x ? x.value : ""; };
+    const span = row.querySelector(".dp-amount");
+    if (span) span.textContent = amountText({ orderUnitPrice: val("orderUnitPrice"), qty: val("qty") });
   }
 
   function html(fileId) {
@@ -157,7 +175,7 @@ function createDrawingPartsEditor(ctx) {
     const ds = draftsOf(fileId);
     return `
       <div class="dp-editor" data-dp-file="${escapeHtml(fileId)}">
-        <div class="dp-head">🔩 図番・品名・数量 <small>注文書・納品書・請求書の品物になります</small></div>
+        <div class="dp-head">🔩 図番・品名・数量・単価 <small>注文書・納品書・請求書の品物になります（単価は受注単価・税抜。あとからでも入れられます）</small></div>
         ${rows.map((r) => `
           <div class="dp-row">${inputs(`data-dp-row="${escapeHtml(r.id)}"`, r)}<span class="dp-ok" title="保存済み">✓</span></div>`).join("")}
         ${ds.some((d) => d.ai) ? `<div class="dp-ai-note">🤖 AIの読み取り結果です。図面と見くらべて、正しければ「登録」を押してください。</div>` : ""}
@@ -172,7 +190,11 @@ function createDrawingPartsEditor(ctx) {
       </div>`;
   }
 
-  const readValue = (el) => el.dataset.k === "qty" ? (el.value === "" ? 0 : Number(el.value) || 0) : el.value.trim();
+  const readValue = (el) => {
+    if (el.dataset.k === "qty") return el.value === "" ? 0 : Number(el.value) || 0;
+    if (el.dataset.k === "orderUnitPrice") return el.value === "" ? null : Number(el.value) || 0;
+    return el.value.trim();
+  };
 
   // 同じ案件で、ほかの行と図番が重ならないか
   function clashes(drawingNo, exceptId) {
@@ -193,7 +215,7 @@ function createDrawingPartsEditor(ctx) {
       el.value = r.drawingNo || "";
       return toast(`図番「${value}」の部品はすでにあります。`);
     }
-    if ((r[key] ?? "") === value) return;
+    if ((r[key] ?? "") === (value ?? "")) return;
     try {
       await updateCaseItem(r.id, { [key]: value });
       r[key] = value;
@@ -222,6 +244,7 @@ function createDrawingPartsEditor(ctx) {
         customer: ctx.customer(), productCode: ctx.productCode(), drawingNo,
         productName: String(d.productName || "").trim(),
         qty: d.qty === "" || d.qty === null ? 0 : Number(d.qty) || 0,
+        orderUnitPrice: d.orderUnitPrice ?? "",
         drawingFileId: fileId,
       });
       const rows = ctx.rows();
@@ -246,6 +269,7 @@ function createDrawingPartsEditor(ctx) {
   function bind(container) {
     const fileOf = (el) => el.closest("[data-dp-file]").dataset.dpFile;
     container.addEventListener("input", (ev) => {
+      if (ev.target.closest(".dp-row")) updateAmount(ev.target);
       const el = ev.target.closest("[data-dp-draft]");
       if (el && el.closest("[data-dp-file]")) draftsOf(fileOf(el))[Number(el.dataset.dpDraft)][el.dataset.k] = el.value;
     });

@@ -388,11 +388,14 @@ async function addCaseItemManual(item) {
 
 // 図面をアップロードしたあとに入れた正式な図番・品名・数量を、表の行にする。
 // 同じ案件に同じ図番の行があれば、その行の品名・数量を直して図面を結びつける。無ければ行を作る。
-// part: { customer, productCode, drawingNo, productName, qty, drawingFileId }
+// part: { customer, productCode, drawingNo, productName, qty, drawingFileId, orderUnitPrice? }
+// orderUnitPrice(受注単価)は空ならnull。すでにある行では、空のときは前の単価を残す
 async function saveDrawingPart(part) {
   const all = await fetchCaseItems();
   const group = customerGroupOf(part.customer);
   const same = all.find((d) => customerGroupOf(d.customer) === group && d.productCode === part.productCode && d.drawingNo === part.drawingNo);
+  const price = part.orderUnitPrice === "" || part.orderUnitPrice === undefined || part.orderUnitPrice === null
+    ? null : Number(part.orderUnitPrice);
   if (same) {
     const fields = {
       productName: part.productName || same.productName || "",
@@ -400,13 +403,14 @@ async function saveDrawingPart(part) {
       drawingFileId: part.drawingFileId,
       drawingId: "",
     };
+    if (price !== null && !Number.isNaN(price)) fields.orderUnitPrice = price;
     await updateCaseItem(same.id, fields);
     return { ...same, ...fields };
   }
   return addCaseItemManual({
     customer: part.customer, productCode: part.productCode, drawingNo: part.drawingNo,
     productName: part.productName || "", qty: part.qty, drawingFileId: part.drawingFileId,
-    material: "", orderDate: "", orderSlipNo: "", orderUnitPrice: null, outsourceUnitPrice: null,
+    material: "", orderDate: "", orderSlipNo: "", orderUnitPrice: price !== null && !Number.isNaN(price) ? price : null, outsourceUnitPrice: null,
     outsourcer: "", note: "", needsCheck: false, costs: [], quoteNo: "", quoteDate: "",
   });
 }

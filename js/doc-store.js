@@ -213,6 +213,12 @@ function companyBlockHtml(sealImage) {
     </div>`;
 }
 
+// 明細の納期。カレンダーで選んだ「2026-11-20」は「11/20」と印刷する。前に手入力した文字はそのまま
+function poDueText(due) {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(due || ""));
+  return m ? `${Number(m[1])}/${Number(m[2])}` : String(due || "");
+}
+
 // 注文書・材料注文書(A4横)
 function purchaseOrderHtml(po, sealImage) {
   const material = po.kind === "material";
@@ -221,7 +227,7 @@ function purchaseOrderHtml(po, sealImage) {
   while (lines.length < MIN_ROWS) lines.push(null);
   let no = 0;
   const rowsHtml = lines.map((l) => {
-    if (!l) return `<tr>${"<td></td>".repeat(material ? 11 : 11)}</tr>`;
+    if (!l) return `<tr>${"<td></td>".repeat(9)}</tr>`;
     const isNote = !l.qty && !l.unitPrice; // 「※ブランク材支給日…」のような注記だけの行
     if (!isNote) no++;
     const amount = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0);
@@ -229,13 +235,11 @@ function purchaseOrderHtml(po, sealImage) {
       ? `<tr>
           <td class="c">${isNote ? "" : no}</td><td>${escapeHtml(l.name || "")}</td><td>${escapeHtml(l.size || "")}</td>
           <td class="c">${escapeHtml(l.material || "")}</td><td class="r">${isNote ? "" : escapeHtml(l.qty)}</td><td class="c">${isNote ? "" : escapeHtml(l.unit || "個")}</td>
-          <td class="c">${escapeHtml(l.maker || "")}</td><td class="c">${escapeHtml(l.arranger || "")}</td>
-          <td class="r">${isNote ? "" : yen(l.unitPrice)}</td><td class="r">${isNote ? "" : yen(amount)}</td><td class="c">${escapeHtml(l.due || "")}</td></tr>`
+          <td class="r">${isNote ? "" : yen(l.unitPrice)}</td><td class="r">${isNote ? "" : yen(amount)}</td><td class="c">${escapeHtml(poDueText(l.due))}</td></tr>`
       : `<tr>
           <td class="c">${isNote ? "" : no}</td><td>${escapeHtml(l.name || "")}</td><td>${escapeHtml(l.spec || "")}</td>
           <td class="c">${escapeHtml(l.material || "")}</td><td class="r">${isNote ? "" : escapeHtml(l.qty)}</td><td class="c">${isNote ? "" : escapeHtml(l.unit || "個")}</td>
-          <td class="c">${escapeHtml(l.maker || "")}</td><td class="c">${escapeHtml(l.arranger || "")}</td>
-          <td class="r">${isNote ? "" : yen(l.unitPrice)}</td><td class="r">${isNote ? "" : yen(amount)}</td><td class="c">${escapeHtml(l.due || "")}</td></tr>`;
+          <td class="r">${isNote ? "" : yen(l.unitPrice)}</td><td class="r">${isNote ? "" : yen(amount)}</td><td class="c">${escapeHtml(poDueText(l.due))}</td></tr>`;
   }).join("");
   const dest = po.deliverTo || OWN_DESTINATIONS[0];
   return `
@@ -256,11 +260,11 @@ function purchaseOrderHtml(po, sealImage) {
       </div>
       <table class="doc-table">
         <colgroup>${material
-          ? `<col style="width:3%"><col style="width:16%"><col style="width:20%"><col style="width:8%"><col style="width:5%"><col style="width:3%"><col style="width:7%"><col style="width:7%"><col style="width:9%"><col style="width:10%"><col style="width:10%">`
-          : `<col style="width:3%"><col style="width:24%"><col style="width:20%"><col style="width:6%"><col style="width:5%"><col style="width:3%"><col style="width:6%"><col style="width:6%"><col style="width:8%"><col style="width:8%"><col style="width:11%">`}</colgroup>
+          ? `<col style="width:3%"><col style="width:18%"><col style="width:26%"><col style="width:10%"><col style="width:6%"><col style="width:4%"><col style="width:10%"><col style="width:12%"><col style="width:11%">`
+          : `<col style="width:3%"><col style="width:28%"><col style="width:23%"><col style="width:8%"><col style="width:6%"><col style="width:4%"><col style="width:9%"><col style="width:9%"><col style="width:10%">`}</colgroup>
         <thead><tr>
           <th>№</th><th>${material ? "名称" : "図面№/部品名称"}</th><th>${material ? "SIZE" : "表示型式"}</th><th>材質</th>
-          <th colspan="2">数量</th><th>ﾒｰｶｰ</th><th>手配先</th><th>単価</th><th>金額</th><th>納期</th>
+          <th colspan="2">数量</th><th>単価</th><th>金額</th><th>納期</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
@@ -270,7 +274,7 @@ function purchaseOrderHtml(po, sealImage) {
           <div class="doc-box-title">納入先</div>
           <div>[宛先] ${escapeHtml(dest.name || "")}　　　　[TEL] ${escapeHtml(dest.tel || "")}</div>
           <div>[住所] ${escapeHtml(dest.address || "")}</div>
-          <div>※送状記載事項：${escapeHtml(po.shipNote || "無")}</div>
+          ${material ? "" : `<div>※送状記載事項：${escapeHtml(po.shipNote || "無")}</div>`}
         </div>
         <div class="doc-box">
           <div class="doc-box-title">備考欄</div>
