@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261110c">
+<link rel="stylesheet" href="css/style.css?v=20261110d">
 </head>
 <body>
 
@@ -357,7 +357,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/firebase-config.js?v=20261014a"></script>
-<script src="js/common.js?v=20261110b"></script>
+<script src="js/common.js?v=20261110c"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261110a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
@@ -1594,6 +1594,15 @@
   document.getElementById("poSavePrintBtn").addEventListener("click", () => savePo(true));
   document.getElementById("poDeleteBtn").addEventListener("click", removePo);
   document.getElementById("dnPrintBtn").addEventListener("click", printDn);
+
+  // 入力中のポップアップの「戻す」「進む」(js/common.js)。明細の行などは配列ごと覚える
+  registerModalUndo("orderModal");
+  registerModalUndo("editModal", { get: () => editingCosts, set: (v) => { editingCosts = v || []; renderCostEdit(); } });
+  registerModalUndo("poModal", {
+    get: () => (poEditing ? poEditing.lines : null),
+    set: (v) => { if (poEditing && v) { poEditing.lines = v; renderPoLines(); } },
+  });
+  registerModalUndo("dnModal", { get: () => dnLines, set: (v) => { dnLines = v || []; renderDnLines(); } });
   document.getElementById("sealInput").addEventListener("change", async (ev) => {
     const file = ev.target.files[0];
     ev.target.value = "";
