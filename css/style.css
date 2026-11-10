@@ -3748,3 +3748,19 @@ body.make-mode #resultArea {
 .modal-head select {
   cursor: pointer;
 }
+
+/* ポップアップの「戻す」「進む」(common.js の registerModalUndo) */
+.modal-head .modal-undo {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+.modal-head .modal-undo .btn {
+  padding: 4px 10px;
+  font-size: 14px;
+}
+.modal-head .modal-undo .btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
