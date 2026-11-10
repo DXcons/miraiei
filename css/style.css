@@ -3233,6 +3233,9 @@ body.make-mode #resultArea {
 .po-lines .w-n { width: 60px; }
 .po-lines .w-xs { width: 40px; }
 .po-lines .w-p { width: 90px; }
+.po-lines .w-mname { width: 140px; }
+.po-lines .w-unit { width: 70px; }
+.po-lines .w-date { width: 140px; }
 
 .po-line-actions {
   display: flex;
@@ -3647,6 +3650,8 @@ body.make-mode #resultArea {
 .dp-row .dp-no { width: 34%; flex: none; }
 .dp-row .dp-name { flex: 1; }
 .dp-row .dp-qty { width: 70px; flex: none; }
+.dp-row .dp-price { width: 100px; flex: none; text-align: right; }
+.dp-row .dp-amount { min-width: 6.5em; flex: none; font-size: 14px; color: var(--text-light); white-space: nowrap; }
 
 .dp-draft input {
   border-color: #e0a36c;
@@ -3664,7 +3669,7 @@ body.make-mode #resultArea {
 /* 登録画面：図面ごとの図番・品名・数量 */
 .new-doc-part {
   display: grid;
-  grid-template-columns: 1fr 1.4fr 90px;
+  grid-template-columns: 1fr 1.4fr 80px 110px;
   gap: 6px 10px;
   padding: 8px 10px 10px;
   border: 1px solid var(--border);
@@ -3730,4 +3735,16 @@ body.make-mode #resultArea {
 .dp-ai input {
   border-color: #93b4f0;
   background: #f3f7ff;
+}
+
+/* ポップアップは見出しの帯をつかんで動かせる(common.js) */
+.modal-head {
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.modal-head button,
+.modal-head input,
+.modal-head select {
+  cursor: pointer;
 }
