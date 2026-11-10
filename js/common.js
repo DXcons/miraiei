@@ -321,3 +321,164 @@ function toast(message) {
   };
   watch();
 })();
+
+/* ---------- ポップアップの「元に戻す／やり直す」 ----------
+   registerModalUndo("ポップアップのID", extra?) を呼んだポップアップの見出しに「↶ 戻す」「↷ 進む」を出す。
+   ・入力欄(idのあるもの、ラジオ・チェックは name)の値は自動で覚える
+   ・明細の行など、画面の裏の配列で持っている内容は extra = { get: () => 値, set: (値) => 描き直し } で渡す
+   ・保存する前の入力だけが対象。保存・削除・印刷などのあとの操作は戻せない
+   ・ポップアップを開いて最初にさわったときの状態から覚え始め、閉じると忘れる
+   ・キーボード：Ctrl+Z で戻す、Ctrl+Y(または Ctrl+Shift+Z)で進む。文字を入れている欄の中では、その欄の文字の取り消しになる */
+const MODAL_UNDO = new Map(); // ID → { extra, stack, index, timer, restoring, undoBtn, redoBtn }
+
+function registerModalUndo(id, extra) {
+  const overlay = document.getElementById(id);
+  if (!overlay || MODAL_UNDO.has(id)) return;
+  const h = { extra: extra || null, stack: [], index: -1, timer: null, restoring: false };
+  MODAL_UNDO.set(id, h);
+
+  // 見出しに「戻す」「進む」を入れる(×ボタンの前)
+  const head = overlay.querySelector(".modal-head");
+  const tools = document.createElement("div");
+  tools.className = "modal-undo";
+  tools.innerHTML = `
+    <button type="button" class="btn btn-ghost btn-sm" data-undo title="元に戻す（Ctrl+Z）">↶ 戻す</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-redo title="やり直す（Ctrl+Y）">↷ 進む</button>`;
+  const close = head.querySelector(".modal-close");
+  if (close) head.insertBefore(tools, close); else head.appendChild(tools);
+  h.undoBtn = tools.querySelector("[data-undo]");
+  h.redoBtn = tools.querySelector("[data-redo]");
+  h.undoBtn.addEventListener("click", () => modalUndoStep(id, -1));
+  h.redoBtn.addEventListener("click", () => modalUndoStep(id, +1));
+  modalUndoButtons(h);
+
+  const inHead = (el) => el.closest && el.closest(".modal-head");
+  // 最初にさわる直前の状態を、出発点として覚える
+  const baseline = (ev) => {
+    if (h.restoring || inHead(ev.target) || h.stack.length) return;
+    h.stack = [modalUndoCapture(overlay, h)];
+    h.index = 0;
+    modalUndoButtons(h);
+  };
+  overlay.addEventListener("pointerdown", baseline, true);
+  overlay.addEventListener("focusin", baseline, true);
+  overlay.addEventListener("keydown", baseline, true);
+  // 文字の入力は、手が止まってから1回分として覚える
+  overlay.addEventListener("input", (ev) => {
+    if (h.restoring || inHead(ev.target)) return;
+    clearTimeout(h.timer);
+    h.timer = setTimeout(() => modalUndoRecord(overlay, h), 600);
+  });
+  overlay.addEventListener("change", (ev) => {
+    if (h.restoring || inHead(ev.target)) return;
+    modalUndoRecord(overlay, h);
+  });
+  // 行の追加・削除などのボタンは、押したあとの状態を覚える
+  overlay.addEventListener("click", (ev) => {
+    if (h.restoring || inHead(ev.target) || !ev.target.closest("button, .chip, label")) return;
+    setTimeout(() => modalUndoRecord(overlay, h), 0);
+  });
+  // 閉じたら忘れる
+  new MutationObserver(() => {
+    if (!overlay.classList.contains("open")) {
+      clearTimeout(h.timer);
+      h.stack = [];
+      h.index = -1;
+      modalUndoButtons(h);
+    }
+  }).observe(overlay, { attributes: true, attributeFilter: ["class"] });
+}
+
+// 覚える対象の入力欄
+function modalUndoFields(overlay) {
+  return [...overlay.querySelectorAll(".modal-body input, .modal-body select, .modal-body textarea, .modal-foot input")]
+    .filter((el) => el.type !== "file" && el.type !== "hidden" && el.type !== "button")
+    .map((el) => {
+      if (el.id) return { key: "#" + el.id, el };
+      if ((el.type === "radio" || el.type === "checkbox") && el.name) return { key: `${el.name}=${el.value}`, el };
+      return null; // idも名前もない欄(明細の行など)は extra で扱う
+    })
+    .filter(Boolean);
+}
+
+function modalUndoCapture(overlay, h) {
+  const fields = {};
+  modalUndoFields(overlay).forEach(({ key, el }) => {
+    fields[key] = el.type === "radio" || el.type === "checkbox" ? el.checked : el.value;
+  });
+  return JSON.stringify({ fields, extra: h.extra ? h.extra.get() : null });
+}
+
+function modalUndoRecord(overlay, h) {
+  clearTimeout(h.timer);
+  if (h.restoring || !overlay.classList.contains("open") || !h.stack.length) return;
+  const snap = modalUndoCapture(overlay, h);
+  if (snap === h.stack[h.index]) return;
+  h.stack = h.stack.slice(0, h.index + 1); // 戻したあとに新しく入力したら、「進む」の分は捨てる
+  h.stack.push(snap);
+  if (h.stack.length > 100) h.stack.shift();
+  h.index = h.stack.length - 1;
+  modalUndoButtons(h);
+}
+
+function modalUndoStep(id, dir) {
+  const overlay = document.getElementById(id);
+  const h = MODAL_UNDO.get(id);
+  if (!h || !overlay) return;
+  modalUndoRecord(overlay, h); // 入力の途中(手が止まる前)の分も先に覚える
+  const next = h.index + dir;
+  if (next < 0 || next >= h.stack.length) return;
+  h.index = next;
+  const state = JSON.parse(h.stack[next]);
+  h.restoring = true;
+  try {
+    if (h.extra) h.extra.set(JSON.parse(JSON.stringify(state.extra)));
+    modalUndoFields(overlay).forEach(({ key, el }) => {
+      if (!(key in state.fields)) return;
+      const v = state.fields[key];
+      if (el.type === "radio" || el.type === "checkbox") {
+        if (el.checked === v) return;
+        el.checked = v;
+      } else {
+        if (el.value === v) return;
+        el.value = v;
+      }
+      // 画面の側の処理(表示の切り替えなど)も動かす
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  } finally {
+    h.restoring = false;
+  }
+  modalUndoButtons(h);
+  toast(dir < 0 ? "1つ前に戻しました" : "やり直しました");
+}
+
+function modalUndoButtons(h) {
+  h.undoBtn.disabled = h.index <= 0;
+  h.redoBtn.disabled = h.index < 0 || h.index >= h.stack.length - 1;
+}
+
+document.addEventListener("keydown", (ev) => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+  const k = ev.key.toLowerCase();
+  const redo = k === "y" || (k === "z" && ev.shiftKey);
+  if (k !== "z" && k !== "y") return;
+  // 文字を入れている欄の中では、ブラウザのふつうの取り消しにまかせる
+  const t = ev.target;
+  if (t && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && /^(text|number|search|tel|email|url)$/.test(t.type)))) return;
+  const open = [...MODAL_UNDO.keys()].filter((id) => document.getElementById(id).classList.contains("open"));
+  if (!open.length) return;
+  ev.preventDefault();
+  modalUndoStep(open[open.length - 1], redo ? +1 : -1);
+});
+
+// 開いたあとに中身を読み込むポップアップ(請求書など)で、読み込みが終わった時点を出発点にする
+function modalUndoReset(id) {
+  const h = MODAL_UNDO.get(id);
+  if (!h) return;
+  clearTimeout(h.timer);
+  h.stack = [];
+  h.index = -1;
+  modalUndoButtons(h);
+}
