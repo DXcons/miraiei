@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261110d">
+<link rel="stylesheet" href="css/style.css?v=20261112c">
 </head>
 <body>
 
@@ -125,6 +125,14 @@
         <div class="field">
           <label for="editDrawingFile">図面</label>
           <select id="editDrawingFile"></select>
+        </div>
+        <div class="field">
+          <label for="editMakeBy">工場／外注</label>
+          <select id="editMakeBy">
+            <option value="">案件の区分に従う</option>
+            <option value="工場">工場で作る</option>
+            <option value="外注">外注（購入品を含む）</option>
+          </select>
         </div>
         <div class="field">
           <label for="editOutPrice">外注単価（円）</label>
@@ -251,6 +259,13 @@
           <label for="poIssueDate">発行日</label>
           <input type="date" id="poIssueDate">
         </div>
+        <div class="field">
+          <label for="poSection">工場分／外注分</label>
+          <select id="poSection" title="粗利の「うち工場分」に入れるかどうか">
+            <option value="工場">工場分（工場で使う材料・加工）</option>
+            <option value="外注">外注分</option>
+          </select>
+        </div>
       </div>
 
       <div class="filter-label" style="margin:6px 0 8px;">明細 <span class="field-note">「結びつける行」を選ぶと、その行の外注単価（内訳）に自動で入ります。</span></div>
@@ -359,12 +374,12 @@
 <script src="js/firebase-config.js?v=20261014a"></script>
 <script src="js/common.js?v=20261110c"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
-<script src="js/case-store.js?v=20261110a"></script>
+<script src="js/case-store.js?v=20261112a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261110a"></script>
+<script src="js/doc-store.js?v=20261112b"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
-<script src="js/drawing-parts.js?v=20261110a"></script>
+<script src="js/drawing-parts.js?v=20261112a"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const groupKey = params.get("customer") || CASE_CUSTOMER_GROUPS[0].key;
@@ -698,6 +713,8 @@
     document.getElementById("poVendor").value = poEditing.vendor || "";
     document.getElementById("poVendorPerson").value = poEditing.vendorPerson || "";
     document.getElementById("poIssueDate").value = poEditing.issueDate || "";
+    // 指定が無ければ、材料注文書と「工場のみ」の案件は工場分(doc-store.js の poSection)
+    document.getElementById("poSection").value = poSection(poEditing, ROWS, ORDER ? ORDER.makeType : "");
     const dest = poEditing.deliverTo || OWN_DESTINATIONS[0];
     document.getElementById("poDest").value = dest.key || "other";
     document.getElementById("poDestName").value = dest.key ? "" : dest.name || "";
@@ -813,6 +830,7 @@
       vendorShort: (vendorInfo(document.getElementById("poVendor").value.trim()) || {}).short || "",
       vendorPerson: document.getElementById("poVendorPerson").value.trim(),
       issueDate: document.getElementById("poIssueDate").value,
+      section: document.getElementById("poSection").value,
       shipNote: poEditing.kind === "material" ? "" : document.getElementById("poShipNote").value.trim() || "無",
       remarks: document.getElementById("poRemarks").value.trim(),
       deliverTo,
@@ -1105,15 +1123,44 @@
      ========================================================== */
 
   function renderSummary() {
-    const s = summarizeCaseRows(code, ROWS);
-    const rate = marginRate(s.orderTotal, s.outsourceTotal);
-    const missing = ROWS.filter((r) => r.orderUnitPrice === null || r.orderUnitPrice === undefined ||
-      r.outsourceUnitPrice === null || r.outsourceUnitPrice === undefined).length;
+    // Excelの受発注書の右上(受注金額・仕入原価・粗利益額・粗利益率)と同じ並び
+    const p = caseProfit(ROWS, POS, ORDER ? ORDER.amount : null, ORDER ? ORDER.makeType : "");
+    const missing = ROWS.filter((r) => r.orderUnitPrice === null || r.orderUnitPrice === undefined || r.orderUnitPrice === "").length;
+    const parts = [
+      ["外注費（注文書）", p.outsourcePo],
+      ["工場仕入（材料注文書）", p.materialPo],
+      ["手入力の外注単価", p.manual],
+    ].filter(([, v]) => v).map(([k, v]) => `${k} ${formatYen(v)}`);
     document.getElementById("summaryArea").innerHTML = `
-      <div class="case-summary-item"><span>点数</span><b>${s.count}点</b>${missing ? `<small class="missing-note">単価が未入力の行 ${missing}点</small>` : ""}</div>
-      <div class="case-summary-item"><span>受注金額（受注単価×数量）</span><b>${formatYen(s.orderTotal)}</b></div>
-      <div class="case-summary-item"><span>外注金額（外注単価×数量）</span><b>${formatYen(s.outsourceTotal)}</b></div>
-      <div class="case-summary-item"><span>粗利</span><b>${formatYen(s.orderTotal - s.outsourceTotal)}${rate === null ? "" : `（${rate.toFixed(1)}%）`}</b></div>`;
+      <div class="case-summary-item"><span>受注金額</span><b>${formatYen(p.orderTotal)}</b>
+        <small class="summary-note">${ROWS.length}点${missing ? `<span class="missing-note">（受注単価が未入力 ${missing}点）</span>` : ""}</small></div>
+      <div class="case-summary-item"><span>仕入原価（工場仕入＋外注費）</span><b>${formatYen(p.cost)}</b>
+        <small class="summary-note">${parts.length ? parts.join("<br>") : "注文書・材料注文書はまだありません"}</small></div>
+      <div class="case-summary-item"><span>粗利益額</span><b class="${p.profit < 0 ? "is-minus" : ""}">${formatYen(p.profit)}</b></div>
+      <div class="case-summary-item"><span>粗利益率</span><b class="${p.profit < 0 ? "is-minus" : ""}">${p.rate === null ? "—" : `${p.rate.toFixed(1)}%`}</b></div>
+      ${p.factory.has ? factorySummaryHtml(p.factory) : ""}`;
+  }
+
+  // Excelの「工場」タブの右上と同じ、工場分だけの集計
+  function factorySummaryHtml(f) {
+    const minus = f.profit < 0 ? "is-minus" : "";
+    return `
+      <div class="case-summary-factory">
+        <div class="case-summary-factory-title">うち工場分
+          <small>品物の「工場／外注」と、注文書の「工場分／外注分」で分けています${f.unsetCount
+            ? `<span class="missing-note">（工場か外注か未設定の品物 ${f.unsetCount}点。表の「修正」で設定してください）</span>` : ""}</small></div>
+        <div class="case-summary-item"><span>工場の受注金額</span><b>${formatYen(f.orderTotal)}</b><small class="summary-note">${f.rowCount}点</small></div>
+        <div class="case-summary-item"><span>工場の原価（材料・外注費）</span><b>${formatYen(f.cost)}</b></div>
+        <div class="case-summary-item"><span>工場の粗利益額</span><b class="${minus}">${formatYen(f.profit)}</b></div>
+        <div class="case-summary-item"><span>工場の粗利益率</span><b class="${minus}">${f.rate === null ? "—" : `${f.rate.toFixed(1)}%`}</b></div>
+      </div>`;
+  }
+
+  // 表の品名の横に出す「工場」「外注」の印
+  function makeBadgeHtml(r) {
+    const by = rowMakeBy(r, ORDER ? ORDER.makeType : "");
+    if (!by) return ORDER && ORDER.makeType === "工場＋外注" ? `<span class="badge badge-make-unset" title="工場か外注か未設定（修正で設定）">工/外?</span>` : "";
+    return `<span class="badge ${by === "工場" ? "badge-make-factory" : "badge-make-out"}">${by}</span>`;
   }
 
   const priceCell = (v) => (v === null || v === undefined || v === "") ? `<span class="missing">未入力</span>` : formatYen(v);
@@ -1169,6 +1216,7 @@
                   <td>${escapeHtml(r.productCode)}</td>
                   <td class="case-name">
                     ${escapeHtml(r.productName)}
+                    ${makeBadgeHtml(r)}
                     ${r.needsCheck ? `<span class="badge badge-check" title="${escapeHtml(r.note)}">要確認</span>` : ""}
                   </td>
                   <td>${escapeHtml(r.drawingNo)}</td>
@@ -1398,6 +1446,7 @@
     document.getElementById("editOutsourcer").value = r ? r.outsourcer || "" : "";
     document.getElementById("editNote").value = r ? r.note || "" : "";
     document.getElementById("editCheck").checked = !!(r && r.needsCheck);
+    document.getElementById("editMakeBy").value = r && (r.makeBy === "工場" || r.makeBy === "外注") ? r.makeBy : "";
     document.getElementById("editDeleteBtn").style.visibility = r ? "visible" : "hidden";
     fillDrawingSelect(r);
     editingCosts = r ? caseCostLines(r).map((c) => ({ ...c })) : [];
@@ -1487,11 +1536,13 @@
       qty: numOrNull("editQty") || 0,
       note: document.getElementById("editNote").value.trim(),
       needsCheck: document.getElementById("editCheck").checked,
-      // 空の行は捨てる
+      makeBy: document.getElementById("editMakeBy").value,
+      // 空の行は捨てる。注文書から入った内訳は、どの注文書のものか(poId)を残す(粗利の二重計上を防ぐ)
       costs: editingCosts
         .filter((c) => (c.vendor || "").trim() || (c.process || "").trim() || (c.unitPrice !== null && c.unitPrice !== ""))
         .map((c) => ({ vendor: (c.vendor || "").trim(), process: (c.process || "").trim(), unitPrice: c.unitPrice ?? null,
-          qty: Number(c.qty) || 0, quoteNo: c.quoteNo || "", ref: (c.ref || "").trim(), kind: c.kind || "" })),
+          qty: Number(c.qty) || 0, quoteNo: c.quoteNo || "", ref: (c.ref || "").trim(), kind: c.kind || "",
+          ...(c.poId ? { poId: c.poId, poLine: c.poLine ?? 0 } : {}) })),
     };
     // 「取り込んだ図面（そのまま）」以外を選んだら、書類の図面に付け替える(「なし」なら外す)
     if (drawingChoice !== "__keep__") {
@@ -1752,6 +1803,7 @@
       console.warn("注文書を取得できませんでした（Firestoreのルールに purchaseOrders が必要です）", err);
     }
     renderDocMake();
+    if (ROWS) renderSummary(); // 注文書が読めたので、仕入原価・粗利を出し直す
     try {
       FILES = await fetchOrderFiles();
     } catch (err) {

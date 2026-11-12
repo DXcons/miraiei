@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261110d">
+<link rel="stylesheet" href="css/style.css?v=20261112c">
 </head>
 <body>
 
@@ -178,7 +178,7 @@
           <input type="text" id="orderOutShipTo" list="vendorList" autocomplete="off">
         </div>
         <div class="field">
-          <label for="orderSalesStaff">営業担当</label>
+          <label for="orderSalesStaff">営業担当（客先）</label>
           <input type="text" id="orderSalesStaff" autocomplete="off">
         </div>
         <div class="field">
@@ -340,10 +340,10 @@
 <script src="js/firebase-config.js?v=20261014a"></script>
 <script src="js/common.js?v=20261110c"></script>
 <script src="js/pdf-store.js?v=20261014a"></script>
-<script src="js/case-store.js?v=20261110a"></script>
-<script src="js/drawing-parts.js?v=20261110a"></script>
+<script src="js/case-store.js?v=20261112a"></script>
+<script src="js/drawing-parts.js?v=20261112a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261110a"></script>
+<script src="js/doc-store.js?v=20261112b"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
 <script>
@@ -649,7 +649,33 @@
      出荷待ちでは、現在の状態もここに置く(2026-10-27 社長のコメント)。
      部品の総数(総数・工場・外注)は表の列に移したので、ここには出さない(入力は「編集」から)。 */
   const openDetails = new Set();
-  const DETAIL_FIELDS = ["customerOrderNos", "outShipTo", "salesStaff", "note", "stateText"];
+  // 客先の注文番号は、社長の指示で注文詳細から外した(2026-11-12。入力は「編集」の「その他の項目」に残す)
+  const DETAIL_FIELDS = ["outShipTo", "salesStaff", "note", "stateText"];
+
+  // 粗利の計算に使う、全案件の表の行と注文書(一覧を読み込むときにまとめて読む)
+  let profitRows = null;
+  let profitPos = null;
+
+  // 注文詳細の中に出す、受注金額・仕入原価・粗利(案件ページの上の集計と同じ計算。doc-store.js の caseProfit)
+  function detailProfitHtml(o) {
+    if (!profitRows || !profitPos) return `<div class="detail-profit">粗利：読み込み中、または読み込めませんでした</div>`;
+    const group = customerGroupOf(o.customer);
+    const rows = o.caseCode ? profitRows.filter((d) => customerGroupOf(d.customer) === group && d.productCode === o.caseCode) : [];
+    const key = o.caseCode ? caseKeyOf(group, o.caseCode) : "";
+    const pos = key ? profitPos.filter((p) => p.caseKey === key) : [];
+    const p = caseProfit(rows, pos, o.amount, o.makeType);
+    const yen = (v, minus) => `<b class="${minus ? "is-minus" : ""}">${formatYen(v)}</b>`;
+    const pct = (r, minus) => `<b class="${minus ? "is-minus" : ""}">${r === null ? "—" : `${r.toFixed(1)}%`}</b>`;
+    const f = p.factory;
+    return `
+      <div class="detail-profit">
+        <span>受注金額${yen(p.orderTotal)}</span>
+        <span>仕入原価${yen(p.cost)}</span>
+        <span>粗利益額${yen(p.profit, p.profit < 0)}</span>
+        <span>粗利益率${pct(p.rate, p.profit < 0)}</span>
+        ${f.has ? `<span class="detail-profit-factory">うち工場分：受注${yen(f.orderTotal)}　原価${yen(f.cost)}　粗利${yen(f.profit, f.profit < 0)}　${pct(f.rate, f.profit < 0)}${f.unsetCount ? `　（工場か外注か未設定 ${f.unsetCount}点）` : ""}</span>` : ""}
+      </div>`;
+  }
 
   function hasDetail(o) {
     return DETAIL_FIELDS.some((k) => o[k] !== undefined && o[k] !== null && o[k] !== "");
@@ -662,12 +688,11 @@
       <tr class="detail-row">
         <td colspan="${colspan}">
           <div class="detail-grid">
+            ${detailProfitHtml(o)}
             ${NAV.view === "pending" ? `
             <label>現在の状態${stateCellHtml(o)}</label>` : ""}
-            <label class="detail-wide">客先の注文番号<small>（複数あるときは「、」で区切る）</small>
-              <input type="text" ${f("customerOrderNos")} value="${v("customerOrderNos")}" placeholder="例：000444444、000444445" autocomplete="off"></label>
             <label>送り先（外注先）<input type="text" list="vendorList" ${f("outShipTo")} value="${v("outShipTo")}" autocomplete="off"></label>
-            <label>営業担当<input type="text" ${f("salesStaff")} value="${v("salesStaff")}" autocomplete="off"></label>
+            <label>営業担当（客先）<input type="text" ${f("salesStaff")} value="${v("salesStaff")}" autocomplete="off"></label>
             <label class="detail-wide">連絡・備考<textarea rows="2" ${f("note")}>${v("note")}</textarea></label>
           </div>
         </td>
@@ -828,6 +853,14 @@
       // 書類の許可(orderFiles)がまだルールに無くても、取引一覧は表示する
       console.warn("書類の一覧を取得できませんでした", err);
       orderFiles = [];
+    }
+    // 注文詳細の粗利用。読めなくても一覧は出す
+    try {
+      [profitRows, profitPos] = await Promise.all([fetchCaseItems(), fetchAllPurchaseOrders()]);
+    } catch (err) {
+      console.warn("粗利の計算に使うデータを取得できませんでした", err);
+      profitRows = null;
+      profitPos = null;
     }
     refreshShipFilters();
     renderNav();
@@ -1377,13 +1410,14 @@
 
   // 図面には正式な図番・品名・数量を入れられる。保存すると案件の表の行になり、注文書・納品書の品物に使われる
   function newDocPartHtml(d, i) {
-    const p = d.part || (d.part = { drawingNo: "", productName: "", qty: 1, orderUnitPrice: "" });
+    const p = d.part || (d.part = { drawingNo: "", productName: "", qty: 1, orderUnitPrice: "", makeBy: "" });
     return `
       <div class="new-doc-part">
         <label>🔩 図番<input type="text" data-newdoc-part="${i}" data-pk="drawingNo" value="${escapeHtml(p.drawingNo)}" placeholder="例：MN-10202" autocomplete="off"></label>
         <label>品名<input type="text" data-newdoc-part="${i}" data-pk="productName" value="${escapeHtml(p.productName)}" placeholder="例：シャフト" autocomplete="off"></label>
         <label>数量<input type="number" min="0" data-newdoc-part="${i}" data-pk="qty" value="${escapeHtml(p.qty)}"></label>
         <label>単価（円・税抜）<input type="number" min="0" data-newdoc-part="${i}" data-pk="orderUnitPrice" value="${escapeHtml(p.orderUnitPrice ?? "")}" placeholder="受注単価"></label>
+        <label>工場／外注<select data-newdoc-part="${i}" data-pk="makeBy" title="粗利の「うち工場分」に使います。空なら案件の区分に従います"><option value="">案件の区分に従う</option><option value="工場" ${p.makeBy === "工場" ? "selected" : ""}>工場</option><option value="外注" ${p.makeBy === "外注" ? "selected" : ""}>外注</option></select></label>
         <div class="field-note new-doc-part-note">図面に書かれた正式な図番・品名・数量と、受注単価。注文書・納品書・請求書の品物になります（空なら、あとで案件ページで入れられます）。</div>
       </div>`;
   }
@@ -1409,6 +1443,7 @@
               productName: String(part.productName || "").trim(),
               qty: part.qty === "" ? 0 : Number(part.qty) || 0,
               orderUnitPrice: part.orderUnitPrice ?? "",
+              makeBy: part.makeBy || "",
               drawingFileId: saved.id,
             });
           } catch (err) {
