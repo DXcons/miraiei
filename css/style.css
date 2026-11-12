@@ -2795,6 +2795,18 @@ body.make-mode #resultArea {
   font-variant-numeric: tabular-nums;
 }
 
+.case-summary-item b.is-minus {
+  color: #b42318;
+}
+
+.case-summary-item .summary-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-light);
+  line-height: 1.5;
+}
+
 .case-filter-row {
   display: flex;
   align-items: flex-end;
@@ -3669,7 +3681,7 @@ body.make-mode #resultArea {
 /* 登録画面：図面ごとの図番・品名・数量 */
 .new-doc-part {
   display: grid;
-  grid-template-columns: 1fr 1.4fr 80px 110px;
+  grid-template-columns: 1fr 1.4fr 80px 110px 140px;
   gap: 6px 10px;
   padding: 8px 10px 10px;
   border: 1px solid var(--border);
@@ -3686,7 +3698,8 @@ body.make-mode #resultArea {
   color: var(--text-light);
 }
 
-#orderModal .new-doc-part input {
+#orderModal .new-doc-part input,
+#orderModal .new-doc-part select {
   width: 100%;
   font: inherit;
   padding: 5px 8px;
@@ -3764,3 +3777,69 @@ body.make-mode #resultArea {
   opacity: 0.35;
   cursor: default;
 }
+
+/* 案件ページの集計：うち工場分(Excelの「工場」タブ) */
+.case-summary-factory {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.case-summary-factory-title {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  color: var(--navy);
+}
+.case-summary-factory-title small {
+  font-weight: 400;
+  color: var(--text-light);
+  margin-left: 8px;
+}
+.case-summary-factory .case-summary-item b {
+  font-size: 19px;
+}
+@media (max-width: 760px) {
+  .case-summary-factory { grid-template-columns: repeat(2, 1fr); }
+}
+.badge-make-factory { background: #e5f4e4; color: #1d6b2a; }
+.badge-make-out { background: #efedff; color: #4b3fa0; }
+.badge-make-unset { background: #fbebeb; color: #b42318; }
+
+/* 進行中の一覧：注文詳細の中の粗利 */
+.detail-profit {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  align-items: baseline;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-light);
+}
+.detail-profit b {
+  font-size: 17px;
+  color: var(--navy);
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.detail-profit b.is-minus { color: #b42318; }
+.detail-profit .detail-profit-factory { flex-basis: 100%; font-size: 13px; }
+.detail-profit .detail-profit-factory b { font-size: 15px; }
+
+/* 書類画面の図番の行：工場／外注の選択 */
+.dp-row .dp-make {
+  flex: none;
+  width: 92px;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+.dp-draft .dp-make { border-color: #e0a36c; }
