@@ -73,6 +73,70 @@ function poTotal(po) {
 }
 
 /**
+ * 案件の受注金額・仕入原価・粗利(Excelの受発注書の右上と同じ考え方)。
+ *   受注金額 = 表の行の 受注単価×数量 の合計(行が無いときは案件の金額(税抜))
+ *   仕入原価 = 外注費(注文書の合計) + 工場仕入(材料注文書の合計) + 手入力の外注単価(注文書から入ったもの以外)
+ * 注文書から表の行に入った外注単価(poId のある内訳)は、注文書の合計で数えるので二重に足さない。
+ * rows: 案件の表の行、pos: 案件の注文書、fallbackAmount: 案件の金額(税抜)、makeType: 案件の区分(工場／工場＋外注／外注)
+ *
+ * 工場分(Excelの「工場」タブの右上)も出す。
+ *   工場の受注金額 = 工場で作る行の 受注単価×数量
+ *   工場の原価     = 工場分の注文書・材料注文書 + 工場で作る行の手入力の外注単価
+ *   行の工場／外注は rowMakeBy()、注文書の工場分／外注分は poSection() で決める。
+ */
+// 行(品物)を工場で作るか。行に指定が無ければ案件の区分に従う(工場＋外注で未指定なら "")
+function rowMakeBy(row, makeType) {
+  if (row.makeBy === "工場" || row.makeBy === "外注") return row.makeBy;
+  if (makeType === "工場") return "工場";
+  if (makeType === "外注") return "外注";
+  return "";
+}
+
+// 注文書が工場分か外注分か。指定が無ければ、材料注文書と「工場のみ」の案件は工場分、
+// 結びつけた行がすべて工場で作る行なら工場分、それ以外は外注分
+function poSection(po, rows, makeType) {
+  if (po.section === "工場" || po.section === "外注") return po.section;
+  if (po.kind === "material" || makeType === "工場") return "工場";
+  const linked = (po.lines || []).map((l) => rows.find((r) => r.id === l.itemId)).filter(Boolean);
+  return linked.length && linked.every((r) => rowMakeBy(r, makeType) === "工場") ? "工場" : "外注";
+}
+
+function caseProfit(rows, pos, fallbackAmount, makeType) {
+  const qtyOf = (r) => Number(r.qty) || 0;
+  const orderOf = (r) => (Number(r.orderUnitPrice) || 0) * qtyOf(r);
+  const manualOf = (r) => {
+    const costs = caseCostLines(r);
+    if (!costs.length) return (Number(r.outsourceUnitPrice) || 0) * qtyOf(r);
+    const perPiece = costs.filter((c) => !isReferenceCost(c) && !c.poId).reduce((s, c) => s + (Number(c.unitPrice) || 0), 0);
+    return perPiece * qtyOf(r);
+  };
+  const sum = (list, fn) => list.reduce((t, x) => t + fn(x), 0);
+  const rate = (order, profit) => (order ? (profit / order) * 100 : null);
+  const amount = typeof fallbackAmount === "number" ? fallbackAmount : 0;
+
+  const fromRows = sum(rows, orderOf);
+  const orderTotal = fromRows || amount;
+  const outsourcePo = sum(pos.filter((p) => p.kind !== "material"), poTotal);
+  const materialPo = sum(pos.filter((p) => p.kind === "material"), poTotal);
+  const manual = sum(rows, manualOf);
+  const cost = outsourcePo + materialPo + manual;
+  const profit = orderTotal - cost;
+
+  // 工場分
+  const factoryRows = rows.filter((r) => rowMakeBy(r, makeType) === "工場");
+  const factoryPos = pos.filter((p) => poSection(p, rows, makeType) === "工場");
+  const fOrder = rows.length ? sum(factoryRows, orderOf) : (makeType === "工場" ? amount : 0);
+  const fCost = sum(factoryPos, poTotal) + sum(factoryRows, manualOf);
+  const factory = {
+    orderTotal: fOrder, cost: fCost, profit: fOrder - fCost, rate: rate(fOrder, fOrder - fCost),
+    rowCount: factoryRows.length,
+    unsetCount: rows.filter((r) => rowMakeBy(r, makeType) === "").length, // 工場か外注か決まっていない行
+    has: makeType === "工場" || makeType === "工場＋外注" || factoryRows.length > 0 || factoryPos.length > 0,
+  };
+  return { orderTotal, outsourcePo, materialPo, manual, cost, profit, rate: rate(orderTotal, profit), factory };
+}
+
+/**
  * 注文書を保存し、表の行の外注の内訳に反映する。
  * po: { id?, caseKey, kind, vendor, vendorShort, issueDate, orderNo, deliverTo, remarks, shipNote, lines[] }
  * rows: この案件の表の行(caseItems)。反映した結果で書き換えて返す。

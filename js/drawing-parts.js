@@ -62,8 +62,9 @@ function createDrawingPartsEditor(ctx) {
       let list = [];
       if (!linkedRows(fileId).length) {
         list = ai && (ai.parts || []).length
-          ? ai.parts.map((p) => ({ drawingNo: p.drawingNo || "", productName: p.productName || "", qty: p.qty ?? 1, ai: true, note: p.note || "" }))
-          : [{ drawingNo: "", productName: "", qty: 1 }];
+          ? ai.parts.map((p) => ({ drawingNo: p.drawingNo || "", productName: p.productName || "", qty: p.qty ?? 1,
+              orderUnitPrice: p.orderUnitPrice ?? "", makeBy: "", ai: true, note: p.note || "" }))
+          : [{ drawingNo: "", productName: "", qty: 1, orderUnitPrice: "", makeBy: "" }];
       }
       drafts.set(fileId, list);
     }
@@ -109,14 +110,14 @@ function createDrawingPartsEditor(ctx) {
     const waiting = last && (last.status === "pending" || last.status === "working");
     const n = unreadDrawings().length;
     let status = "";
-    if (last && last.status === "pending") status = `⏳ ${escapeHtml(last.requestedAtText || "")} に依頼済み。管理者のPCが読み取ると、図番・品名・数量の欄に下書きが入ります（読み取りは平日9:00〜22:00。時間外の依頼は次の平日の朝に読み取ります）。`;
+    if (last && last.status === "pending") status = `⏳ ${escapeHtml(last.requestedAtText || "")} に依頼済み。管理者のPCが読み取ると、図番・品名・数量・単価の欄に下書きが入ります（読み取りは平日9:00〜22:00。時間外の依頼は次の平日の朝に読み取ります）。`;
     else if (last && last.status === "working") status = "🤖 いま読み取っています。少し待ってから画面を開き直してください。";
     else if (last && last.status === "done") status = `✅ ${escapeHtml(last.doneAtText || "")} に読み取りました。${escapeHtml(last.message || "")}`;
     else if (last && last.status === "error") status = `⚠ 読み取りできませんでした：${escapeHtml(last.message || "")}`;
     return `
       <div class="dp-ai-bar">
         <button type="button" class="btn btn-secondary btn-sm" data-dp-ai-request ${waiting || !n ? "disabled" : ""}
-          title="図面と注文書をAIが読んで、図番・品名・数量の下書きを入れます。結果は人が確認して「登録」します">
+          title="図面と注文書をAIが読んで、図番・品名・数量・単価（注文書に書かれていれば）の下書きを入れます。結果は人が確認して「登録」します">
           🤖 AIで読み取りを依頼（管理者に通知）${n ? `　${n}枚` : ""}</button>
         <span class="dp-ai-status">${status || (n ? "" : "図番がまだの図面はありません。")}</span>
       </div>`;
@@ -155,7 +156,12 @@ function createDrawingPartsEditor(ctx) {
       <input type="text" class="dp-name" ${attr} data-k="productName" value="${escapeHtml(v.productName || "")}" placeholder="品名" autocomplete="off">
       <input type="number" min="0" class="dp-qty" ${attr} data-k="qty" value="${escapeHtml(v.qty ?? "")}" placeholder="数量" title="数量">
       <input type="number" min="0" class="dp-price" ${attr} data-k="orderUnitPrice" value="${escapeHtml(v.orderUnitPrice ?? "")}" placeholder="単価(円)" title="受注単価(円・税抜)。請求書・納品書の単価になります">
-      <span class="dp-amount" title="金額(単価×数量)">${amountText(v)}</span>`;
+      <span class="dp-amount" title="金額(単価×数量)">${amountText(v)}</span>
+      <select class="dp-make" ${attr} data-k="makeBy" title="工場で作るか、外注か(粗利の「うち工場分」に使います)。空なら案件の区分に従います">
+        <option value="" ${!v.makeBy ? "selected" : ""}>工場/外注</option>
+        <option value="工場" ${v.makeBy === "工場" ? "selected" : ""}>工場</option>
+        <option value="外注" ${v.makeBy === "外注" ? "selected" : ""}>外注</option>
+      </select>`;
   }
 
   // 入力に合わせて、その行の金額の表示を直す
@@ -175,7 +181,7 @@ function createDrawingPartsEditor(ctx) {
     const ds = draftsOf(fileId);
     return `
       <div class="dp-editor" data-dp-file="${escapeHtml(fileId)}">
-        <div class="dp-head">🔩 図番・品名・数量・単価 <small>注文書・納品書・請求書の品物になります（単価は受注単価・税抜。あとからでも入れられます）</small></div>
+        <div class="dp-head">🔩 図番・品名・数量・単価・工場/外注 <small>注文書・納品書・請求書の品物になります（単価は受注単価・税抜。工場/外注は粗利の「うち工場分」に使います。あとからでも入れられます）</small></div>
         ${rows.map((r) => `
           <div class="dp-row">${inputs(`data-dp-row="${escapeHtml(r.id)}"`, r)}<span class="dp-ok" title="保存済み">✓</span></div>`).join("")}
         ${ds.some((d) => d.ai) ? `<div class="dp-ai-note">🤖 AIの読み取り結果です。図面と見くらべて、正しければ「登録」を押してください。</div>` : ""}
@@ -245,6 +251,7 @@ function createDrawingPartsEditor(ctx) {
         productName: String(d.productName || "").trim(),
         qty: d.qty === "" || d.qty === null ? 0 : Number(d.qty) || 0,
         orderUnitPrice: d.orderUnitPrice ?? "",
+        makeBy: d.makeBy || "",
         drawingFileId: fileId,
       });
       const rows = ctx.rows();
@@ -296,7 +303,7 @@ function createDrawingPartsEditor(ctx) {
       const more = ev.target.closest("[data-dp-more]");
       if (more) {
         const fileId = fileOf(more);
-        draftsOf(fileId).push({ drawingNo: "", productName: "", qty: 1 });
+        draftsOf(fileId).push({ drawingNo: "", productName: "", qty: 1, orderUnitPrice: "", makeBy: "" });
         ctx.rerender();
         const input = container.querySelector(`[data-dp-file="${CSS.escape(fileId)}"] .dp-draft input[data-k="drawingNo"]`);
         if (input) input.focus();

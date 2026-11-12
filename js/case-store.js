@@ -404,6 +404,7 @@ async function saveDrawingPart(part) {
       drawingId: "",
     };
     if (price !== null && !Number.isNaN(price)) fields.orderUnitPrice = price;
+    if (part.makeBy === "工場" || part.makeBy === "外注") fields.makeBy = part.makeBy;
     await updateCaseItem(same.id, fields);
     return { ...same, ...fields };
   }
@@ -411,7 +412,7 @@ async function saveDrawingPart(part) {
     customer: part.customer, productCode: part.productCode, drawingNo: part.drawingNo,
     productName: part.productName || "", qty: part.qty, drawingFileId: part.drawingFileId,
     material: "", orderDate: "", orderSlipNo: "", orderUnitPrice: price !== null && !Number.isNaN(price) ? price : null, outsourceUnitPrice: null,
-    outsourcer: "", note: "", needsCheck: false, costs: [], quoteNo: "", quoteDate: "",
+    outsourcer: "", note: "", needsCheck: false, makeBy: part.makeBy === "工場" || part.makeBy === "外注" ? part.makeBy : "", costs: [], quoteNo: "", quoteDate: "",
   });
 }
 
