@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261112c">
+<link rel="stylesheet" href="css/style.css?v=20261113b">
 </head>
 <body>
 
@@ -34,6 +34,9 @@
 
   <!-- 1. 案件の情報(受発注・請求書の管理と同じデータ) -->
   <div class="card" id="infoArea"></div>
+
+  <!-- 1.4 受注金額・仕入原価・粗利(Excelの受発注書の右上)。「書類を作成する」から開いたときも出す(2026-11-13) -->
+  <div class="card case-summary" id="summaryArea"></div>
 
   <!-- 1.5 注文書・納品書をつくる -->
   <div class="card" id="docMakeArea"></div>
@@ -65,7 +68,6 @@
   </div>
 
   <!-- 3. 突き合わせ表 -->
-  <div class="card case-summary" id="summaryArea"></div>
 
   <div class="card" id="tableTools">
     <div class="case-filter-row">
@@ -268,7 +270,7 @@
         </div>
       </div>
 
-      <div class="filter-label" style="margin:6px 0 8px;">明細 <span class="field-note">「結びつける行」を選ぶと、その行の外注単価（内訳）に自動で入ります。</span></div>
+      <div class="filter-label" style="margin:6px 0 8px;">明細 <span class="field-note">「結びつける部品」を選ぶと、その部品の外注単価（内訳）に自動で入ります。</span></div>
       <div class="table-wrap"><table class="po-lines" id="poLines"></table></div>
       <!-- 明細の「名称」「単位」の選択肢(一覧から選ぶか、そのまま手入力もできる) -->
       <datalist id="poMatNameList">
@@ -281,10 +283,8 @@
         <option value="個"></option><option value="本"></option><option value="式"></option><option value="set"></option>
       </datalist>
       <div class="po-line-actions">
-        <select id="poAddFromRow"></select>
-        <button type="button" class="btn btn-secondary btn-sm" id="poAddRowBtn">＋ 表の行から追加</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="poAddBlankBtn">＋ 空の行</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="poAddNoteBtn">＋ 注記の行（例：※ブランク材支給日）</button>
+        <!-- 部品を選ぶと、その場で明細に1行足す(2026-11-13 社長の指摘で、ボタンと分かれていたのを1つにした) -->
+        <select id="poAddFromRow" class="po-add-select" title="選ぶと、その部品の行が明細に追加されます"></select>
         <span class="po-total" id="poTotal"></span>
       </div>
 
@@ -386,7 +386,7 @@
   const code = (params.get("code") || "").trim();
   const caseKey = caseKeyOf(groupKey, code);
   // 進行中の一覧の「書類を作成する」から開いたとき(mode=make)は、書類づくりに要る部分だけを出す
-  // (納期・ステータス、点数・金額の集計、検索欄、表が空のときの案内は隠す)
+  // (納期・ステータス、検索欄、表が空のときの案内は隠す。粗利の集計は出す)
   const MAKE_MODE = params.get("mode") === "make";
   if (MAKE_MODE) {
     document.body.classList.add("make-mode");
@@ -725,8 +725,9 @@
     // 送状記載事項は注文書だけ。材料注文書では使わない
     document.getElementById("poShipNoteField").style.display = poEditing.kind === "material" ? "none" : "";
     document.getElementById("poRemarks").value = poEditing.remarks || "";
-    document.getElementById("poAddFromRow").innerHTML = `<option value="">表の行を選ぶ…</option>` +
-      ROWS.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.drawingNo)}　${escapeHtml(r.productName || "")}（${escapeHtml(r.qty)}個）</option>`).join("");
+    document.getElementById("poAddFromRow").innerHTML = `<option value="">＋ 部品を選んで追加…</option>` +
+      ROWS.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.drawingNo)}　${escapeHtml(r.productName || "")}（${escapeHtml(r.qty)}個）</option>`).join("") +
+      `<option value="__blank__">（部品を選ばずに、空の行を追加）</option>`;
     document.getElementById("poDeleteBtn").style.visibility = po ? "visible" : "hidden";
     renderPoLines();
     document.getElementById("poModal").classList.add("open");
@@ -747,7 +748,7 @@
     const rowOptions = (selected) => `<option value="">なし</option>` + ROWS.map((r) =>
       `<option value="${escapeHtml(r.id)}" ${r.id === selected ? "selected" : ""}>${escapeHtml(r.drawingNo)}</option>`).join("");
     document.getElementById("poLines").innerHTML = `
-      <thead><tr><th>№</th>${cols.map((c) => `<th>${c[1]}</th>`).join("")}<th>金額</th><th title="この明細の金額を、表のどの行の外注単価に入れるか">結びつける行</th><th></th></tr></thead>
+      <thead><tr><th>№</th>${cols.map((c) => `<th>${c[1]}</th>`).join("")}<th>金額</th><th title="この明細の金額を、どの部品の外注単価に入れるか">結びつける部品</th><th></th></tr></thead>
       <tbody>
         ${poEditing.lines.length ? poEditing.lines.map((l, i) => `
           <tr>
@@ -764,7 +765,7 @@
             <td><select data-li="${i}" data-lk="itemId">${rowOptions(l.itemId)}</select></td>
             <td><button type="button" class="btn btn-ghost btn-sm" data-ldel="${i}">削除</button></td>
           </tr>`).join("")
-        : `<tr><td colspan="${cols.length + 4}" class="doc-empty">下の「＋ 表の行から追加」で、注文する部品を追加してください。</td></tr>`}
+        : `<tr><td colspan="${cols.length + 4}" class="doc-empty">下の「＋ 部品を選んで追加…」から、注文する部品を選んでください。</td></tr>`}
       </tbody>`;
     document.getElementById("poTotal").textContent = `合計（税抜）：${formatYen(poTotal(poEditing))}`;
     document.querySelectorAll("#poLines [data-lk]").forEach((el) => {
@@ -1629,17 +1630,17 @@
     if (!document.getElementById("poDestTel").value) document.getElementById("poDestTel").value = v.tel || "";
     if (!document.getElementById("poDestAddress").value) document.getElementById("poDestAddress").value = v.address || "";
   });
-  document.getElementById("poAddRowBtn").addEventListener("click", () => {
-    const id = document.getElementById("poAddFromRow").value;
-    if (!id) return toast("追加する表の行を選んでください。");
-    addLineFromRow(id);
-  });
-  document.getElementById("poAddBlankBtn").addEventListener("click", () => { poEditing.lines.push(blankLine()); renderPoLines(); });
-  document.getElementById("poAddNoteBtn").addEventListener("click", () => {
-    const l = { ...blankLine(), unit: "" };
-    if (poEditing.kind === "material") l.size = "※"; else l.spec = "※";
-    poEditing.lines.push(l);
-    renderPoLines();
+  // 部品を選んだら、すぐ明細に追加して、選択を「＋ 部品を選んで追加…」に戻す
+  document.getElementById("poAddFromRow").addEventListener("change", (ev) => {
+    const id = ev.target.value;
+    if (!id || !poEditing) return;
+    if (id === "__blank__") {
+      poEditing.lines.push(blankLine());
+      renderPoLines();
+    } else {
+      addLineFromRow(id);
+    }
+    ev.target.value = "";
   });
   document.getElementById("poSaveBtn").addEventListener("click", () => savePo(false));
   document.getElementById("poSavePrintBtn").addEventListener("click", () => savePo(true));
