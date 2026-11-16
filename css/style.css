@@ -1745,12 +1745,36 @@ footer.mock-footer {
   max-height: 44px;
 }
 
-/* 溶接ありの目印(「あり」の直下) */
-.weld-mark {
+/* 「あり」の直下の目印。溶接ありはオレンジの太字、溶接なしはグレー。押すと加工の内容の欄が開く */
+.next-mark {
+  display: block;
   margin-top: 2px;
-  color: #d32f2f;
-  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.next-mark span {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--text-light, #888);
+}
+
+.next-mark:hover {
+  text-decoration: underline;
+}
+
+.weld-mark {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.no-weld-mark {
+  color: #8a8f98;
 }
 
 .next-due-cell {
