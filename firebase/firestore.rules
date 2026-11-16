@@ -26,6 +26,8 @@
 // purchaseOrders : 案件ページで作った下請け・材料屋への注文書。
 // settings/seal  : 注文書に出す担当者印の画像(公開しているアプリのファイルには入れない)。
 // backups     : バックアップの記録(backup.html)。state＝最後に取った日時と履歴、files_○○＝どのファイルをどのZIPに入れたか。
+// aiRequests  : 図面の図番・品名・数量のAI読み取りの依頼(2026-11-03〜)。画面の「🤖 AIで読み取りを依頼」で作られ、
+//               管理者のPCの見回り(サービスアカウントで接続するのでルールの対象外)が読み取って結果を書く。
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -82,6 +84,12 @@ service cloud.firestore {
     // バックアップの記録(最後に取った日時・どのファイルをどのZIPに入れたか)
     match /backups/{docId} {
       allow read, write: if isAppUser();
+    }
+
+    // 図面のAI読み取りの依頼。画面からは作る・読むだけ(消さない)
+    match /aiRequests/{reqId} {
+      allow read, create: if isAppUser();
+      allow update, delete: if false;
     }
 
     match /caseDocs/{docId} {
