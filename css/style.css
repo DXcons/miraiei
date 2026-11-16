@@ -1695,6 +1695,64 @@ footer.mock-footer {
   width: 150px;
 }
 
+/* 外注次加工の中身(熱処理・溶接など)。「あり」のときだけ出す */
+.next-proc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 2px 14px;
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.next-proc-grid .check-label {
+  font-weight: 400;
+}
+
+.next-check-cell .next-ship-input {
+  width: 150px;
+}
+
+/* 押印の登録(案件ページ) */
+.seal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.seal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.seal-item b {
+  min-width: 8em;
+}
+
+.seal-thumb {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border, #ccc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.seal-thumb img {
+  max-width: 44px;
+  max-height: 44px;
+}
+
+/* 溶接ありの目印(「あり」の直下) */
+.weld-mark {
+  margin-top: 2px;
+  color: #d32f2f;
+  font-weight: 700;
+  font-size: 14px;
+}
+
 .next-due-cell {
   min-width: 165px;
 }
@@ -1702,8 +1760,14 @@ footer.mock-footer {
 /* 案件ページを「書類を作成する」から開いたとき(case-detail.html?mode=make)に隠す部分 */
 body.make-mode #infoArea,
 body.make-mode #tableTools,
-body.make-mode #resultArea {
+body.make-mode #resultArea,
+body.make-mode .upload-only {
   display: none !important;
+}
+
+/* 「書類を作成する」から開いたときだけ出す見出し */
+body:not(.make-mode) .make-only {
+  display: none;
 }
 
 /* 部品の一覧(図番・品名・数量をその場で直す) */
@@ -3276,8 +3340,9 @@ body.make-mode #resultArea {
   display: none;
 }
 
+/* 書体はExcelと同じメイリオ(2026-11-16 社長のリクエスト) */
 .doc-sheet {
-  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  font-family: "Meiryo", "メイリオ", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   color: #000;
   background: #fff;
   font-size: 11px;
@@ -3503,6 +3568,155 @@ body.make-mode #resultArea {
 .doc-sum td {
   width: 36mm;
   text-align: right;
+}
+
+/* ----- 注文書・材料注文書(Excelの「受発注書」「工場」シート) ----- */
+.doc-po .doc-head-left {
+  padding-top: 6px;
+}
+
+.doc-po .doc-title {
+  margin: 0 0 14px 70px;
+}
+
+.doc-title-center {
+  text-align: center;
+  font-size: 24px;
+  margin: 0 0 4px !important;
+  letter-spacing: 0.4em;
+}
+
+.doc-company-po {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.doc-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  margin-left: 20px;
+}
+
+.doc-company-po .doc-logo {
+  height: 13mm;
+}
+
+.doc-addr-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.doc-company-po .doc-addr {
+  font-size: 11px;
+  line-height: 2;
+}
+
+.doc-company-po .doc-seal {
+  width: 17mm;
+  height: 17mm;
+  margin-bottom: 2px;
+}
+
+.doc-company-po .doc-seal img {
+  width: 15mm;
+  height: 15mm;
+}
+
+.doc-po .doc-table th,
+.doc-po .doc-table td {
+  height: 8.2mm;
+  font-size: 11px;
+}
+
+/* 材料注文書は見間違いを防ぐため、明細の文字を大きくする */
+.doc-material .doc-table td {
+  font-size: 14px;
+}
+
+.doc-material .doc-table td:first-child {
+  font-size: 10px;
+}
+
+.doc-material .doc-to {
+  font-size: 15px;
+}
+
+/* ----- 納品書・請求書(Excelの「納品書」シート)。行は1枚に入るだけ多く ----- */
+.doc-dn .doc-title {
+  font-size: 19px;
+  margin: 10px 0 8px 60px;
+}
+
+.doc-dn .doc-to {
+  font-size: 14px;
+}
+
+.doc-dn .doc-greeting {
+  margin-top: 16px;
+  line-height: 1.9;
+  font-size: 9.5px;
+}
+
+.doc-dn .doc-head-right {
+  gap: 8px;
+}
+
+.doc-dn .doc-company {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-right: 6mm;
+}
+
+.doc-dn .doc-logo {
+  height: 10mm;
+  margin-left: 4mm;
+}
+
+.doc-dn .doc-addr {
+  font-size: 9.5px;
+  line-height: 1.9;
+}
+
+.doc-dn .doc-meta {
+  font-size: 9px;
+  margin-bottom: 14px;
+}
+
+.doc-dn .doc-table th {
+  height: 9mm;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.doc-dn .doc-table td {
+  height: 8.5mm;
+  font-size: 11.5px;
+}
+
+.doc-dn .doc-table td:first-child,
+.doc-dn .doc-table td:nth-child(2) {
+  font-size: 9.5px;
+}
+
+.doc-dn .doc-sum {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+.doc-dn .doc-sum th,
+.doc-dn .doc-sum td {
+  height: 9mm;
+}
+
+.doc-dn .doc-sum th {
+  width: 25mm;
+  text-align: center;
+  white-space: nowrap;
 }
 
 /* 印刷するときは書類だけを出す */
