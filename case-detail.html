@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261113b">
+<link rel="stylesheet" href="css/style.css?v=20261116b">
 </head>
 <body>
 
@@ -44,13 +44,13 @@
   <!-- 1.6 部品の一覧(図番・品名・数量)。「書類を作成する」から開いたときだけ出す -->
   <div class="card" id="partsArea" hidden></div>
 
-  <!-- 2. 書類 -->
+  <!-- 2. 書類。「書類を作成する」から開いたとき(make-mode)は、アップロードの欄を隠す(2026-11-16 社長のリクエスト。追加は進行中の一覧の「編集」から) -->
   <div class="card">
     <div class="section-head">
-      <h2 class="section-title">📎 書類をアップロードする</h2>
-      <span class="field-note">届いた書類から順に追加していけます。</span>
+      <h2 class="section-title"><span class="upload-only">📎 書類をアップロードする</span><span class="make-only">📎 書類</span></h2>
+      <span class="field-note upload-only">届いた書類から順に追加していけます。</span>
     </div>
-    <div class="docs-upload">
+    <div class="docs-upload upload-only">
       <div class="chip-group" id="docTypeGroup"></div>
       <div class="dropzone docs-dropzone" id="docsDropzone">
         <div class="dropzone-main">ここにファイルをドラッグ＆ドロップ</div>
@@ -62,8 +62,8 @@
         </label>
         <div class="dropzone-note">上で選んだ種類として保存します。PDF・Excel・写真など、1ファイル20MBまで。</div>
       </div>
-      <div id="docsUploadStatus" class="save-status"></div>
     </div>
+    <div id="docsUploadStatus" class="save-status"></div>
     <div id="docsList"></div>
   </div>
 
@@ -250,7 +250,7 @@
       <div class="po-form">
         <div class="field">
           <label for="poVendor">宛先（外注先） <span class="req">必須</span></label>
-          <input type="text" id="poVendor" list="poVendorList" placeholder="例：㈱城南キー" autocomplete="off">
+          <input type="text" id="poVendor" list="poVendorList" autocomplete="off">
           <datalist id="poVendorList"></datalist>
         </div>
         <div class="field">
@@ -267,6 +267,14 @@
             <option value="工場">工場分（工場で使う材料・加工）</option>
             <option value="外注">外注分</option>
           </select>
+        </div>
+        <div class="field">
+          <label for="poAddrMark">住所の□（■に塗る）</label>
+          <select id="poAddrMark" title="本社・工場の住所の前の□を、黒く塗りつぶします"></select>
+        </div>
+        <div class="field">
+          <label for="poSeal">押印</label>
+          <select id="poSeal" title="印欄に押す印。「押印の登録」で名前ごとに登録できます"></select>
         </div>
       </div>
 
@@ -351,6 +359,10 @@
           <label for="dnSlipNo">伝票№</label>
           <input type="text" id="dnSlipNo" autocomplete="off">
         </div>
+        <div class="field">
+          <label for="dnAddrMark">住所の□（■に塗る）</label>
+          <select id="dnAddrMark" title="本社・工場の住所の前の□を、黒く塗りつぶします"></select>
+        </div>
       </div>
       <div class="filter-label" style="margin:6px 0 8px;">納品する品物 <span class="field-note">チェックした行が納品書に載ります。名称・備考はここで直せます。</span></div>
       <div class="table-wrap"><table class="po-lines" id="dnLines"></table></div>
@@ -367,6 +379,34 @@
 </div>
 
 <input type="file" id="sealInput" accept="image/*" hidden>
+<!-- ===== 印影(押印)の登録・削除 ===== -->
+<div class="modal-overlay" id="sealModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>押印の登録</h3>
+      <button type="button" class="modal-close" onclick="closeSealModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-note">登録した印は、注文書・材料注文書を作るときに「押印」で名前を選ぶと、印欄に押した状態で印刷されます。白い紙に押した印をスマホで撮るか、スキャンした画像を使ってください（白い部分は自動で透明にします）。</div>
+      <div id="sealList" class="seal-list"></div>
+      <div class="po-form" style="margin-top:12px;">
+        <div class="field">
+          <label for="sealName">名前（例：中嶋）</label>
+          <input type="text" id="sealName" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>画像</label>
+          <button type="button" class="btn btn-secondary btn-sm" id="sealPickBtn">画像を選んで登録</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span></span>
+      <div class="form-actions"><button type="button" class="btn btn-ghost" onclick="closeSealModal()">閉じる</button></div>
+    </div>
+  </div>
+</div>
+
 
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -376,7 +416,7 @@
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261112a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261112b"></script>
+<script src="js/doc-store.js?v=20261116b"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
 <script src="js/drawing-parts.js?v=20261112a"></script>
@@ -623,7 +663,7 @@
         <button type="button" class="btn btn-primary btn-sm" id="newPoBtn">＋ 注文書（下請けへ）</button>
         <button type="button" class="btn btn-secondary btn-sm" id="newMatBtn">＋ 材料注文書</button>
         <button type="button" class="btn btn-secondary btn-sm" id="dnBtn">🧾 納品書をつくる（客先へ）</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="sealBtn" title="注文書の右上の印欄に出す担当者印の画像">印影の画像を登録</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="sealBtn" title="注文書の右上の印欄に押す印の画像（名前ごとに複数登録できます）">押印の登録</button>
       </div>
       ${POS.length ? `
         <div class="table-wrap">
@@ -656,7 +696,7 @@
     document.getElementById("newPoBtn").addEventListener("click", () => openPoModal("order"));
     document.getElementById("newMatBtn").addEventListener("click", () => openPoModal("material"));
     document.getElementById("dnBtn").addEventListener("click", openDnModal);
-    document.getElementById("sealBtn").addEventListener("click", () => document.getElementById("sealInput").click());
+    document.getElementById("sealBtn").addEventListener("click", openSealModal);
     area.querySelectorAll("[data-po-print]").forEach((b) => b.addEventListener("click", () => printPO(POS.find((p) => p.id === b.dataset.poPrint))));
     area.querySelectorAll("[data-po-edit]").forEach((b) => b.addEventListener("click", () => openPoModal(null, POS.find((p) => p.id === b.dataset.poEdit))));
   }
@@ -674,7 +714,7 @@
 
   async function printPO(po) {
     if (!po) return;
-    printDocument(purchaseOrderHtml(po, await loadSealImage()), "landscape");
+    printDocument(purchaseOrderHtml(po, sealImageFor(po, await loadSeals())), "landscape");
   }
 
   /* ---------- 注文書の作成・編集 ---------- */
@@ -708,8 +748,13 @@
           deliverTo: { ...OWN_DESTINATIONS[0] }, lines: [] };
     document.getElementById("poTitle").textContent =
       `${PO_KINDS[poEditing.kind]}${po ? "の編集" : "をつくる"}（受注№ ${ORDER.orderNo || "保存時に自動で付けます"}）`;
-    document.getElementById("poVendorList").innerHTML = knownVendors(ALL_POS)
-      .map((v) => `<option value="${escapeHtml(v.name)}"></option>`).join("");
+    // 宛先の候補。材料注文書は材料屋だけ(2026-11-16 社長のリクエスト)＋前に材料注文書で使った宛先
+    const vendorNames = poEditing.kind === "material"
+      ? Array.from(new Set([...MATERIAL_VENDORS, ...ALL_POS.filter((p) => p.kind === "material" && p.vendor).map((p) => p.vendor)]))
+      : knownVendors(ALL_POS).map((v) => v.name);
+    document.getElementById("poVendorList").innerHTML = vendorNames
+      .map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
+    fillAddrMarkSelect(document.getElementById("poAddrMark"), poEditing.addrMark);
     document.getElementById("poVendor").value = poEditing.vendor || "";
     document.getElementById("poVendorPerson").value = poEditing.vendorPerson || "";
     document.getElementById("poIssueDate").value = poEditing.issueDate || "";
@@ -725,6 +770,7 @@
     // 送状記載事項は注文書だけ。材料注文書では使わない
     document.getElementById("poShipNoteField").style.display = poEditing.kind === "material" ? "none" : "";
     document.getElementById("poRemarks").value = poEditing.remarks || "";
+    fillSealSelect(po);
     document.getElementById("poAddFromRow").innerHTML = `<option value="">＋ 部品を選んで追加…</option>` +
       ROWS.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.drawingNo)}　${escapeHtml(r.productName || "")}（${escapeHtml(r.qty)}個）</option>`).join("") +
       `<option value="__blank__">（部品を選ばずに、空の行を追加）</option>`;
@@ -832,6 +878,8 @@
       vendorPerson: document.getElementById("poVendorPerson").value.trim(),
       issueDate: document.getElementById("poIssueDate").value,
       section: document.getElementById("poSection").value,
+      addrMark: document.getElementById("poAddrMark").value,
+      sealName: document.getElementById("poSeal").value,
       shipNote: poEditing.kind === "material" ? "" : document.getElementById("poShipNote").value.trim() || "無",
       remarks: document.getElementById("poRemarks").value.trim(),
       deliverTo,
@@ -844,6 +892,8 @@
     if (busy || !poEditing) return;
     const po = readPoForm();
     if (!po.vendor) return toast("宛先（外注先）を入力してください。");
+    rememberAddrMark(po.addrMark);
+    rememberSealName(po.sealName);
     if (!po.lines.length) return toast("明細を1行以上入れてください。");
     busy = true;
     try {
@@ -894,6 +944,7 @@
     document.getElementById("dnCustomer").value = CUSTOMER_FORMAL_NAMES[groupKey] || (ORDER && ORDER.customer) || "";
     document.getElementById("dnIssueDate").value = todayText();
     document.getElementById("dnSlipNo").value = (ORDER && ORDER.orderNo) || "";
+    fillAddrMarkSelect(document.getElementById("dnAddrMark"));
     dnLines = ROWS.map((r) => ({
       checked: true,
       name: `${r.drawingNo}　${r.productName || ""}`.trim(),
@@ -944,7 +995,10 @@
       document.getElementById("dnSlipNo").value = await ensureOrderNo();
       renderDocMake();
     }
+    const addrMark = document.getElementById("dnAddrMark").value;
+    rememberAddrMark(addrMark);
     printDocument(deliveryNoteHtml({
+      addrMark,
       customerName: document.getElementById("dnCustomer").value.trim(),
       issueDate,
       slipNo: document.getElementById("dnSlipNo").value.trim(),
@@ -1655,13 +1709,123 @@
     set: (v) => { if (poEditing && v) { poEditing.lines = v; renderPoLines(); } },
   });
   registerModalUndo("dnModal", { get: () => dnLines, set: (v) => { dnLines = v || []; renderDnLines(); } });
+  /* ---------- 押印(印影)の登録・削除と、注文書の「押印」の選択 ---------- */
+  let SEALS = null; // 読み込んだ印の一覧(最初に必要になったときに読む)
+
+  async function ensureSeals() {
+    if (!SEALS) SEALS = await loadSeals();
+    return SEALS;
+  }
+
+  // 注文書の画面の「押印」。新しい注文書は前に選んだ名前(無ければ、印が1つだけならそれ)
+  async function fillSealSelect(po) {
+    const sel = document.getElementById("poSeal");
+    sel.innerHTML = `<option value="">読み込み中…</option>`;
+    const seals = await ensureSeals();
+    sel.innerHTML = `<option value="">押さない（印欄は空）</option>` +
+      seals.map((s) => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join("");
+    let name;
+    if (po && po.sealName !== undefined && po.sealName !== null) name = po.sealName;
+    else if (po) name = seals.length === 1 ? seals[0].name : "";
+    else name = seals.some((s) => s.name === lastSealName()) ? lastSealName() : (seals.length === 1 ? seals[0].name : "");
+    if (name && !seals.some((s) => s.name === name)) {
+      sel.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(name)}">${escapeHtml(name)}（登録が消されています）</option>`);
+    }
+    sel.value = name;
+  }
+
+  async function openSealModal() {
+    document.getElementById("sealName").value = "";
+    document.getElementById("sealModal").classList.add("open");
+    await ensureSeals();
+    renderSealList();
+  }
+
+  function closeSealModal() {
+    document.getElementById("sealModal").classList.remove("open");
+  }
+
+  function renderSealList() {
+    document.getElementById("sealList").innerHTML = SEALS.length
+      ? SEALS.map((s, i) => `
+        <div class="seal-item">
+          <span class="seal-thumb"><img src="${s.image}" alt=""></span>
+          <b>${escapeHtml(s.name)}</b>
+          <button type="button" class="btn btn-ghost btn-sm" data-seal-rename="${i}">名前を変える</button>
+          <button type="button" class="btn btn-ghost btn-sm btn-danger" data-seal-del="${i}">削除</button>
+        </div>`).join("")
+      : `<div class="doc-empty">まだ登録されていません。</div>`;
+  }
+
+  async function storeSeals(list, message) {
+    try {
+      await saveSeals(list);
+      SEALS = list;
+      renderSealList();
+      toast(message);
+    } catch (err) {
+      console.error("押印の保存に失敗しました", err);
+      toast("保存できませんでした：" + (err.message || err));
+    }
+  }
+
+  document.getElementById("sealList").addEventListener("click", async (ev) => {
+    const del = ev.target.closest("[data-seal-del]");
+    if (del) {
+      const s = SEALS[Number(del.dataset.sealDel)];
+      if (!confirm(`「${s.name}」の印を削除しますか？\n（この印を選んでいた注文書は、印欄が空で印刷されます）`)) return;
+      await storeSeals(SEALS.filter((x) => x !== s), `「${s.name}」の印を削除しました`);
+      return;
+    }
+    const ren = ev.target.closest("[data-seal-rename]");
+    if (ren) {
+      const s = SEALS[Number(ren.dataset.sealRename)];
+      const name = (prompt("新しい名前", s.name) || "").trim();
+      if (!name || name === s.name) return;
+      if (SEALS.some((x) => x.name === name)) return toast(`「${name}」はもう登録されています。`);
+      await storeSeals(SEALS.map((x) => (x === s ? { ...x, name } : x)), `名前を「${name}」に変えました`);
+    }
+  });
+
+  document.getElementById("sealPickBtn").addEventListener("click", () => {
+    const name = document.getElementById("sealName").value.trim();
+    if (!name) return toast("先に名前を入れてください（例：中嶋）。");
+    document.getElementById("sealInput").click();
+  });
+
+  // 白っぽいところを透明にする(紙に押した印を撮った写真でも、印欄の枠に重ねられるように)
+  function whiteToTransparent(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, c.width, c.height);
+        for (let i = 0; i < d.data.length; i += 4) {
+          const [r, gg, b] = [d.data[i], d.data[i + 1], d.data[i + 2]];
+          if (r > 200 && gg > 200 && b > 200) d.data[i + 3] = 0;
+        }
+        g.putImageData(d, 0, 0);
+        resolve(c.toDataURL("image/png"));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   document.getElementById("sealInput").addEventListener("change", async (ev) => {
     const file = ev.target.files[0];
     ev.target.value = "";
-    if (!file) return;
+    const name = document.getElementById("sealName").value.trim();
+    if (!file || !name) return;
     try {
-      await saveSealImage(await imageFileToDataUrl(file));
-      toast("印影を登録しました。注文書の印欄に出ます。");
+      const image = await whiteToTransparent(await imageFileToDataUrl(file));
+      const list = (await ensureSeals()).filter((s) => s.name !== name).concat({ name, image });
+      await storeSeals(list, `「${name}」の印を登録しました。注文書の「押印」で選べます。`);
+      document.getElementById("sealName").value = "";
     } catch (err) {
       console.error("印影の登録に失敗しました", err);
       toast("印影を登録できませんでした：" + (err.message || err));

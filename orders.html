@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261113b">
+<link rel="stylesheet" href="css/style.css?v=20261116b">
 </head>
 <body>
 
@@ -120,10 +120,16 @@
 
       <div class="field">
         <label class="check-label"><input type="checkbox" id="orderOutsourceNext"> 外注次加工あり</label>
-        <div class="due-row" id="orderNextDueRow" hidden>
-          <label class="check-label">納期 <input type="date" id="orderNextDue" title="外注先への納期"></label>
+        <div id="orderNextDueRow" hidden>
+          <div class="next-proc-grid" id="orderNextProcGroup"></div>
+          <div class="due-row">
+            <label class="check-label">送先（外注先） <input type="text" id="orderOutShipTo" list="vendorList" autocomplete="off"></label>
+          </div>
+          <div class="due-row">
+            <label class="check-label">納期 <input type="date" id="orderNextDue" title="外注先への納期"></label>
+          </div>
         </div>
-        <div class="field-note">ありにチェックしたときだけ、外注先への納期の欄が出ます。</div>
+        <div class="field-note">ありにチェックしたときだけ、加工の内容・送先・外注先への納期の欄が出ます。溶接にチェックすると、一覧に「※溶接あり」と出ます。</div>
       </div>
 
       <div class="field">
@@ -174,10 +180,6 @@
           <input type="text" id="orderCustomerOrderNos" autocomplete="off">
         </div>
         <div class="field">
-          <label for="orderOutShipTo">送り先（外注先）</label>
-          <input type="text" id="orderOutShipTo" list="vendorList" autocomplete="off">
-        </div>
-        <div class="field">
           <label for="orderSalesStaff">営業担当（客先）</label>
           <input type="text" id="orderSalesStaff" autocomplete="off">
         </div>
@@ -215,7 +217,9 @@
       <button type="button" class="modal-close" id="docsClose" title="閉じる">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="docs-upload">
+      <!-- 書類のアップロードは「編集」の画面だけにする(2026-11-16 社長のリクエスト)。
+           差し替え用のファイル選択などをスクリプトが使うので、要素は残して隠す -->
+      <div class="docs-upload" hidden>
         <div class="filter-label">書類を追加する</div>
         <div class="chip-group" id="docTypeGroup"></div>
         <div class="dropzone docs-dropzone" id="docsDropzone">
@@ -228,12 +232,12 @@
           </label>
           <div class="dropzone-note">PDF・Excel・写真など。1ファイル20MBまで（写真は自動で縮小して保存します）。</div>
         </div>
-        <div id="docsUploadStatus" class="save-status"></div>
         <div id="docsStorageMeter"></div>
       </div>
+      <div id="docsUploadStatus" class="save-status"></div>
 
       <div class="docs-drawing-bar">
-        <span>図面は上で「図面」を選んで追加するか、保存済みの図面を紐づけます。</span>
+        <span>書類の追加は、一覧の「✏️ 編集」からできます。保存済みの図面を紐づけることもできます。</span>
         <button type="button" class="btn btn-secondary btn-sm" id="linkDrawingBtn">＋ 保存済みの図面から紐づける</button>
       </div>
 
@@ -313,6 +317,10 @@
           <label for="invNo">請求書№</label>
           <input type="text" id="invNo" autocomplete="off">
         </div>
+        <div class="field">
+          <label for="invAddrMark">住所の□（■に塗る）</label>
+          <select id="invAddrMark" title="本社・工場の住所の前の□を、黒く塗りつぶします"></select>
+        </div>
       </div>
       <div class="filter-label" style="margin:6px 0 8px;">請求する品物 <span class="field-note">この客先・この月に出荷した案件の品物です。チェックした行が請求書に載ります。名称・数量・単価・備考はここで直せます。</span></div>
       <div id="invLoading" class="empty-state" hidden>品物を読み込んでいます…</div>
@@ -343,7 +351,7 @@
 <script src="js/case-store.js?v=20261112a"></script>
 <script src="js/drawing-parts.js?v=20261112a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261112b"></script>
+<script src="js/doc-store.js?v=20261116b"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
 <script>
@@ -650,7 +658,8 @@
      部品の総数(総数・工場・外注)は表の列に移したので、ここには出さない(入力は「編集」から)。 */
   const openDetails = new Set();
   // 客先の注文番号は、社長の指示で注文詳細から外した(2026-11-12。入力は「編集」の「その他の項目」に残す)
-  const DETAIL_FIELDS = ["outShipTo", "salesStaff", "note", "stateText"];
+  // 送り先(外注先)は外注次加工の列へ移し、営業担当(客先)は一覧から外した(2026-11-16 社長のコメント。営業担当の入力は「編集」の「その他の項目」に残す)
+  const DETAIL_FIELDS = ["note", "stateText"];
 
   // 粗利の計算に使う、全案件の表の行と注文書(一覧を読み込むときにまとめて読む)
   let profitRows = null;
@@ -691,12 +700,38 @@
             ${detailProfitHtml(o)}
             ${NAV.view === "pending" ? `
             <label>現在の状態${stateCellHtml(o)}</label>` : ""}
-            <label>送り先（外注先）<input type="text" list="vendorList" ${f("outShipTo")} value="${v("outShipTo")}" autocomplete="off"></label>
-            <label>営業担当（客先）<input type="text" ${f("salesStaff")} value="${v("salesStaff")}" autocomplete="off"></label>
             <label class="detail-wide">連絡・備考<textarea rows="2" ${f("note")}>${v("note")}</textarea></label>
           </div>
         </td>
       </tr>`;
+  }
+
+  /* ---------- 外注次加工の中身 ----------
+     「あり」にチェックすると、加工の内容(熱処理・表面処理・溶接・ライニング・研磨・その他)・送先(外注先)・納期の欄が出る。
+     加工の内容は nextProcesses(配列)に保存。溶接にチェックがあるときだけ「※溶接あり」を「あり」の直下に出す(2026-11-16 社長のコメント) */
+  // 並びは社長の手書きの図に合わせる(2列で、1段目が熱処理・研磨)
+  const NEXT_PROCESSES = ["熱処理", "研磨", "表面処理", "溶接", "ライニング", "その他"];
+
+  function nextProcessesOf(o) {
+    return Array.isArray(o.nextProcesses) ? o.nextProcesses : [];
+  }
+
+  function hasWelding(o) {
+    return hasOutsourceNext(o) && nextProcessesOf(o).includes("溶接");
+  }
+
+  function nextCellHtml(o) {
+    const on = hasOutsourceNext(o);
+    const procs = nextProcessesOf(o);
+    return `
+      <label class="check-label" title="チェックすると、加工の内容・送先・外注先への納期の欄が出ます"><input type="checkbox" data-outsource-next="${o.id}" ${on ? "checked" : ""}> あり</label>
+      ${hasWelding(o) ? `<div class="weld-mark">※溶接あり</div>` : ""}
+      ${on ? `
+      <div class="next-proc-grid">
+        ${NEXT_PROCESSES.map((p) => `<label class="check-label"><input type="checkbox" data-next-proc="${o.id}" value="${p}" ${procs.includes(p) ? "checked" : ""}> ${p}</label>`).join("")}
+      </div>
+      <label class="next-due-label">送先<input type="text" class="next-due-input next-ship-input" list="vendorList" data-detail-field="outShipTo" data-id="${o.id}" value="${escapeHtml(o.outShipTo || "")}" autocomplete="off" title="送先（外注先）"></label>
+      <label class="next-due-label">納期<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注先への納期"></label>` : ""}`;
   }
 
   async function saveDetail(el) {
@@ -743,8 +778,7 @@
         <td class="count-cell">${countCellHtml(o)}</td>
         <td class="make-cell">${makeCellHtml(o)}</td>
         ${pending ? `<td class="next-check-cell">
-          <label class="check-label" title="チェックすると、外注先への納期の欄が出ます"><input type="checkbox" data-outsource-next="${o.id}" ${hasOutsourceNext(o) ? "checked" : ""}> あり</label>
-          ${hasOutsourceNext(o) ? `<label class="next-due-label">納期<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注先への納期"></label>` : ""}
+          ${nextCellHtml(o)}
         </td>` : `<td>${escapeHtml(formatOrderDate(o.invoiceDate))}</td>`}
         <td class="order-actions">
           <div class="icon-actions">
@@ -1008,11 +1042,19 @@
       saveNextDue(dateInput.dataset.nextDue, { nextDueDate: dateInput.value });
       return;
     }
-    // 外注次加工あり(表の列)：チェックすると、すぐ下に外注先への納期の欄が出る。外すと納期も消す
+    // 外注次加工あり(表の列)：チェックすると、すぐ下に加工の内容・送先・納期の欄が出る。外すと納期と加工の内容も消す(送先は残す)
     const nextBox = ev.target.closest("[data-outsource-next]");
     if (nextBox) {
-      saveNextDue(nextBox.dataset.outsourceNext, nextBox.checked ? { outsourceNext: true } : { outsourceNext: false, nextDueDate: "" },
-        nextBox.checked ? "外注次加工ありにしました。外注先への納期を入れてください" : "外注次加工なしにしました");
+      saveNextDue(nextBox.dataset.outsourceNext, nextBox.checked ? { outsourceNext: true } : { outsourceNext: false, nextDueDate: "", nextProcesses: [] },
+        nextBox.checked ? "外注次加工ありにしました。加工の内容と外注先への納期を入れてください" : "外注次加工なしにしました");
+      return;
+    }
+    // 外注次加工の内容(熱処理・溶接など)：チェックしたらすぐ保存
+    const procBox = ev.target.closest("[data-next-proc]");
+    if (procBox) {
+      const id = procBox.dataset.nextProc;
+      const picked = [...document.querySelectorAll(`[data-next-proc="${id}"]:checked`)].map((el) => el.value);
+      saveNextDue(id, { nextProcesses: NEXT_PROCESSES.filter((p) => picked.includes(p)) }, "外注次加工の内容を保存しました");
       return;
     }
     const makeSel = ev.target.closest("[data-make]");
@@ -1071,6 +1113,7 @@
     document.getElementById("invIssueDate").value = todayText();
     document.getElementById("invNo").value = "";
     document.getElementById("invRemarks").value = "";
+    fillAddrMarkSelect(document.getElementById("invAddrMark"));
     document.getElementById("invoiceKey").value = key;
     invLines = [];
     renderInvLines();
@@ -1148,7 +1191,10 @@
     if (noPrice && !confirm(`単価が空欄の行が${noPrice}件あります（金額が空欄で印刷されます）。このまま印刷しますか？`)) return;
     const issueDate = document.getElementById("invIssueDate").value;
     const [month] = document.getElementById("invoiceKey").value.split("\t");
+    const addrMark = document.getElementById("invAddrMark").value;
+    rememberAddrMark(addrMark);
     printDocument(invoiceHtml({
+      addrMark,
       customerName: document.getElementById("invCustomer").value.trim(),
       issueDate,
       invoiceNo: document.getElementById("invNo").value.trim(),
@@ -1243,7 +1289,10 @@
   function syncOutsourceNext() {
     const on = document.getElementById("orderOutsourceNext").checked;
     document.getElementById("orderNextDueRow").hidden = !on;
-    if (!on) document.getElementById("orderNextDue").value = "";
+    if (!on) {
+      document.getElementById("orderNextDue").value = "";
+      document.querySelectorAll('input[name="orderNextProc"]').forEach((el) => (el.checked = false));
+    }
   }
 
   function setRadio(name, value) {
@@ -1281,6 +1330,9 @@
     document.getElementById("orderSalesStaff").value = val("salesStaff");
     document.getElementById("orderNextDue").value = order ? order.nextDueDate || "" : "";
     document.getElementById("orderOutsourceNext").checked = !!order && hasOutsourceNext(order);
+    const procs = order ? nextProcessesOf(order) : [];
+    document.getElementById("orderNextProcGroup").innerHTML = NEXT_PROCESSES.map((p) =>
+      `<label class="check-label"><input type="checkbox" name="orderNextProc" value="${p}" ${procs.includes(p) ? "checked" : ""}> ${p}</label>`).join("");
     syncOutsourceNext();
     // 以前の選択肢(外注先の返答待ちなど)で保存した案件は、その値も選べるように足しておく
     const stateSel = document.getElementById("orderState");
@@ -1345,6 +1397,7 @@
       makeType: make ? make.value : "",
       nextDueDate: outsourceNext ? document.getElementById("orderNextDue").value : "",
       outsourceNext,
+      nextProcesses: outsourceNext ? [...document.querySelectorAll('input[name="orderNextProc"]:checked')].map((el) => el.value) : [],
       stateText: document.getElementById("orderState").value,
       customerOrderNos: document.getElementById("orderCustomerOrderNos").value.trim(),
       countTotal: numOrNull("orderCountTotal"),
