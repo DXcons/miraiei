@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進行中の案件を管理する | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261116b">
+<link rel="stylesheet" href="css/style.css?v=20261116c">
 </head>
 <body>
 
@@ -720,18 +720,24 @@
     return hasOutsourceNext(o) && nextProcessesOf(o).includes("溶接");
   }
 
+  /* 一覧では「あり」と、その下に「※溶接あり」(オレンジ)か「溶接なし」(グレー)だけを出す(2026-11-16 ユーザー指示：
+     選択肢が全部並ぶと見づらい)。その文字を押すと、加工の内容と送先の欄が開く。外注先への納期はこれまでどおり常に出す */
+  const openNext = new Set();
+
   function nextCellHtml(o) {
     const on = hasOutsourceNext(o);
     const procs = nextProcessesOf(o);
+    const open = on && openNext.has(o.id);
+    const markTitle = open ? "押すと、加工の内容の欄を閉じます" : "押すと、加工の内容（熱処理・溶接など）と送先を見る・直すことができます";
     return `
       <label class="check-label" title="チェックすると、加工の内容・送先・外注先への納期の欄が出ます"><input type="checkbox" data-outsource-next="${o.id}" ${on ? "checked" : ""}> あり</label>
-      ${hasWelding(o) ? `<div class="weld-mark">※溶接あり</div>` : ""}
-      ${on ? `
+      ${on ? `<button type="button" class="next-mark ${hasWelding(o) ? "weld-mark" : "no-weld-mark"}" data-next-open="${o.id}" title="${markTitle}">${hasWelding(o) ? "※溶接あり" : "溶接なし"}<span>${open ? "▾" : "▸"}</span></button>` : ""}
+      ${open ? `
       <div class="next-proc-grid">
         ${NEXT_PROCESSES.map((p) => `<label class="check-label"><input type="checkbox" data-next-proc="${o.id}" value="${p}" ${procs.includes(p) ? "checked" : ""}> ${p}</label>`).join("")}
       </div>
-      <label class="next-due-label">送先<input type="text" class="next-due-input next-ship-input" list="vendorList" data-detail-field="outShipTo" data-id="${o.id}" value="${escapeHtml(o.outShipTo || "")}" autocomplete="off" title="送先（外注先）"></label>
-      <label class="next-due-label">納期<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注先への納期"></label>` : ""}`;
+      <label class="next-due-label">送先<input type="text" class="next-due-input next-ship-input" list="vendorList" data-detail-field="outShipTo" data-id="${o.id}" value="${escapeHtml(o.outShipTo || "")}" autocomplete="off" title="送先（外注先）"></label>` : ""}
+      ${on ? `<label class="next-due-label">納期<input type="date" class="next-due-input" data-next-due="${o.id}" value="${escapeHtml(o.nextDueDate || "")}" title="外注先への納期"></label>` : ""}`;
   }
 
   async function saveDetail(el) {
@@ -1007,6 +1013,15 @@
       openDocsModal(docsBtn.dataset.docs);
       return;
     }
+    // 外注次加工の「※溶接あり」「溶接なし」：加工の内容の欄を開く／閉じる
+    const nextOpen = ev.target.closest("[data-next-open]");
+    if (nextOpen) {
+      const id = nextOpen.dataset.nextOpen;
+      if (openNext.has(id)) openNext.delete(id);
+      else openNext.add(id);
+      renderOrders();
+      return;
+    }
     const editBtn = ev.target.closest("[data-edit]");
     if (editBtn) openOrderModal(editBtn.dataset.edit);
   });
@@ -1045,6 +1060,9 @@
     // 外注次加工あり(表の列)：チェックすると、すぐ下に加工の内容・送先・納期の欄が出る。外すと納期と加工の内容も消す(送先は残す)
     const nextBox = ev.target.closest("[data-outsource-next]");
     if (nextBox) {
+      // ありにしたときは、加工の内容を選べるように欄を開いておく
+      if (nextBox.checked) openNext.add(nextBox.dataset.outsourceNext);
+      else openNext.delete(nextBox.dataset.outsourceNext);
       saveNextDue(nextBox.dataset.outsourceNext, nextBox.checked ? { outsourceNext: true } : { outsourceNext: false, nextDueDate: "", nextProcesses: [] },
         nextBox.checked ? "外注次加工ありにしました。加工の内容と外注先への納期を入れてください" : "外注次加工なしにしました");
       return;
