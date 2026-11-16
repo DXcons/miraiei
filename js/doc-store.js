@@ -35,6 +35,9 @@ const OWN_DESTINATIONS = [
 
 const PO_KINDS = { order: "注文書", material: "材料注文書" };
 
+// 材料注文書の宛先の候補(材料屋。2026-11-16 社長のリクエスト)
+const MATERIAL_VENDORS = ["カラヤ㈱", "㈱金太", "㈱伸栄商会", "北鋼シャーリング㈱"];
+
 /* ---------- 外注先 ---------- */
 
 // 登録済みの外注先＋これまでの注文書に出てきた外注先(新しい情報を優先)
@@ -204,23 +207,50 @@ async function syncPurchaseOrderCosts(po, rows) {
 
 /* ---------- 印影(担当者印) ----------
    公開しているアプリのファイルには入れず、ログインした人だけが読める
-   Firestore の settings/seal に画像(dataURL)で保存する。 */
-async function loadSealImage() {
+   Firestore の settings/seal に画像(dataURL)で保存する。
+   2026-11-16 から複数登録できる：seals = [{ name: "中嶋", image: "data:..." }, …]。
+   注文書を作るときに「押印」で名前を選び、注文書に sealName として保存する。
+   前の形(image が1つだけ)で登録した印は「登録済みの印」という名前で扱う。 */
+const LEGACY_SEAL_NAME = "登録済みの印";
+const SEAL_PICK_KEY = "miraiei.sealName";
+
+async function loadSeals() {
   try {
     const doc = await db.collection(SETTINGS_COLLECTION).doc("seal").get();
-    return doc.exists ? doc.data().image || "" : "";
+    if (!doc.exists) return [];
+    const d = doc.data();
+    const list = Array.isArray(d.seals) ? d.seals.filter((s) => s && s.name && s.image) : [];
+    if (!list.length && d.image) list.push({ name: LEGACY_SEAL_NAME, image: d.image });
+    return list;
   } catch (err) {
     console.warn("印影を読み込めませんでした", err);
-    return "";
+    return [];
   }
 }
 
-async function saveSealImage(dataUrl) {
+async function saveSeals(list) {
   await db.collection(SETTINGS_COLLECTION).doc("seal").set({
-    image: dataUrl,
+    seals: list.map((s) => ({ name: s.name, image: s.image })),
+    image: firebase.firestore.FieldValue.delete(),
     updatedBy: auth.currentUser ? auth.currentUser.email : "",
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-  });
+  }, { merge: true });
+}
+
+// 注文書に押す印の画像。sealName が "" なら押さない。
+// sealName の無い前の注文書は、登録した印が1つだけならそれを押す(これまでと同じ)
+function sealImageFor(po, seals) {
+  if (po.sealName === undefined || po.sealName === null) return seals.length === 1 ? seals[0].image : "";
+  const s = seals.find((x) => x.name === po.sealName);
+  return s ? s.image : "";
+}
+
+function lastSealName() {
+  try { return localStorage.getItem(SEAL_PICK_KEY) || ""; } catch (e) { return ""; }
+}
+
+function rememberSealName(name) {
+  try { localStorage.setItem(SEAL_PICK_KEY, name || ""); } catch (e) { /* 覚えられなくても注文書は作れる */ }
 }
 
 // 画像ファイルを小さめのPNGのdataURLにする(印影は小さいので最大300px)
@@ -263,17 +293,62 @@ function slashDate(text) {
   return m ? `${m[1]}/${Number(m[2])}/${Number(m[3])}` : "";
 }
 
-function companyBlockHtml(sealImage) {
+/* 本社・工場の住所の前の□。選んだほうを■(黒く塗りつぶす)にする(2026-11-16 社長のリクエスト。作る書類すべて)。
+   mark: "head"(本社)・"factory"(工場)・""(塗らない) */
+const ADDR_MARKS = [
+  { value: "", label: "塗らない（□のまま）" },
+  { value: "head", label: "本社を■にする" },
+  { value: "factory", label: "工場を■にする" },
+];
+const ADDR_MARK_KEY = "miraiei.addrMark";
+
+// 前に選んだものを既定にする(この端末だけ。使えないときは「塗らない」)
+function lastAddrMark() {
+  try { return localStorage.getItem(ADDR_MARK_KEY) || ""; } catch (e) { return ""; }
+}
+
+function rememberAddrMark(mark) {
+  try { localStorage.setItem(ADDR_MARK_KEY, mark || ""); } catch (e) { /* 保存できなくても印刷はできる */ }
+}
+
+// 選択欄(<select>)に選択肢を入れる。value を省くと前に選んだもの
+function fillAddrMarkSelect(sel, value) {
+  sel.innerHTML = ADDR_MARKS.map((m) => `<option value="${m.value}">${m.label}</option>`).join("");
+  sel.value = value === undefined || value === null ? lastAddrMark() : value;
+}
+
+function companyAddrHtml(mark) {
+  const box = (key) => (mark === key ? "■" : "□");
+  return `
+      <div class="doc-addr">
+        <div>${box("head")} ${COMPANY.head.label}　${COMPANY.head.zip} ${COMPANY.head.address}</div>
+        <div class="doc-tel">TEL ${COMPANY.head.tel}　FAX ： ${COMPANY.head.fax}</div>
+        <div>${box("factory")} ${COMPANY.factory.label}　${COMPANY.factory.zip} ${COMPANY.factory.address}</div>
+        <div class="doc-tel">TEL ${COMPANY.factory.tel}　FAX ： ${COMPANY.factory.fax}</div>
+      </div>`;
+}
+
+// 注文書・材料注文書の右上(Excelと同じ：ロゴの右に日付、住所の右下に印欄)
+function poCompanyBlockHtml(sealImage, mark, dateText) {
+  return `
+    <div class="doc-company-po">
+      <div class="doc-logo-row">
+        <img class="doc-logo" src="img/logo.jpg" alt="未来栄株式会社">
+        <span class="doc-date">${escapeHtml(dateText || "")}</span>
+      </div>
+      <div class="doc-addr-row">
+        ${companyAddrHtml(mark)}
+        <div class="doc-seal">${sealImage ? `<img src="${sealImage}" alt="印">` : ""}</div>
+      </div>
+    </div>`;
+}
+
+// 納品書・請求書の右側(Excelの納品書と同じ：ロゴの下に住所)
+function companyBlockHtml(mark) {
   return `
     <div class="doc-company">
       <img class="doc-logo" src="img/logo.jpg" alt="未来栄株式会社">
-      <div class="doc-addr">
-        <div>□ ${COMPANY.head.label}　${COMPANY.head.zip} ${COMPANY.head.address}</div>
-        <div class="doc-tel">TEL ${COMPANY.head.tel}　FAX ： ${COMPANY.head.fax}</div>
-        <div>□ ${COMPANY.factory.label}　${COMPANY.factory.zip} ${COMPANY.factory.address}</div>
-        <div class="doc-tel">TEL ${COMPANY.factory.tel}　FAX ： ${COMPANY.factory.fax}</div>
-      </div>
-      ${sealImage !== undefined ? `<div class="doc-seal">${sealImage ? `<img src="${sealImage}" alt="印">` : ""}</div>` : ""}
+      ${companyAddrHtml(mark)}
     </div>`;
 }
 
@@ -283,7 +358,8 @@ function poDueText(due) {
   return m ? `${Number(m[1])}/${Number(m[2])}` : String(due || "");
 }
 
-// 注文書・材料注文書(A4横)
+// 注文書・材料注文書(A4横)。Excelの「受発注書」「工場」シートに合わせる。
+// 材料注文書は見間違いを防ぐため、明細の文字を大きくする(2026-11-16 社長のリクエスト)
 function purchaseOrderHtml(po, sealImage) {
   const material = po.kind === "material";
   const MIN_ROWS = 11;
@@ -307,10 +383,11 @@ function purchaseOrderHtml(po, sealImage) {
   }).join("");
   const dest = po.deliverTo || OWN_DESTINATIONS[0];
   return `
-    <div class="doc-sheet doc-landscape">
+    <div class="doc-sheet doc-landscape doc-po ${material ? "doc-material" : ""}">
+      ${material ? `<div class="doc-title doc-title-center">材 料 注 文 書</div>` : ""}
       <div class="doc-head">
         <div class="doc-head-left">
-          <div class="doc-title">${material ? "材 料 注 文 書" : "注　文　書"}</div>
+          ${material ? "" : `<div class="doc-title">注　文　書</div>`}
           <div class="doc-to"><span class="doc-to-name">${escapeHtml(po.vendor || "")}</span><span>御中</span></div>
           <div class="doc-to"><span class="doc-to-name">${escapeHtml(po.vendorPerson || "")}</span><span>様</span></div>
           <div class="doc-small">下記の通り御注文申し上げますので、御用命賜りますようお願い申し上げます。</div>
@@ -318,8 +395,7 @@ function purchaseOrderHtml(po, sealImage) {
           <div class="doc-small">※納品書・請求書に上記№を記載してください。</div>
         </div>
         <div class="doc-head-right">
-          <div class="doc-date">${escapeHtml(jpDate(po.issueDate))}</div>
-          ${companyBlockHtml(sealImage)}
+          ${poCompanyBlockHtml(sealImage, po.addrMark || "", jpDate(po.issueDate))}
         </div>
       </div>
       <table class="doc-table">
@@ -348,31 +424,32 @@ function purchaseOrderHtml(po, sealImage) {
     </div>`;
 }
 
-// 納品書(A4縦)。dn: { customerName, issueDate, slipNo, lines:[{date,name,qty,unit,unitPrice,note}] }
+// 納品書(A4縦)。dn: { customerName, issueDate, slipNo, addrMark, lines:[{date,name,qty,unit,unitPrice,note}] }
+// Excelの「納品書」シートに合わせる。行は1枚に入るだけ多くする(2026-11-16 社長のリクエスト)
 function deliveryNoteHtml(dn) {
-  const MIN_ROWS = 16;
+  const MIN_ROWS = 22;
   const lines = dn.lines.slice();
   while (lines.length < MIN_ROWS) lines.push(null);
   const subtotal = dn.lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
   const tax = Math.floor(subtotal * 0.1);
   return `
-    <div class="doc-sheet doc-portrait">
+    <div class="doc-sheet doc-portrait doc-dn">
       <div class="doc-head">
         <div class="doc-head-left">
           <div class="doc-title">納　品　書</div>
           <div class="doc-to"><span class="doc-to-name">${escapeHtml(dn.customerName || "")}</span><span>御中</span></div>
-          <div class="doc-small" style="margin-top:14px;">この度はお買い上げ頂き誠にありがとうございます。下記の通り納品致しました。<br>これからもよろしくお願い申し上げます。</div>
+          <div class="doc-small doc-greeting">この度はお買い上げ頂き誠にありがとうございます。下記の通り納品致しました。<br>これからもよろしくお願い申し上げます。</div>
         </div>
         <div class="doc-head-right">
           <table class="doc-meta">
             <tr><th>発行日</th><td>${escapeHtml(slashDate(dn.issueDate))}</td></tr>
             <tr><th>伝票№</th><td>${escapeHtml(dn.slipNo || "")}</td></tr>
           </table>
-          ${companyBlockHtml()}
+          ${companyBlockHtml(dn.addrMark || "")}
         </div>
       </div>
       <table class="doc-table">
-        <colgroup><col style="width:4%"><col style="width:11%"><col style="width:36%"><col style="width:6%"><col style="width:4%"><col style="width:10%"><col style="width:11%"><col style="width:18%"></colgroup>
+        <colgroup><col style="width:3%"><col style="width:9%"><col style="width:40%"><col style="width:5%"><col style="width:3%"><col style="width:9%"><col style="width:12%"><col style="width:19%"></colgroup>
         <thead><tr><th>№</th><th>日付</th><th>名称</th><th colspan="2">数量</th><th>単価</th><th>金額</th><th>備考欄</th></tr></thead>
         <tbody>${lines.map((l, i) => l
           ? `<tr><td class="c">${i + 1}</td><td class="c">${escapeHtml(slashDate(l.date))}</td><td>${escapeHtml(l.name)}</td>
@@ -389,20 +466,20 @@ function deliveryNoteHtml(dn) {
 }
 
 // 請求書(A4縦)。毎月・客先ごとに1枚で、その月に出荷した案件をまとめて載せる。
-// inv: { customerName, issueDate, invoiceNo, periodLabel, remarks, lines:[{date,name,qty,unit,unitPrice,note}] }
+// inv: { customerName, issueDate, invoiceNo, periodLabel, remarks, addrMark, lines:[{date,name,qty,unit,unitPrice,note}] }
 function invoiceHtml(inv) {
-  const MIN_ROWS = 14;
+  const MIN_ROWS = 18;
   const lines = inv.lines.slice();
   while (lines.length < MIN_ROWS) lines.push(null);
   const subtotal = inv.lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
   const tax = Math.floor(subtotal * 0.1);
   return `
-    <div class="doc-sheet doc-portrait">
+    <div class="doc-sheet doc-portrait doc-dn">
       <div class="doc-head">
         <div class="doc-head-left">
           <div class="doc-title">請　求　書</div>
           <div class="doc-to"><span class="doc-to-name">${escapeHtml(inv.customerName || "")}</span><span>御中</span></div>
-          <div class="doc-small" style="margin-top:14px;">下記の通り、ご請求申し上げます。${inv.periodLabel ? `<br>（${escapeHtml(inv.periodLabel)}）` : ""}</div>
+          <div class="doc-small doc-greeting">下記の通り、ご請求申し上げます。${inv.periodLabel ? `<br>（${escapeHtml(inv.periodLabel)}）` : ""}</div>
           <div class="doc-total-box"><span>ご請求金額（税込）</span><b>¥${yen(subtotal + tax)}</b></div>
         </div>
         <div class="doc-head-right">
@@ -410,11 +487,11 @@ function invoiceHtml(inv) {
             <tr><th>請求日</th><td>${escapeHtml(slashDate(inv.issueDate))}</td></tr>
             <tr><th>請求書№</th><td>${escapeHtml(inv.invoiceNo || "")}</td></tr>
           </table>
-          ${companyBlockHtml()}
+          ${companyBlockHtml(inv.addrMark || "")}
         </div>
       </div>
       <table class="doc-table">
-        <colgroup><col style="width:4%"><col style="width:11%"><col style="width:36%"><col style="width:6%"><col style="width:4%"><col style="width:10%"><col style="width:11%"><col style="width:18%"></colgroup>
+        <colgroup><col style="width:3%"><col style="width:9%"><col style="width:40%"><col style="width:5%"><col style="width:3%"><col style="width:9%"><col style="width:12%"><col style="width:19%"></colgroup>
         <thead><tr><th>№</th><th>出荷日</th><th>名称</th><th colspan="2">数量</th><th>単価</th><th>金額</th><th>備考欄</th></tr></thead>
         <tbody>${lines.map((l, i) => l
           ? `<tr><td class="c">${i + 1}</td><td class="c">${escapeHtml(slashDate(l.date))}</td><td>${escapeHtml(l.name)}</td>
