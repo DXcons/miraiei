@@ -3364,192 +3364,94 @@ body:not(.make-mode) .make-only {
   display: none;
 }
 
-/* 書体はExcelと同じメイリオ(2026-11-16 社長のリクエスト) */
-.doc-sheet {
+/* 書体はExcelと同じメイリオ。列の幅・行の高さ・文字の大きさは doc-store.js の xlSheetHtml がExcelの値から決める(2026-11-18) */
+.xl-page {
   font-family: "Meiryo", "メイリオ", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   color: #000;
   background: #fff;
-  font-size: 11px;
 }
 
-.doc-landscape { width: 277mm; }
-.doc-portrait { width: 190mm; }
-
-.doc-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
+.xl-sheet {
+  position: relative;
 }
 
-.doc-title {
-  font-size: 20px;
-  letter-spacing: 0.3em;
-  margin: 0 0 10px 50px;
+.xl-grid {
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.doc-to {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 13px;
-}
-
-.doc-to-name {
-  display: inline-block;
-  min-width: 62mm;
-  border-bottom: 1px solid #000;
-  text-align: center;
-  padding-bottom: 2px;
-}
-
-.doc-small {
-  font-size: 10px;
-  margin: 4px 0;
-}
-
-.doc-no {
-  display: inline-block;
-  min-width: 45mm;
-  border-bottom: 1px solid #000;
-  margin: 6px 0 2px 12px;
-  font-size: 12px;
-}
-
-.doc-no span {
-  color: #1f5fa8;
-  margin-right: 14px;
-  font-size: 10px;
-}
-
-.doc-head-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-
-.doc-date {
-  font-size: 12px;
-  text-decoration: underline;
-}
-
-.doc-company {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: center;
-  column-gap: 10px;
-}
-
-.doc-logo {
-  height: 12mm;
-  grid-column: 1 / span 2;
-}
-
-.doc-addr {
-  font-size: 10px;
-  line-height: 1.7;
-}
-
-.doc-addr .doc-tel {
-  padding-left: 1.2em;
-}
-
-.doc-addr div {
+.xl-grid td {
+  padding: 0 1.5pt;
+  line-height: 1.15;
   white-space: nowrap;
-}
-
-.doc-portrait .doc-addr {
-  font-size: 9px;
-}
-
-.doc-sheet th,
-.doc-sheet td {
+  overflow: hidden;
+  vertical-align: middle;
+  font-weight: 400;
   color: #000;
 }
 
-.doc-seal {
-  width: 15mm;
-  height: 15mm;
-  border: 1px solid #000;
+.xl-grid td.xl-wrap {
+  white-space: normal;
+  word-break: break-all;
+  padding: 1pt 4pt;
+}
+
+.xl-grid td.xl-fill {
+  background: #a6a6a6;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.xl-u {
+  text-decoration: underline;
+}
+
+/* ロゴ・印欄(Excelではセルの上に置いた図) */
+.xl-over {
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.doc-seal img {
-  width: 13mm;
-  height: 13mm;
+.xl-logo {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
-.doc-table {
+.xl-seal {
   width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.doc-table th,
-.doc-table td {
-  border: 1px solid #000;
-  height: 7mm;
-  padding: 0 3px;
-  font-size: 10.5px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.doc-table th {
-  background: #a6a6a6;
-  font-weight: 600;
-  text-align: center;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
-.doc-table .c { text-align: center; }
-.doc-table .r { text-align: right; }
-
-.doc-total {
+  height: 100%;
+  box-sizing: border-box;
+  border: 0.75pt solid #000;
   display: flex;
-  justify-content: flex-end;
-  gap: 18px;
-  margin: 6px 30px 6px 0;
-  font-size: 11px;
+  align-items: center;
+  justify-content: center;
 }
 
-.doc-total span:first-child,
-.doc-total b {
-  text-decoration: underline;
+.xl-seal img {
+  height: 80%;
+  max-width: 90%;
+  object-fit: contain;
+}
+
+/* 請求書のご請求金額 */
+.xl-total-box {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10pt;
+  padding: 0 8pt 2pt;
+  border-bottom: 1.5pt solid #000;
+  font-size: 9pt;
+}
+
+.xl-total-box b {
+  font-size: 15pt;
   font-weight: 400;
 }
 
-.doc-bottom {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border: 1px solid #000;
-}
-
-.doc-box {
-  padding: 0 10px 6px;
-  font-size: 10.5px;
-  line-height: 1.8;
-}
-
-.doc-box + .doc-box {
-  border-left: 1px solid #000;
-}
-
-.doc-box-title {
-  display: inline-block;
-  background: #a6a6a6;
-  padding: 0 14px;
-  margin: 0 0 2px -10px;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
+/* 一覧の .doc-meta(画面) */
 .doc-meta {
   border-collapse: collapse;
   font-size: 10px;
@@ -3566,181 +3468,6 @@ body:not(.make-mode) .make-only {
   border-bottom: 1px solid #000;
   min-width: 26mm;
   text-align: right;
-}
-
-.doc-sum {
-  border-collapse: collapse;
-  margin: 10px 0 0 auto;
-  font-size: 12px;
-}
-
-.doc-sum th,
-.doc-sum td {
-  border: 1px solid #000;
-  height: 8mm;
-  padding: 0 8px;
-}
-
-.doc-sum th {
-  background: #a6a6a6;
-  font-weight: 400;
-  width: 26mm;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
-.doc-sum td {
-  width: 36mm;
-  text-align: right;
-}
-
-/* ----- 注文書・材料注文書(Excelの「受発注書」「工場」シート) ----- */
-.doc-po .doc-head-left {
-  padding-top: 6px;
-}
-
-.doc-po .doc-title {
-  margin: 0 0 14px 70px;
-}
-
-.doc-title-center {
-  text-align: center;
-  font-size: 24px;
-  margin: 0 0 4px !important;
-  letter-spacing: 0.4em;
-}
-
-.doc-company-po {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.doc-logo-row {
-  display: flex;
-  align-items: center;
-  gap: 40px;
-  margin-left: 20px;
-}
-
-.doc-company-po .doc-logo {
-  height: 13mm;
-}
-
-.doc-addr-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 14px;
-}
-
-.doc-company-po .doc-addr {
-  font-size: 11px;
-  line-height: 2;
-}
-
-.doc-company-po .doc-seal {
-  width: 17mm;
-  height: 17mm;
-  margin-bottom: 2px;
-}
-
-.doc-company-po .doc-seal img {
-  width: 15mm;
-  height: 15mm;
-}
-
-.doc-po .doc-table th,
-.doc-po .doc-table td {
-  height: 8.2mm;
-  font-size: 11px;
-}
-
-/* 材料注文書は見間違いを防ぐため、明細の文字を大きくする */
-.doc-material .doc-table td {
-  font-size: 14px;
-}
-
-.doc-material .doc-table td:first-child {
-  font-size: 10px;
-}
-
-.doc-material .doc-to {
-  font-size: 15px;
-}
-
-/* ----- 納品書・請求書(Excelの「納品書」シート)。行は1枚に入るだけ多く ----- */
-.doc-dn .doc-title {
-  font-size: 19px;
-  margin: 10px 0 8px 60px;
-}
-
-.doc-dn .doc-to {
-  font-size: 14px;
-}
-
-.doc-dn .doc-greeting {
-  margin-top: 16px;
-  line-height: 1.9;
-  font-size: 9.5px;
-}
-
-.doc-dn .doc-head-right {
-  gap: 8px;
-}
-
-.doc-dn .doc-company {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  margin-right: 6mm;
-}
-
-.doc-dn .doc-logo {
-  height: 10mm;
-  margin-left: 4mm;
-}
-
-.doc-dn .doc-addr {
-  font-size: 9.5px;
-  line-height: 1.9;
-}
-
-.doc-dn .doc-meta {
-  font-size: 9px;
-  margin-bottom: 14px;
-}
-
-.doc-dn .doc-table th {
-  height: 9mm;
-  font-size: 11px;
-  font-weight: 400;
-}
-
-.doc-dn .doc-table td {
-  height: 8.5mm;
-  font-size: 11.5px;
-}
-
-.doc-dn .doc-table td:first-child,
-.doc-dn .doc-table td:nth-child(2) {
-  font-size: 9.5px;
-}
-
-.doc-dn .doc-sum {
-  margin-top: 0;
-  font-size: 13px;
-}
-
-.doc-dn .doc-sum th,
-.doc-dn .doc-sum td {
-  height: 9mm;
-}
-
-.doc-dn .doc-sum th {
-  width: 25mm;
-  text-align: center;
-  white-space: nowrap;
 }
 
 /* 印刷するときは書類だけを出す */

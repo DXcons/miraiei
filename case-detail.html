@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>案件 | 未来栄 図面管理システム</title>
-<link rel="stylesheet" href="css/style.css?v=20261116c">
+<link rel="stylesheet" href="css/style.css?v=20261118a">
 </head>
 <body>
 
@@ -287,6 +287,12 @@
         <option value="レーザー板"></option><option value="角パイプ"></option><option value="アングル材"></option>
         <option value="チャンネル材"></option>
       </datalist>
+      <!-- 材料注文書の「材質」(2026-11-18 追加。一覧にない材質は手入力できる) -->
+      <datalist id="poMaterialList">
+        <option value="SS400"></option><option value="SS400D"></option><option value="S45C"></option>
+        <option value="S45CD"></option><option value="S50C"></option><option value="STK"></option>
+        <option value="STKM13A"></option><option value="SUS304"></option><option value="A5052"></option>
+      </datalist>
       <datalist id="poUnitList">
         <option value="個"></option><option value="本"></option><option value="式"></option><option value="set"></option>
       </datalist>
@@ -416,7 +422,7 @@
 <script src="js/pdf-store.js?v=20261014a"></script>
 <script src="js/case-store.js?v=20261112a"></script>
 <script src="js/order-store.js?v=20261029a"></script>
-<script src="js/doc-store.js?v=20261116b"></script>
+<script src="js/doc-store.js?v=20261118a"></script>
 <script src="js/pdf-split.js?v=20261020a"></script>
 <script src="js/pdf-annotate.js?v=20261101a"></script>
 <script src="js/drawing-parts.js?v=20261112a"></script>
@@ -720,16 +726,18 @@
   /* ---------- 注文書の作成・編集 ---------- */
 
   // [項目, 見出し, 入力の種類, 幅, 選択肢(datalist)]
-  // メーカー・手配先の欄はなくした(2026/11)。前のデータに入っていても、画面と印刷には出さない
+  // 列はExcelの注文書・材料注文書と同じ順。ﾒｰｶｰ・手配先は 2026-11-10 に誤ってなくしたので、Excelに合わせてもどした(2026-11-18。こちらが正)
   const PO_COLUMNS = {
     order: [
       ["name", "図面№/部品名称", "text", "w-name"], ["spec", "表示型式", "text", "w-spec"], ["material", "材質", "text", "w-s"],
       ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-unit", "poUnitList"],
+      ["maker", "ﾒｰｶｰ", "text", "w-s"], ["arranger", "手配先", "text", "w-s"],
       ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "date", "w-date"],
     ],
     material: [
-      ["name", "名称", "text", "w-mname", "poMatNameList"], ["size", "SIZE", "text", "w-spec"], ["material", "材質", "text", "w-s"],
+      ["name", "名称", "text", "w-mname", "poMatNameList"], ["size", "SIZE", "text", "w-spec"], ["material", "材質", "text", "w-s", "poMaterialList"],
       ["qty", "数量", "number", "w-n"], ["unit", "単位", "text", "w-unit", "poUnitList"],
+      ["maker", "ﾒｰｶｰ", "text", "w-s"], ["arranger", "手配先", "text", "w-s"],
       ["unitPrice", "単価", "number", "w-p"], ["due", "納期", "date", "w-date"],
     ],
   };
@@ -846,8 +854,11 @@
     }));
   }
 
+  // 手配先には、宛先の略称(取引先の設定)があれば最初から入れておく(Excelと同じ。手で直せる)
   function blankLine() {
-    return { name: "", spec: "", size: "", material: "", qty: "", unit: "個", unitPrice: "", due: "", itemId: "" };
+    const v = vendorInfo(document.getElementById("poVendor").value.trim());
+    return { name: "", spec: "", size: "", material: "", qty: "", unit: "個", maker: "", arranger: (v && v.short) || "",
+      unitPrice: "", due: "", itemId: "" };
   }
 
   // 表の行(部品)から明細を作る。材料注文書では、材質と数量だけ引き継ぐ

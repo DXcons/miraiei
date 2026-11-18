@@ -317,40 +317,66 @@ function fillAddrMarkSelect(sel, value) {
   sel.value = value === undefined || value === null ? lastAddrMark() : value;
 }
 
-function companyAddrHtml(mark) {
-  const box = (key) => (mark === key ? "■" : "□");
-  return `
-      <div class="doc-addr">
-        <div>${box("head")} ${COMPANY.head.label}　${COMPANY.head.zip} ${COMPANY.head.address}</div>
-        <div class="doc-tel">TEL ${COMPANY.head.tel}　FAX ： ${COMPANY.head.fax}</div>
-        <div>${box("factory")} ${COMPANY.factory.label}　${COMPANY.factory.zip} ${COMPANY.factory.address}</div>
-        <div class="doc-tel">TEL ${COMPANY.factory.tel}　FAX ： ${COMPANY.factory.fax}</div>
-      </div>`;
+/* ---------- Excelのシートをそのまま再現する(2026-11-18) ----------
+   Excel(「出荷済 MDA-2607-023　DID●.xlsx」の受発注書・工場・納品書シート)の
+   列の幅・行の高さ・文字の大きさ・罫線・結合セルを、セル番地のまま書き写して表にする。
+   寸法はExcelの値(pt)で書き、印刷したExcel(PDF)と同じ大きさになるように
+   横 sx・縦 sy・文字 sf を掛ける(Excelは印刷すると、横・縦・文字で縮み方が少し違うため)。 */
+
+// "B26" → { r: 行(0から), c: 列(0から) }。base は表の1行目にあたるExcelの行番号
+function xlAddr(a, base) {
+  const m = /^([A-Z]+)(\d+)$/.exec(a);
+  return { c: m[1].split("").reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0) - 1, r: Number(m[2]) - base };
 }
 
-// 注文書・材料注文書の右上(Excelと同じ：ロゴの右に日付、住所の右下に印欄)
-function poCompanyBlockHtml(sealImage, mark, dateText) {
+/* sheet: { cols:[幅pt], rows:[高さpt], base:1行目のExcel行番号, sx, sy, sf, cells:[[番地, 中身html, 書式]], overlays:[{x,y,w,h,html}] }
+   書式: fs 文字pt(既定10)・al "l"|"c"|"r"・va "t"|"m"|"b"・bd 罫線 "lrtb" の組合せ・fill 灰色・u 下線・color・wrap 折り返し */
+function xlSheetHtml(sheet) {
+  const { cols, rows, base, sx, sy, sf, cells, overlays = [], cls = "" } = sheet;
+  const pt = (v) => `${Math.round(v * 100) / 100}pt`;
+  const grid = rows.map(() => cols.map(() => null));
+  cells.forEach(([ref, html, f = {}]) => {
+    const [a, b = a] = ref.split(":");
+    const p = xlAddr(a, base), q = xlAddr(b, base);
+    const cell = { html, f, rs: q.r - p.r + 1, cs: q.c - p.c + 1 };
+    for (let r = p.r; r <= q.r; r++) for (let c = p.c; c <= q.c; c++) grid[r][c] = "x";
+    grid[p.r][p.c] = cell;
+  });
+  const AL = { l: "left", c: "center", r: "right" };
+  const VA = { t: "top", m: "middle", b: "bottom" };
+  const LINE = "0.75pt solid #000";
+  const td = (cell) => {
+    if (cell === "x") return "";
+    if (!cell) return "<td></td>";
+    const f = cell.f;
+    const st = [`font-size:${pt((f.fs || 10) * sf)}`];
+    if (f.al) st.push(`text-align:${AL[f.al]}`);
+    if (f.va && f.va !== "m") st.push(`vertical-align:${VA[f.va]}`);
+    const bd = f.bd || "";
+    if (bd.includes("l")) st.push(`border-left:${LINE}`);
+    if (bd.includes("r")) st.push(`border-right:${LINE}`);
+    if (bd.includes("t")) st.push(`border-top:${LINE}`);
+    if (bd.includes("b")) st.push(`border-bottom:${LINE}`);
+    if (f.color) st.push(`color:${f.color}`);
+    const klass = [f.fill ? "xl-fill" : "", f.u ? "xl-u" : "", f.wrap ? "xl-wrap" : ""].filter(Boolean).join(" ");
+    return `<td${cell.rs > 1 ? ` rowspan="${cell.rs}"` : ""}${cell.cs > 1 ? ` colspan="${cell.cs}"` : ""}${klass ? ` class="${klass}"` : ""} style="${st.join(";")}">${cell.html ?? ""}</td>`;
+  };
+  const width = cols.reduce((t, w) => t + w, 0) * sx;
   return `
-    <div class="doc-company-po">
-      <div class="doc-logo-row">
-        <img class="doc-logo" src="img/logo.jpg" alt="未来栄株式会社">
-        <span class="doc-date">${escapeHtml(dateText || "")}</span>
-      </div>
-      <div class="doc-addr-row">
-        ${companyAddrHtml(mark)}
-        <div class="doc-seal">${sealImage ? `<img src="${sealImage}" alt="印">` : ""}</div>
-      </div>
+    <div class="xl-sheet ${cls}" style="width:${pt(width)}">
+      <table class="xl-grid" style="width:${pt(width)}">
+        <colgroup>${cols.map((w) => `<col style="width:${pt(w * sx)}">`).join("")}</colgroup>
+        <tbody>${rows.map((h, r) => `<tr style="height:${pt(h * sy)}">${grid[r].map(td).join("")}</tr>`).join("")}</tbody>
+      </table>
+      ${overlays.map((o) => `<div class="xl-over" style="left:${pt(o.x * sx)};top:${pt(o.y * sy)};width:${pt(o.w * sx)};height:${pt(o.h * sy)}">${o.html}</div>`).join("")}
     </div>`;
 }
 
-// 納品書・請求書の右側(Excelの納品書と同じ：ロゴの下に住所)
-function companyBlockHtml(mark) {
-  return `
-    <div class="doc-company">
-      <img class="doc-logo" src="img/logo.jpg" alt="未来栄株式会社">
-      ${companyAddrHtml(mark)}
-    </div>`;
-}
+// 本社・工場の住所の行(□は、選んだほうを■にする)。注文書は□だけ少し大きい(Excelと同じ)
+const addrLine = (mark, key, bigBox) =>
+  ` ${bigBox ? `<span style="font-size:1.1em">${mark === key ? "■" : "□"}</span>` : mark === key ? "■" : "□"} ${COMPANY[key].label}　${COMPANY[key].zip} ${COMPANY[key].address}`;
+const telLine = (key) => `TEL ${COMPANY[key].tel}　 FAX ： ${COMPANY[key].fax}`;
+const LOGO_HTML = `<img class="xl-logo" src="img/logo.jpg" alt="未来栄株式会社">`;
 
 // 明細の納期。カレンダーで選んだ「2026-11-20」は「11/20」と印刷する。前に手入力した文字はそのまま
 function poDueText(due) {
@@ -358,154 +384,217 @@ function poDueText(due) {
   return m ? `${Number(m[1])}/${Number(m[2])}` : String(due || "");
 }
 
-// 注文書・材料注文書(A4横)。Excelの「受発注書」「工場」シートに合わせる。
-// 材料注文書は見間違いを防ぐため、明細の文字を大きくする(2026-11-16 社長のリクエスト)
+// Excelの「#,##0_ 」(数字のあとに半角1つ分あける)
+const xlNum = (n) => (n === "" || n === null || n === undefined || isNaN(n) ? "" : `${yen(n)}&nbsp;`);
+
+// 注文書・材料注文書(A4横)。注文書はExcelの「受発注書」シート24〜46行、材料注文書は「工場」シート24〜47行と同じ。
+// 列：№・図面№/部品名称(名称)・表示型式(SIZE)・材質・数量(数・単位)・ﾒｰｶｰ・手配先・単価・金額・納期
 function purchaseOrderHtml(po, sealImage) {
   const material = po.kind === "material";
-  const MIN_ROWS = 11;
+  const mark = po.addrMark || "";
+  const ROWS = 11;
   const lines = (po.lines || []).slice();
-  while (lines.length < MIN_ROWS) lines.push(null);
+  while (lines.length < ROWS) lines.push(null);
+  // 1枚目の行の位置。材料注文書は表題の行が1行多い(「工場」シートと同じ)
+  const T = 24;                      // 表題の行
+  const o = material ? 1 : 0;        // 材料注文書は宛名から下が1行ずつ下がる
+  const H = 30 + o;                  // 明細の見出しの行
+  const L = H + 1;                   // 明細の1行目
+  const E = L + lines.length;        // total の行
+  const B = E + 1;                   // 納入先・備考欄の1行目
+  const D = material ? 12 : 10;      // 明細の名称・型式・材質・数量の文字(材料注文書は見間違えないように大きく。Excelと同じ)
+  const cells = [];
+  const c = (ref, html, f) => cells.push([ref, html, f]);
+
+  // 表題・日付
+  if (material) c(`G${T}:L${T}`, " 材 料 注 文 書 ", { fs: 20, al: "c" });
+  else c(`C${T}:F${T}`, "　注　文　書", { fs: 16 });
+  c(`R${T + o}:S${T + o + 1}`, escapeHtml(jpDate(po.issueDate)), { al: "r", u: true });
+  // 宛名
+  c(`B${25 + o}:E${25 + o}`, escapeHtml(po.vendor || ""), { fs: 12, al: "c", bd: "b" });
+  c(`F${25 + o}:G${25 + o}`, " 御中");
+  c(`B${26 + o}:E${26 + o}`, escapeHtml(po.vendorPerson || ""), { fs: 12, al: "c", bd: "b" });
+  c(`F${26 + o}:G${26 + o}`, " 様");
+  c(`A${27 + o}:L${27 + o}`, "　　下記の通り御注文申し上げますので、御用命賜りますようお願い申し上げます。", { fs: 9 });
+  c(`B${28 + o}`, "№", { al: "r", bd: "b", color: "#0070c0" });
+  c(`C${28 + o}:D${28 + o}`, escapeHtml(po.orderNo || ""), { al: "c", bd: "b" });
+  c(`B${29 + o}:L${29 + o}`, "※納品書・請求書に上記№を記載してください。", { fs: 9 });
+  // 本社・工場の住所
+  c(`M${26 + o}:S${26 + o}`, addrLine(mark, "head", true));
+  c(`N${27 + o}:S${27 + o}`, telLine("head"), { va: "t" });
+  c(`M${28 + o}:R${28 + o}`, addrLine(mark, "factory", true));
+  c(`N${29 + o}:R${29 + o}`, telLine("factory"), { va: "t" });
+
+  // 明細の見出し
+  const th = { al: "c", bd: "lrtb", fill: true };
+  c(`A${H}`, "№", th);
+  if (material) {
+    c(`B${H}:D${H}`, "名称", th); c(`E${H}:I${H}`, "SIZE", th); c(`J${H}:K${H}`, "材質", th);
+  } else {
+    c(`B${H}:F${H}`, "図面№/部品名称", th); c(`G${H}:J${H}`, "表示型式", th); c(`K${H}`, "材質", th);
+  }
+  c(`L${H}:M${H}`, "数量", th); c(`N${H}`, "ﾒｰｶｰ", th); c(`O${H}:P${H}`, "手配先", th);
+  c(`Q${H}`, "単価", th); c(`R${H}`, "金額", th); c(`S${H}`, "納期", th);
+
+  // 明細
   let no = 0;
-  const rowsHtml = lines.map((l) => {
-    if (!l) return `<tr>${"<td></td>".repeat(9)}</tr>`;
-    const isNote = !l.qty && !l.unitPrice; // 「※ブランク材支給日…」のような注記だけの行
-    if (!isNote) no++;
-    const amount = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0);
-    return material
-      ? `<tr>
-          <td class="c">${isNote ? "" : no}</td><td>${escapeHtml(l.name || "")}</td><td>${escapeHtml(l.size || "")}</td>
-          <td class="c">${escapeHtml(l.material || "")}</td><td class="r">${isNote ? "" : escapeHtml(l.qty)}</td><td class="c">${isNote ? "" : escapeHtml(l.unit || "個")}</td>
-          <td class="r">${isNote ? "" : yen(l.unitPrice)}</td><td class="r">${isNote ? "" : yen(amount)}</td><td class="c">${escapeHtml(poDueText(l.due))}</td></tr>`
-      : `<tr>
-          <td class="c">${isNote ? "" : no}</td><td>${escapeHtml(l.name || "")}</td><td>${escapeHtml(l.spec || "")}</td>
-          <td class="c">${escapeHtml(l.material || "")}</td><td class="r">${isNote ? "" : escapeHtml(l.qty)}</td><td class="c">${isNote ? "" : escapeHtml(l.unit || "個")}</td>
-          <td class="r">${isNote ? "" : yen(l.unitPrice)}</td><td class="r">${isNote ? "" : yen(amount)}</td><td class="c">${escapeHtml(poDueText(l.due))}</td></tr>`;
-  }).join("");
+  lines.forEach((l, i) => {
+    const r = L + i;
+    const isNote = l && !l.qty && !l.unitPrice; // 「※ブランク材支給日…」のような注記だけの行
+    if (l && !isNote) no++;
+    const v = (k) => (l ? escapeHtml(l[k] ?? "") : "");
+    const b = { bd: "lrtb" };
+    c(`A${r}`, l && !isNote ? no : "", { fs: 8, al: "r", bd: "lrtb" });
+    if (material) {
+      c(`B${r}:D${r}`, v("name"), { ...b, fs: D });
+      c(`E${r}:I${r}`, v("size"), { ...b, fs: D });
+      c(`J${r}:K${r}`, v("material"), { ...b, fs: D, al: "c" });
+    } else {
+      c(`B${r}:F${r}`, v("name"), { ...b, fs: D });
+      c(`G${r}:J${r}`, v("spec"), { ...b, fs: D });
+      c(`K${r}`, v("material"), { ...b, fs: D, al: "c" });
+    }
+    c(`L${r}`, l && !isNote ? v("qty") : "", { ...b, fs: D, al: "r" });
+    c(`M${r}`, l && !isNote ? escapeHtml(l.unit || "個") : "", { ...b, al: "c" });
+    c(`N${r}`, v("maker"), { ...b, al: "c" });
+    c(`O${r}:P${r}`, v("arranger"), { ...b, al: "c" });
+    c(`Q${r}`, l && !isNote ? xlNum(l.unitPrice) : "", { ...b, al: "r" });
+    // 単価が空なら金額も空(0と出さない)
+    c(`R${r}`, l && !isNote && l.unitPrice !== "" && l.unitPrice != null ? xlNum((Number(l.qty) || 0) * (Number(l.unitPrice) || 0)) : "", { ...b, al: "r" });
+    c(`S${r}`, l ? escapeHtml(poDueText(l.due)) : "", { ...b, al: "r" });
+  });
+  c(`Q${E}`, "total", { al: "r", u: true });
+  c(`R${E}`, poTotal(po) ? `¥${yen(poTotal(po))}` : "", { al: "r", u: true });
+  c(`S${E}`, "（税抜）", { al: "l", u: true });
+
+  // 納入先・備考欄
   const dest = po.deliverTo || OWN_DESTINATIONS[0];
-  return `
-    <div class="doc-sheet doc-landscape doc-po ${material ? "doc-material" : ""}">
-      ${material ? `<div class="doc-title doc-title-center">材 料 注 文 書</div>` : ""}
-      <div class="doc-head">
-        <div class="doc-head-left">
-          ${material ? "" : `<div class="doc-title">注　文　書</div>`}
-          <div class="doc-to"><span class="doc-to-name">${escapeHtml(po.vendor || "")}</span><span>御中</span></div>
-          <div class="doc-to"><span class="doc-to-name">${escapeHtml(po.vendorPerson || "")}</span><span>様</span></div>
-          <div class="doc-small">下記の通り御注文申し上げますので、御用命賜りますようお願い申し上げます。</div>
-          <div class="doc-no"><span>№</span>${escapeHtml(po.orderNo || "")}</div>
-          <div class="doc-small">※納品書・請求書に上記№を記載してください。</div>
-        </div>
-        <div class="doc-head-right">
-          ${poCompanyBlockHtml(sealImage, po.addrMark || "", jpDate(po.issueDate))}
-        </div>
-      </div>
-      <table class="doc-table">
-        <colgroup>${material
-          ? `<col style="width:3%"><col style="width:18%"><col style="width:26%"><col style="width:10%"><col style="width:6%"><col style="width:4%"><col style="width:10%"><col style="width:12%"><col style="width:11%">`
-          : `<col style="width:3%"><col style="width:28%"><col style="width:23%"><col style="width:8%"><col style="width:6%"><col style="width:4%"><col style="width:9%"><col style="width:9%"><col style="width:10%">`}</colgroup>
-        <thead><tr>
-          <th>№</th><th>${material ? "名称" : "図面№/部品名称"}</th><th>${material ? "SIZE" : "表示型式"}</th><th>材質</th>
-          <th colspan="2">数量</th><th>単価</th><th>金額</th><th>納期</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-      <div class="doc-total"><span>total</span><b>¥${yen(poTotal(po))}</b><span>（税抜）</span></div>
-      <div class="doc-bottom">
-        <div class="doc-box">
-          <div class="doc-box-title">納入先</div>
-          <div>[宛先] ${escapeHtml(dest.name || "")}　　　　[TEL] ${escapeHtml(dest.tel || "")}</div>
-          <div>[住所] ${escapeHtml(dest.address || "")}</div>
-          ${material ? "" : `<div>※送状記載事項：${escapeHtml(po.shipNote || "無")}</div>`}
-        </div>
-        <div class="doc-box">
-          <div class="doc-box-title">備考欄</div>
-          <div class="doc-remarks">${escapeHtml(po.remarks || "")}</div>
-        </div>
-      </div>
-    </div>`;
+  c(`A${B}:B${B}`, "納入先", { al: "c", fill: true, bd: "lt" });
+  c(`C${B}:J${B}`, "", { bd: "t" });
+  c(`A${B + 1}:A${B + 3}`, "", { bd: "lb" });
+  c(`B${B + 1}`, "[宛先]", { al: "c" });
+  c(`C${B + 1}:G${B + 1}`, escapeHtml(dest.name || ""));
+  c(`H${B + 1}`, "[TEL]", { al: "c" });
+  c(`I${B + 1}:J${B + 1}`, escapeHtml(dest.tel || ""));
+  c(`B${B + 2}`, "[住所]", { al: "c" });
+  c(`C${B + 2}:J${B + 2}`, escapeHtml(dest.address || ""));
+  // 送状記載事項は注文書だけ(材料注文書では使わない。2026-11-10)
+  c(`B${B + 3}:J${B + 3}`, material ? "" : `※送状記載事項：${escapeHtml(po.shipNote || "無")}`, { bd: "b" });
+  c(`K${B}`, "備考欄", { al: "c", fill: true, bd: "lt" });
+  c(`L${B}:S${B}`, "", { bd: "tr" });
+  c(`K${B + 1}:S${B + 3}`, escapeHtml(po.remarks || "").replace(/\n/g, "<br>"), { va: "t", bd: "lrb", wrap: true });
+
+  // ロゴと印欄は、Excelの図の位置(セルの上に置いてある)
+  const top = (row, d) => [31.2, ...(material ? [31.2] : []), 24.6, 24.6, 24.6, 24.6, 24.6].slice(0, row - T).reduce((t, h) => t + h, 0) + d;
+  const sealRow = 28 + o;
+  const overlays = [
+    material
+      ? { x: 545.5, y: top(25, 14.5), w: 185.2, h: 37.4, html: LOGO_HTML }
+      : { x: 542.8, y: 8.9, w: 184.3, h: 37.7, html: LOGO_HTML },
+    { x: material ? 791.5 : 788.1, y: top(sealRow, material ? 9 : 3), w: 45.75, h: 40.6,
+      html: `<div class="xl-seal">${sealImage ? `<img src="${sealImage}" alt="印">` : ""}</div>` },
+  ];
+  const rows = [];
+  for (let r = T; r <= B + 3; r++) {
+    rows.push(r === T || (material && r === T + 1) ? 31.2 : r < H ? 24.6 : r === H ? 28.2 : r <= E ? 27 : 16.2);
+  }
+  return `<div class="xl-page" data-page-margin="${material ? "54pt 10mm 8mm 50.4pt" : "72pt 10mm 8mm 54pt"}">${xlSheetHtml({
+    cls: material ? "xl-material" : "xl-po",
+    cols: [19.8, 34.2, 48.6, 48.6, 48.6, 48.6, 48.6, 48.6, 48.6, 48.6, 48.6, 33, 18.6, 48.6, 33, 18.6, 65.4, 65.4, 65.4],
+    rows, base: T, sx: 0.8695, sy: 0.795, sf: 0.852, cells, overlays,
+  })}</div>`;
 }
 
-// 納品書(A4縦)。dn: { customerName, issueDate, slipNo, addrMark, lines:[{date,name,qty,unit,unitPrice,note}] }
-// Excelの「納品書」シートに合わせる。行は1枚に入るだけ多くする(2026-11-16 社長のリクエスト)
-function deliveryNoteHtml(dn) {
-  const MIN_ROWS = 22;
-  const lines = dn.lines.slice();
-  while (lines.length < MIN_ROWS) lines.push(null);
-  const subtotal = dn.lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
+/* 納品書・請求書(A4縦)。Excelの「納品書」シートと同じ。品物1つにExcelの2行を使う。
+   行はExcel(16)より7行多い23行にして、A4の下の余白を小さくする(2026-11-18)。請求書は下に備考を入れるので18行。
+   opt: { title, metaLabels:[2つ], meta:[2つ], customerName, greeting:[2行], dateHead, lines, sumLabels:[3つ], rowsCount, extraTop(html), remarks } */
+function xlSlipHtml(opt) {
+  const mark = opt.addrMark || "";
+  const N = opt.rowsCount;
+  const lines = opt.lines.slice();
+  while (lines.length < N) lines.push(null);
+  const subtotal = opt.lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
   const tax = Math.floor(subtotal * 0.1);
-  return `
-    <div class="doc-sheet doc-portrait doc-dn">
-      <div class="doc-head">
-        <div class="doc-head-left">
-          <div class="doc-title">納　品　書</div>
-          <div class="doc-to"><span class="doc-to-name">${escapeHtml(dn.customerName || "")}</span><span>御中</span></div>
-          <div class="doc-small doc-greeting">この度はお買い上げ頂き誠にありがとうございます。下記の通り納品致しました。<br>これからもよろしくお願い申し上げます。</div>
-        </div>
-        <div class="doc-head-right">
-          <table class="doc-meta">
-            <tr><th>発行日</th><td>${escapeHtml(slashDate(dn.issueDate))}</td></tr>
-            <tr><th>伝票№</th><td>${escapeHtml(dn.slipNo || "")}</td></tr>
-          </table>
-          ${companyBlockHtml(dn.addrMark || "")}
-        </div>
-      </div>
-      <table class="doc-table">
-        <colgroup><col style="width:3%"><col style="width:9%"><col style="width:40%"><col style="width:5%"><col style="width:3%"><col style="width:9%"><col style="width:12%"><col style="width:19%"></colgroup>
-        <thead><tr><th>№</th><th>日付</th><th>名称</th><th colspan="2">数量</th><th>単価</th><th>金額</th><th>備考欄</th></tr></thead>
-        <tbody>${lines.map((l, i) => l
-          ? `<tr><td class="c">${i + 1}</td><td class="c">${escapeHtml(slashDate(l.date))}</td><td>${escapeHtml(l.name)}</td>
-               <td class="r">${escapeHtml(l.qty)}</td><td class="c">${escapeHtml(l.unit || "個")}</td><td class="r">${yen(l.unitPrice)}</td>
-               <td class="r">${yen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td><td>${escapeHtml(l.note || "")}</td></tr>`
-          : `<tr>${"<td></td>".repeat(8)}</tr>`).join("")}</tbody>
-      </table>
-      <table class="doc-sum">
-        <tr><th>合計</th><td>¥${yen(subtotal)}</td></tr>
-        <tr><th>消費税 (10%)</th><td>¥${yen(tax)}</td></tr>
-        <tr><th>総合計</th><td>¥${yen(subtotal + tax)}</td></tr>
-      </table>
-    </div>`;
+  const cells = [];
+  const c = (ref, html, f) => cells.push([ref, html, f]);
+  c("A1:E2", opt.title, { fs: 16, al: "c", u: true });
+  c("L1", opt.metaLabels[0], { fs: 8, al: "r", u: true });
+  c("M1", escapeHtml(opt.meta[0]), { fs: 8, al: "r", u: true });
+  c("L2", opt.metaLabels[1], { fs: 8, al: "r", u: true });
+  c("M2", escapeHtml(opt.meta[1]), { fs: 8, al: "r", u: true });
+  c("A3:D3", escapeHtml(opt.customerName || ""), { fs: 12, al: "c", bd: "b" });
+  c("E3", " 御中", { al: "c", bd: "b" });
+  c("A5:I5", opt.greeting[0], { fs: 8 });
+  c("A6:I6", opt.greeting[1] || "", { fs: 8 });
+  if (opt.extraTop) c("A8:G10", opt.extraTop, { va: "b" });
+  c("J7:M7", addrLine(mark, "head"), { fs: 8 });
+  c("J8:M8", `　　${telLine("head")}`, { fs: 8, va: "t" });
+  c("J9:M9", addrLine(mark, "factory"), { fs: 8 });
+  c("J10:M10", `　　${telLine("factory")}`, { fs: 8, va: "t" });
+
+  const th = { al: "c", bd: "lrtb", fill: true };
+  c("A12", "№", th); c("B12", opt.dateHead, th); c("C12:G12", "名称", th); c("H12:I12", "数量", th);
+  c("J12", "単価", th); c("K12", "金額", th); c("L12:M12", "備考欄", th);
+  const b = { bd: "lrtb" };
+  lines.forEach((l, i) => {
+    const r = 13 + i * 2, r2 = r + 1;
+    const v = (k) => (l ? escapeHtml(l[k] ?? "") : "");
+    c(`A${r}:A${r2}`, l ? i + 1 : "", { ...b, fs: 8, al: "r" });
+    c(`B${r}:B${r2}`, l ? escapeHtml(slashDate(l.date)) : "", { ...b, fs: 8, al: "c" });
+    c(`C${r}:G${r2}`, v("name"), { ...b, al: "l" });
+    c(`H${r}:H${r2}`, v("qty"), { ...b, al: "r" });
+    c(`I${r}:I${r2}`, l ? escapeHtml(l.unit || "個") : "", { ...b, al: "c" });
+    c(`J${r}:J${r2}`, l ? xlNum(l.unitPrice) : "", { ...b, fs: 9, al: "r" });
+    c(`K${r}:K${r2}`, l ? xlNum((Number(l.qty) || 0) * (Number(l.unitPrice) || 0)) : "", { ...b, fs: 9, al: "r" });
+    c(`L${r}:M${r2}`, v("note"), { ...b, al: "l", va: "t", wrap: true });
+  });
+  const S = 13 + N * 2; // 合計の行
+  const sumTh = { fs: 11, al: "c", bd: "lrtb", fill: true };
+  const sumTd = { fs: 11, al: "r", bd: "lrtb" };
+  c(`K${S}`, opt.sumLabels[0], sumTh); c(`L${S}:M${S}`, `¥${yen(subtotal)}`, sumTd);
+  c(`K${S + 1}`, `${opt.sumLabels[1]} <span style="font-size:${Math.round(9 * 0.81 * 100) / 100}pt">(10％)</span>`, sumTh);
+  c(`L${S + 1}:M${S + 1}`, `¥${yen(tax)}`, sumTd);
+  c(`K${S + 2}`, opt.sumLabels[2], sumTh); c(`L${S + 2}:M${S + 2}`, `¥${yen(subtotal + tax)}`, sumTd);
+  const rows = [16.2, 16.2, 24.6, 16.2, 16.2, 16.2, 16.2, 16.2, 16.2, 16.2, 16.2, 28.2];
+  for (let i = 0; i < N * 2; i++) rows.push(13.2);
+  rows.push(27, 27, 27);
+  if (opt.remarks) {
+    rows.push(16.2, 16.2, 32, 32);
+    c(`A${S + 4}:C${S + 4}`, "備考・お振込先", { al: "c", fill: true, bd: "lt" });
+    c(`D${S + 4}:M${S + 4}`, "", { bd: "tr" });
+    c(`A${S + 5}:M${S + 6}`, escapeHtml(opt.remarks).replace(/\n/g, "<br>"), { va: "t", bd: "lrb", wrap: true });
+  }
+  return `<div class="xl-page" data-page-margin="54pt 10mm 8mm 50.4pt">${xlSheetHtml({
+    cls: "xl-slip",
+    cols: [17.4, 52.8, 48, 48, 48, 48, 48, 29.4, 16.8, 56.4, 73.8, 48, 60],
+    rows, base: 1, sx: 0.828, sy: 0.764, sf: 0.81, cells,
+    overlays: [{ x: 369.9, y: 66.75, w: 155.7, h: 31.3, html: LOGO_HTML }],
+  })}</div>`;
 }
 
-// 請求書(A4縦)。毎月・客先ごとに1枚で、その月に出荷した案件をまとめて載せる。
+// 納品書。dn: { customerName, issueDate, slipNo, addrMark, lines:[{date,name,qty,unit,unitPrice,note}] }
+function deliveryNoteHtml(dn) {
+  return xlSlipHtml({
+    title: "納　品　書", metaLabels: ["発行日", "伝票№"], meta: [slashDate(dn.issueDate), dn.slipNo || ""],
+    customerName: dn.customerName, addrMark: dn.addrMark,
+    greeting: ["この度はお買い上げ頂き誠にありがとうございます。下記の通り納品致しました。", "これからもよろしくお願い申し上げます。"],
+    dateHead: "日付", lines: dn.lines, sumLabels: ["合計", "消費税", "総合計"], rowsCount: 23,
+  });
+}
+
+// 請求書(A4縦)。毎月・客先ごとに1枚で、その月に出荷した案件をまとめて載せる。納品書と同じ書式。
 // inv: { customerName, issueDate, invoiceNo, periodLabel, remarks, addrMark, lines:[{date,name,qty,unit,unitPrice,note}] }
 function invoiceHtml(inv) {
-  const MIN_ROWS = 18;
-  const lines = inv.lines.slice();
-  while (lines.length < MIN_ROWS) lines.push(null);
   const subtotal = inv.lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0);
-  const tax = Math.floor(subtotal * 0.1);
-  return `
-    <div class="doc-sheet doc-portrait doc-dn">
-      <div class="doc-head">
-        <div class="doc-head-left">
-          <div class="doc-title">請　求　書</div>
-          <div class="doc-to"><span class="doc-to-name">${escapeHtml(inv.customerName || "")}</span><span>御中</span></div>
-          <div class="doc-small doc-greeting">下記の通り、ご請求申し上げます。${inv.periodLabel ? `<br>（${escapeHtml(inv.periodLabel)}）` : ""}</div>
-          <div class="doc-total-box"><span>ご請求金額（税込）</span><b>¥${yen(subtotal + tax)}</b></div>
-        </div>
-        <div class="doc-head-right">
-          <table class="doc-meta">
-            <tr><th>請求日</th><td>${escapeHtml(slashDate(inv.issueDate))}</td></tr>
-            <tr><th>請求書№</th><td>${escapeHtml(inv.invoiceNo || "")}</td></tr>
-          </table>
-          ${companyBlockHtml(inv.addrMark || "")}
-        </div>
-      </div>
-      <table class="doc-table">
-        <colgroup><col style="width:3%"><col style="width:9%"><col style="width:40%"><col style="width:5%"><col style="width:3%"><col style="width:9%"><col style="width:12%"><col style="width:19%"></colgroup>
-        <thead><tr><th>№</th><th>出荷日</th><th>名称</th><th colspan="2">数量</th><th>単価</th><th>金額</th><th>備考欄</th></tr></thead>
-        <tbody>${lines.map((l, i) => l
-          ? `<tr><td class="c">${i + 1}</td><td class="c">${escapeHtml(slashDate(l.date))}</td><td>${escapeHtml(l.name)}</td>
-               <td class="r">${escapeHtml(l.qty)}</td><td class="c">${escapeHtml(l.unit || "個")}</td><td class="r">${yen(l.unitPrice)}</td>
-               <td class="r">${yen((Number(l.qty) || 0) * (Number(l.unitPrice) || 0))}</td><td>${escapeHtml(l.note || "")}</td></tr>`
-          : `<tr>${"<td></td>".repeat(8)}</tr>`).join("")}</tbody>
-      </table>
-      <table class="doc-sum">
-        <tr><th>合計</th><td>¥${yen(subtotal)}</td></tr>
-        <tr><th>消費税 (10%)</th><td>¥${yen(tax)}</td></tr>
-        <tr><th>ご請求金額</th><td>¥${yen(subtotal + tax)}</td></tr>
-      </table>
-      ${inv.remarks ? `<div class="doc-box" style="margin-top:12px;"><div class="doc-box-title">備考・お振込先</div><div class="doc-remarks">${escapeHtml(inv.remarks)}</div></div>` : ""}
-    </div>`;
+  const total = subtotal + Math.floor(subtotal * 0.1);
+  return xlSlipHtml({
+    title: "請　求　書", metaLabels: ["請求日", "請求書№"], meta: [slashDate(inv.issueDate), inv.invoiceNo || ""],
+    customerName: inv.customerName, addrMark: inv.addrMark,
+    greeting: ["下記の通り、ご請求申し上げます。", inv.periodLabel ? `（${escapeHtml(inv.periodLabel)}）` : ""],
+    extraTop: `<div class="xl-total-box"><span>ご請求金額（税込）</span><b>¥${yen(total)}</b></div>`,
+    dateHead: "出荷日", lines: inv.lines, sumLabels: ["合計", "消費税", "ご請求金額"], rowsCount: 18,
+    remarks: inv.remarks || "",
+  });
 }
 
 /* ---------- 印刷 ----------
@@ -524,8 +613,11 @@ function printDocument(html, orientation) {
     pageStyle.id = "printPageStyle";
     document.head.appendChild(pageStyle);
   }
-  pageStyle.textContent = `@page { size: A4 ${orientation === "portrait" ? "portrait" : "landscape"}; margin: 8mm; }`;
   area.innerHTML = html;
+  // 余白はExcelの印刷の余白に合わせる(書類の data-page-margin)
+  const page = area.querySelector("[data-page-margin]");
+  const margin = page ? page.dataset.pageMargin : "8mm";
+  pageStyle.textContent = `@page { size: A4 ${orientation === "portrait" ? "portrait" : "landscape"}; margin: ${margin}; }`;
   document.body.classList.add("printing");
   const done = () => {
     document.body.classList.remove("printing");
